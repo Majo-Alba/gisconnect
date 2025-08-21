@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "@vitejs/plugin-vue": "^5.1.3",
+    "jspdf": "^2.5.1",
+    "papaparse": "^5.5.3",
+    "vite-plugin-require": "^1.2.14"
+  }
+}
