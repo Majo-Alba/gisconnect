@@ -1,5 +1,4 @@
-cat > .gitignore << 'EOF'
-# Node
+# Dependencies
 node_modules
 .npm
 
@@ -9,16 +8,55 @@ server/dist
 build
 dist
 
-# Env
-.env
-.env.*
-
-# OS/IDE
+# System
 .DS_Store
 *.log
+
+# VSCode
 .vscode/*
 !.vscode/settings.json
-EOF
+
+# Ignore real env files
+.env
+.env.local
+.env.development
+.env.production
+client/.env
+client/gisconnect/.env
+server/.env
+server/gisconnect/.env
+
+# Allow example env files
+!client/.env.example
+!client/gisconnect/.env.example
+!server/.env.example
+!server/gisconnect/.env.example
+
+
+# cat > .gitignore << 'EOF'
+# # Node
+# node_modules
+# .npm
+
+# # Builds
+# client/dist
+# server/dist
+# build
+# dist
+
+# # Env
+# .env
+# .env.*
+
+# # OS/IDE
+# .DS_Store
+# *.log
+# .vscode/*
+# !.vscode/settings.json
+# EOF
+
+
+
 
 
 
