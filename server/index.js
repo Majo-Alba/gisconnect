@@ -6,14 +6,10 @@ require("dotenv/config");
 
 const router = require("./routes/router");         // your main routes
 let evidenceRouter; try { evidenceRouter = require("./routes/evidence"); } catch {}
-let cacheRouter;    try { cacheRouter    = require("./routes/cache"); } catch {}
+
 
 const app = express();
-console.log("Booting server from:", __filename);
-
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: false }));
-app.use(cookieParser());
+// console.log("Booting server from:", __filename);
 
 // CORS allowlist
 const corsOrigins = (process.env.CORS_ORIGINS || "")
@@ -23,6 +19,14 @@ app.use(cors({
   origin: (origin, cb) => { if (!origin) return cb(null, true); if (allowed.includes(origin)) return cb(null, true); return cb(new Error("CORS not allowed"), false); },
   credentials: true,
 }));
+
+const cacheRouter = require("./routes/cache");
+app.use("/cache", cacheRouter);
+
+app.use(express.json({ limit: "5mb" }));
+app.use(express.urlencoded({ extended: false }));
+app.use(cookieParser());
+
 
 // ✅ Health FIRST
 app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok" }));
@@ -59,7 +63,7 @@ app.use("/files", express.static("files"));
 
 // Mount routers
 if (evidenceRouter) app.use("/orders", evidenceRouter);
-if (cacheRouter)    app.use("/cache",  cacheRouter);
+
 app.use("/", router);
 
 // Mongo
@@ -70,6 +74,8 @@ mongoose.connect(mongoUri)
 
 const port = process.env.PORT || 4000;
 app.listen(port, () => console.log(`Server running on port ${port}`));
+
+
 
 // const express = require("express");
 // const cors = require("cors");
