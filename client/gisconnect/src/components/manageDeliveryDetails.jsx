@@ -8,6 +8,8 @@ import "jspdf-autotable";
 import Logo from "/src/assets/images/GIS_Logo.png";
 import quoterIcon from "/src/assets/images/Icono_Cotiza.png";
 
+import { API } from "/src/lib/api";
+
 import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 

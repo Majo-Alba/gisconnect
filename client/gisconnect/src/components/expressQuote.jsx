@@ -16,6 +16,8 @@ import iconEmail from "../assets/images/iconEmail.png";
 
 import Logo from "/src/assets/images/GIS_Logo.png";
 
+import { API } from "/src/lib/api";
+
 export default function ExpressQuote() {
   const navigate = useNavigate();
 

@@ -6,6 +6,8 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+import { API } from "/src/lib/api";
+
 import Papa from "papaparse";
 import fallbackImg from "../assets/images/Product_GISSample.png";
 

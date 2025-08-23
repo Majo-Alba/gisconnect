@@ -6,6 +6,8 @@ import "react-step-progress-bar/styles.css";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+import { API } from "/src/lib/api";
+
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 

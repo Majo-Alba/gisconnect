@@ -7,6 +7,8 @@ import Basket from "/src/assets/images/BG-veggieBasket.png";
 import HomeIcon from "/src/assets/images/Icono_Home.png"
 import UserIcon from "/src/assets/images/Icono_User.png"
 import SettingsIcon from "/src/assets/images/Icono_Settings.png"
+
+import { API } from "/src/lib/api";
 // function goToAdminCode() {
 //     console.log("Go to admin code")
 // }

@@ -11,6 +11,8 @@ import Logo from "/src/assets/images/GIS_Logo.png";
 import LocationIcon from "/src/assets/images/Icon_location-pin.png"
 import InvoiceIcon from "/src/assets/images/Icon_edit-Invoice.png"
 
+import { API } from "/src/lib/api";
+
 
 export default function UserProfile() {
 

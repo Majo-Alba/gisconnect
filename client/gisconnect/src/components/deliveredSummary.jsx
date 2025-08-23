@@ -8,6 +8,8 @@ import { faHouse, faCartShopping, faCheckToSlot } from "@fortawesome/free-solid-
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 // import ShippingAddress from "../../../../server/models/ShippingAddress";
 
+import { API } from "/src/lib/api";
+
 export default function DeliveredSummary() {
   const { orderId } = useParams();
   const navigate = useNavigate();

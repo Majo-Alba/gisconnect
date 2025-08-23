@@ -7,6 +7,8 @@ import Logo from "/src/assets/images/GIS_Logo.png";
 import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
+import { API } from "/src/lib/api";
+
 export default function DeliverReady() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
