@@ -11,6 +11,27 @@ let evidenceRouter; try { evidenceRouter = require("./routes/evidence"); } catch
 const app = express();
 // console.log("Booting server from:", __filename);
 
+const helmet = require("helmet");
+const compression = require("compression");
+const rateLimit = require("express-rate-limit");
+
+// Trust Render proxy (for correct IPs)
+app.set("trust proxy", 1);
+
+// Security headers
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" }, // allow S3 images
+}));
+
+// Gzip responses
+app.use(compression());
+
+// Basic rate limit (tune as needed)
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 min
+  max: 1000,                // requests per IP per window
+}));
+
 // CORS allowlist
 const corsOrigins = (process.env.CORS_ORIGINS || "")
   .split(",").map(s => s.trim()).filter(Boolean);
