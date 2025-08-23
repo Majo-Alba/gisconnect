@@ -19,7 +19,7 @@ export default function DeliveredOrders() {
     const fetchDeliveredOrders = async () => {
       try {
         setLoading(true);
-        const response = await axios.get("http://localhost:4000/orders");
+        const response = await axios.get(`${API}/orders`);
         const filtered = response.data.filter(
           (order) => order.orderStatus === "Pedido Entregado"
         );

@@ -71,8 +71,8 @@ export default function EditInvoice() {
           userEmail: userEmail
         };
       
-        try {
-          const response = await fetch("http://localhost:4000/billing-address", {
+        try {    
+          const response = await fetch(`${API}/billing-address`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json"

@@ -10,7 +10,7 @@ export default function RestorePassword() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    fetch("http://localhost:4000/forgot-password", {
+    fetch(`${API}/forgot-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email })

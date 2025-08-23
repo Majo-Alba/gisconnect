@@ -45,7 +45,7 @@ export default function GeneratedQuotes() {
         formData.append("precioProducto", productDetails.precioProducto)
         formData.append("cantidadProducto", productDetails.cantidadProducto)
         
-        axios.post('http://localhost:4000/quoter', formData, {
+        axios.post(`${API}/quoter`, formData, {
             headers: {
                 'Content-Type': "application/json"
               },

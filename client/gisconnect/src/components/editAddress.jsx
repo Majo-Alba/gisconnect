@@ -77,7 +77,7 @@ export default function EditAddress() {
         };
       
         try {
-          const response = await fetch("http://localhost:4000/shipping-address", {
+          const response = await fetch(`${API}/shipping-address`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json"
@@ -114,7 +114,7 @@ export default function EditAddress() {
 
     const getAllProjects =()=> {
         // fetch('https://orion-backend-z5yv.onrender.com/project')
-        fetch('http://localhost:4000/register')
+        fetch(`${API}/register`)
         .then((response) => response.json())
         .then((data) => {
             setProjects(data)

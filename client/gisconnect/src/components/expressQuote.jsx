@@ -50,7 +50,7 @@ export default function ExpressQuote() {
   useEffect(() => {
     const getDofRate = async () => {
       try {
-        const res = await fetch("http://localhost:4000/fx/usd-dof");
+        const res = await fetch(`${API}/fx/usd-dof`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
         setDofRate(Number(data.rate)); // e.g. 18.23 (MXN per USD)
@@ -624,7 +624,7 @@ export default function ExpressQuote() {
         })
       );
   
-      await axios.post("http://localhost:4000/save-pdf", formData);
+      await axios.post(`${API}/save-pdf`, formData);
       alert("PDF generado y guardado exitosamente.");
     } catch (err) {
       console.error("Error saving PDF:", err);

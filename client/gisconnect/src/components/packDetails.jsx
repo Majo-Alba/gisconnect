@@ -314,7 +314,6 @@ export default function PackDetails() {
 //   useEffect(() => {
 //     if (!orderId) return;
 //     axios
-//       .get(`http://localhost:4000/orders/${orderId}`)
 //       .then((res) => {
 //         const o = res.data;
 //         setOrder(o);
@@ -367,7 +366,6 @@ export default function PackDetails() {
 //       formData.append("orderStatus", "Pedido Listo");
 //       formData.append("packerName", packer);
 
-//       await axios.put(`http://localhost:4000/orders/${orderId}`, formData, {
 //         headers: { "Content-Type": "multipart/form-data" },
 //       });
 

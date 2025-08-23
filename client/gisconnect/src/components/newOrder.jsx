@@ -521,7 +521,6 @@ export default function NewOrder() {
 //   useEffect(() => {
 //     const getDofRate = async () => {
 //       try {
-//         const res = await fetch("http://localhost:4000/fx/usd-dof");
 //         const data = await res.json();
 //         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
 //         setDofRate(Number(data.rate)); // e.g. 18.23 (MXN per USD)

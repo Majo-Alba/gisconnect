@@ -51,7 +51,7 @@ export default function GeneralLogin() {
     
         localStorage.setItem('userLoginCreds', JSON.stringify(userCreds)); // Keep this if you need it
     
-        fetch('http://localhost:4000/login', {
+        fetch(`${API}/login`, {
             method: "POST",
             body: JSON.stringify(userCreds),
             headers: {

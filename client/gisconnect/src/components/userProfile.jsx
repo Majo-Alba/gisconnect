@@ -83,7 +83,7 @@ export default function UserProfile() {
 
     const getAllProjects =()=> {
         // fetch('https://orion-backend-z5yv.onrender.com/project')
-        fetch('http://localhost:4000/register')
+        fetch(`${API}/register`)
         .then((response) => response.json())
         .then((data) => {
             setProjects(data)

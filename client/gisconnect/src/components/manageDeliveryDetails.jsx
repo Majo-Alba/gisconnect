@@ -36,7 +36,7 @@ export default function ManageDeliveryDetails() {
 
   const fetchOrderDetails = async () => {
     try {
-      const response = await axios.get(`http://localhost:4000/orders/${orderId}`);
+      const response = await axios.get(`${API}/orders/${orderId}`);
       setOrder(response.data);
     } catch (err) {
       console.error("Error fetching order:", err);
@@ -49,7 +49,7 @@ export default function ManageDeliveryDetails() {
 
   useEffect(() => {
     axios
-      .get("http://localhost:4000/shipping-preferences")
+      .get(`${API}/shipping-preferences`)
       .then((res) => {
         const parsedData = parseCSV(res.data);
         setAllPrefs(parsedData);
@@ -184,7 +184,7 @@ export default function ManageDeliveryDetails() {
     doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
 
     try {
-      await axios.put(`http://localhost:4000/orders/${order._id}`, {
+      await axios.put(`${API}/orders/${order._id}`, {
         orderStatus: "Etiqueta Generada",
       });
       alert("Etiqueta generada y estado actualizado.");

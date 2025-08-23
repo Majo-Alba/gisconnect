@@ -33,8 +33,7 @@ export default function NewQuotes() {
     let mounted = true;
     (async () => {
       try {
-        // const { data } = await axios.get("http://localhost:4000/save-pdf");
-        const { data } = await axios.get("http://localhost:4000/pdfquotes");
+        const { data } = await axios.get(`${API}/pdfquotes`);
         // Expecting an array of docs. Each doc should look like:
         // { _id, filename, createdAt, metadata: { userEmail, totals: {...}, items: [...] }, fileUrl? }
         if (mounted) setQuotes(Array.isArray(data) ? data : []);

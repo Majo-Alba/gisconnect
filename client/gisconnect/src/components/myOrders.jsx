@@ -42,7 +42,7 @@ export default function MyOrders() {
         return;
         }
 
-        fetch(`http://localhost:4000/userOrders?email=${userEmail}`)
+        fetch(`${API}/userOrders?email=${userEmail}`)
         .then((res) => res.json())
         .then((data) => {
             setOrders(data);

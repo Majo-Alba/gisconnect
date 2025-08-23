@@ -32,7 +32,7 @@ export default function DeliveredSummary() {
       setLoading(true);
       setErrMsg("");
       try {
-        const { data } = await axios.get(`http://localhost:4000/orders/${orderId}`);
+        const { data } = await axios.get(`${API}/orders/${orderId}`);
         if (cancelled) return;
         setOrder(data);
       } catch (err) {
@@ -182,9 +182,9 @@ export default function DeliveredSummary() {
     //  GET /orders/:orderId/evidence/delivery
     //  GET /orders/:orderId/evidence/packing/:index
     switch (kind) {
-      case "payment": return `http://localhost:4000/orders/${orderId}/evidence/payment`;
-      case "delivery": return `http://localhost:4000/orders/${orderId}/evidence/delivery`;
-      case "packing": return `http://localhost:4000/orders/${orderId}/evidence/packing/${idx ?? 0}`;
+      case "payment": return `${API}/orders/${orderId}/evidence/payment`;
+      case "delivery": return `${API}/orders/${orderId}/evidence/delivery`;
+      case "packing": return `${API}/orders/${orderId}/evidence/packing/${idx ?? 0}`;
       default: return "#";
     }
   };

@@ -27,7 +27,7 @@ export default function PendingPack() {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get("http://localhost:4000/orders");
+      const response = await axios.get(`${API}/orders`);
       const pagoVerificado = (response.data || []).filter(
         (order) => order.orderStatus === "Pago Verificado"
       );

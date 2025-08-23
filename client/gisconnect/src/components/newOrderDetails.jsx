@@ -99,7 +99,7 @@ export default function NewOrderDetails() {
   useEffect(() => {
     const fetchOrderDetails = async () => {
       try {
-        const res = await fetch(`http://localhost:4000/orders/${orderId}`);
+        const res = await fetch(`${API}/orders/${orderId}`);
         if (!res.ok) {
           const message = await res.text();
           throw new Error(message || "Failed to fetch order details");
@@ -185,7 +185,7 @@ export default function NewOrderDetails() {
         paymentAccount: account,
         orderStatus: "Pago Verificado",
       };
-      await axios.put(`http://localhost:4000/orders/${orderId}`, updatedData);
+      await axios.put(`${API}/orders/${orderId}`, updatedData);
       setIsValidated(true);
       alert("Pago validado exitosamente.");
       navigate("/newOrders");

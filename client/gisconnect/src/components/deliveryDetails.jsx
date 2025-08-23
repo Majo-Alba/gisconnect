@@ -397,7 +397,6 @@ export default function DeliveryDetails() {
 
 //   const fetchOrderDetails = async () => {
 //     try {
-//       const response = await axios.get(`http://localhost:4000/orders/${orderId}`);
 //       setOrder(response.data);
 //     } catch (err) {
 //       console.error("Error fetching order:", err);
@@ -473,7 +472,6 @@ export default function DeliveryDetails() {
 //         form.append("deliveryImage", deliveryImage); // <-- backend should accept this field
 //       }
 
-//       await axios.put(`http://localhost:4000/orders/${order._id}`, form, {
 //         headers: { "Content-Type": "multipart/form-data" },
 //       });
 

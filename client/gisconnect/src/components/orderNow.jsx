@@ -84,7 +84,8 @@ export default function OrderNow() {
   useEffect(() => {
     const getDofRate = async () => {
       try {
-        const res = await fetch("http://localhost:4000/fx/usd-dof");
+
+        const res = await fetch(`${API}:4000/fx/usd-dof`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
         setDofRate(Number(data.rate));
@@ -261,13 +262,13 @@ export default function OrderNow() {
 
     // Shipping addresses for this user
     axios
-      .get(`http://localhost:4000/shipping-address/${encodeURIComponent(email)}`)
+      .get(`${API}/shipping-address/${encodeURIComponent(email)}`)
       .then((res) => setShippingOptions(Array.isArray(res.data) ? res.data : []))
       .catch((err) => console.error("Error fetching shipping addresses:", err));
 
     // Billing addresses for this user (adjust URL if your route differs)
     axios
-      .get(`http://localhost:4000/billing-address/${encodeURIComponent(email)}`)
+      .get(`${API}/billing-address/${encodeURIComponent(email)}`)
       .then((res) => setBillingOptions(Array.isArray(res.data) ? res.data : []))
       .catch((err) => console.error("Error fetching billing addresses:", err));
   }, [userCredentials?.correo]);
@@ -728,7 +729,9 @@ export default function OrderNow() {
       form.append("pdf", file);
 
       // 1) Create order + upload PDF
-      const createRes = await axios.post("http://localhost:4000/orderDets", form, {
+      await axios.get(`${API}/orders/${orderId}`);
+
+      const createRes = await axios.post(`${API}/orderDets`, form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -744,7 +747,8 @@ export default function OrderNow() {
       try {
         const holdLines = buildHoldLines();
         if (createdOrderId && holdLines.length > 0) {
-          await axios.post("http://localhost:4000/inventory/hold", {
+
+          await axios.post(`${API}/inventory/hold`, {
             orderId: createdOrderId,
             holdMinutes: 120,
             lines: holdLines,

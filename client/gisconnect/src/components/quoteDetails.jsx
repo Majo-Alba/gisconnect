@@ -35,7 +35,7 @@ export default function QuoteDetails() {
     let mounted = true;
     (async () => {
       try {
-        const { data } = await axios.get(`http://localhost:4000/pdfquotes/${id}`);
+        const { data } = await axios.get(`${API}/pdfquotes/${id}`);
         if (mounted) setQuote(data);
       } catch (e) {
         console.error("Failed to fetch quote detail:", e);
@@ -83,7 +83,7 @@ export default function QuoteDetails() {
 
   // Provide a file URL or a route that streams the PDF by id.
   const fileUrl =
-    quote.fileUrl || `http://localhost:4000/pdfquotes/${quote._id}/file`;
+    quote.fileUrl || `${API}/pdfquotes/${quote._id}/file`;
 
   return (
     <body className="body-BG-Gradient">

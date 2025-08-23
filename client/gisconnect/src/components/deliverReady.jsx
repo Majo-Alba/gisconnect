@@ -21,7 +21,7 @@ export default function DeliverReady() {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get("http://localhost:4000/orders");
+      const response = await axios.get(`${API}/orders`);
       const deliverableOrders = response.data.filter(
         (order) => order.orderStatus === "Etiqueta Generada"
       );

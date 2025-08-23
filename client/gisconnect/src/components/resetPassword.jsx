@@ -29,7 +29,7 @@ export default function ResetPassword() {
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    fetch("http://localhost:4000/reset-password", {
+    fetch(`${API}/reset-password`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token, password })

@@ -47,7 +47,7 @@ export default function AdminData() {
         formData.append("contrasenaAdmin", adminDetails.contrasenaAdmin)
         formData.append("confirmarContrasenaAdmin", adminDetails.confirmarContrasenaAdmin)
 
-        axios.post('http://localhost:4000/userAdmin', formData, {
+        axios.post(`${API}/userAdmin`, formData, {
             headers: {
                 'Content-Type': "application/json"
               },

@@ -19,7 +19,7 @@ import fallbackImg from "../assets/images/Product_GISSample.png";
 // CSV + HTTP
 import axios from "axios";
 import Papa from "papaparse";
-import { API } from "/src/lib/api"; // <— use your configured base (http://localhost:4000 in dev)
+import { API } from "/src/lib/api"; // 
 
 export default function OrderTrackDetails() {
   const navigate = useNavigate();

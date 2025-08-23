@@ -56,7 +56,7 @@ export default function NewSignupData() {
         formData.append("contrasena", userDetails.contrasena)
 
         // JUL21
-        axios.post('http://localhost:4000/register', formData, {
+        axios.post(`${API}/register`, formData, {
             headers: { 'Content-Type': 'application/json' }
           })
           .then((response) => {
