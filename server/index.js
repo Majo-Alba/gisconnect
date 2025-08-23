@@ -31,6 +31,10 @@ app.use(cookieParser());
 // ✅ Health FIRST
 app.get("/healthz", (_req, res) => res.status(200).json({ status: "ok" }));
 
+app.get("/", (_req, res) => {
+  res.type("text/plain").send("GISConnect API is running ✅  See /healthz");
+});
+
 // Route inspector (prints to console on boot)
 setTimeout(() => {
     const flatten = (s) =>
