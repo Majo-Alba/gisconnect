@@ -1,25 +1,45 @@
-body{
+@font-face {
+  font-family: "FiraSansExtraCondensed";
+  src: url("/fonts/FiraSansExtraCondensed-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+font-family: 'FiraSans'; 
+src: url('/src/assets/fonts/FiraSansExtraCondensed-Regular.ttf');
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  /* Prefer your custom family first, then system fallbacks */
+  font-family: "FiraSansExtraCondensed", -apple-system, BlinkMacSystemFont, "Segoe UI",
+               Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #fff; /* or your gradient wrapper */
+}
+
+/* body{
   min-height: 100vh;
   padding: 0px;
   font-family: 'Poppins', sans-serif;
-
-  /* background-color: rgb(246, 246, 246);
-
-  background-image: url("./assets/images/Cabling_ITLogo.png");
-  background-size: cover; */
-}
+} */
 
 /* GISCONNECT NEW - APR/06 */
 html, body, #root {
   height: 100%;
 }
 
-body {
+/* body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: #fff; /* or your gradient wrapper */
-}
+  background: #fff;
+} */
 
 /* Prevent horizontal scroll on small screens */
 * {
@@ -55,7 +75,7 @@ button, .btn, .clickable {
 
 @media only screen and (max-width: 600px) {
 
-  @font-face {
+  /* @font-face {
     font-family: "FiraSansExtraCondensed";
     src: url("/fonts/FiraSansExtraCondensed-Regular.ttf") format("truetype");
     font-weight: 400;
@@ -66,7 +86,9 @@ button, .btn, .clickable {
 @font-face {
   font-family: 'FiraSans'; 
   src: url('/src/assets/fonts/FiraSansExtraCondensed-Regular.ttf');
-}
+} */
+
+/* after this point we have all other css styling */
 
 .body-BG-Gradient{
   background-color: rgb(255, 255, 255);
