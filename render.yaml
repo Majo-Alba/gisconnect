@@ -40,7 +40,7 @@ services:
   # -------------------------
   # FRONTEND: Vite static app
   # -------------------------
-  - type: static
+  - type: static_site
     name: gisconnect-web
     repo: https://github.com/Majo-Alba/gisconnect
     branch: main
