@@ -5,6 +5,7 @@ import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-ico
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 import Logo from "/src/assets/images/GIS_Logo.png";
+import PlantIcon from "/src/assets/images/Icon_Plant.png"
 
 export default function ProductDetails() {
   const { state } = useLocation();
@@ -93,7 +94,7 @@ function prodImgBtnClicked() {
 
 
             <div>
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/Icon_Plant.png" alt="Home Icon" width="30" height="30"/>
+                <img className="secondaryPages-GISLogo" src={PlantIcon} alt="Home Icon" width="30" height="30"/>
                 <p className='productBenefits-Details'>{product.DESCRIPCION_CIENTIFICA}</p>
             </div>
 
