@@ -489,7 +489,7 @@ export default function OrderTrackDetails() {
             </div>
 
             {/* Gate “Solicitar Factura” by status >= “Pago Verificado” */}
-            <div className="requestBill-Div">
+            {/* <div className="requestBill-Div">
               <button
                 className="submitOrder-Btn"
                 type="button"
@@ -505,7 +505,7 @@ export default function OrderTrackDetails() {
                   Esta opción se habilita <br />cuando el pago se <br />verifique.
                 </div>
               )}
-            </div>
+            </div> */}
           </div>
 
           {/* ===== SUBIR EVIDENCIA (tu UI original, pero con el nuevo endpoint) ===== */}
