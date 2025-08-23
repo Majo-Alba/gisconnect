@@ -62,8 +62,8 @@ function App() {
             <Route path='/' element={<GeneralLogin/>}/>
             <Route path='/restorePassword' element={<RestorePassword/>}/>
             <Route path="/reset-password/:token" element={<ResetPassword/>} />
-
-            <Route path='/newSignup' element={<Private Component={NewSignupData}/>}/>
+            <Route path='/newSignup' element={<NewSignupData/>}/>
+            
             <Route path='/userHome' element={<Private Component={UserHome}/>}/>
 
             <Route path='/expressQuote' element={<Private Component={ExpressQuote}/>}/>
