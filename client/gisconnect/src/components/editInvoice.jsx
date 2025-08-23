@@ -7,6 +7,9 @@ import axios from "axios"
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import InvoiceIcon from "/src/assets/images/Icon_edit-Invoice.png"
+
 export default function EditInvoice() {
 
     const navigate = useNavigate();
@@ -95,13 +98,13 @@ export default function EditInvoice() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+                <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
             <div className="edit-titleIcon-Div">
                 <label className="editAddress-headerLabel">Edita tus datos de facturación</label>
-                <img src="./src/assets/images/Icon_edit-Invoice.png" alt="Home Icon" width="35" height="35"/>
+                <img src={InvoiceIcon} alt="Home Icon" width="35" height="35"/>
             </div>
 
 

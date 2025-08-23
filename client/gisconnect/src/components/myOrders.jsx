@@ -5,6 +5,7 @@ import { faHouse, faUser, faCartShopping, faHouseMedicalCircleExclamation } from
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 import Logo from "/src/assets/images/GIS_Logo.png";
+import OrdersIcon from "/src/assets/images/Icono_Pedidos.png"
 
 export default function MyOrders() {
 
@@ -70,7 +71,7 @@ export default function MyOrders() {
             <div className="order-tracker-container">
                 <div className="edit-titleIcon-Div">
                     <label className="editAddress-headerLabel">Mis Pedidos</label>
-                    <img className="myOrders-Icon" src="./src/assets/images/Icono_Pedidos.png" alt="Carrito" width="50" height="50" />
+                    <img className="myOrders-Icon" src={OrdersIcon}alt="Carrito" width="50" height="50" />
                 </div>
 
                 <div className="myOrders-DetailDiv">

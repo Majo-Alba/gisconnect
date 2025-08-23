@@ -7,6 +7,11 @@ import axios from "axios"
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import LocationIcon from "/src/assets/images/Icon_location-pin.png"
+import InvoiceIcon from "/src/assets/images/Icon_edit-Invoice.png"
+
+
 export default function UserProfile() {
 
     const navigate = useNavigate();
@@ -212,7 +217,7 @@ export default function UserProfile() {
         <body className="body-BG-Gradient">
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+                <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
                 {/* <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/> */}
             </div>
             {/* LOGOS END*/}
@@ -236,7 +241,7 @@ export default function UserProfile() {
                     <div>
                     {/* <div className="editSection-Div"> */}
                         <div className="icon-editLabel-Div" onClick={editAddresses}>
-                            <img src="./src/assets/images/Icon_location-pin.png" alt="Home Icon" width="25" height="25"/>
+                            <img src={LocationIcon} alt="Home Icon" width="25" height="25"/>
                             <label className="edit-Label">Administrar <br></br>direcciones</label>
                         </div>
                     </div>
@@ -260,7 +265,7 @@ export default function UserProfile() {
                     <label className="subSection-invoiceLabel">Datos de Facturación</label>
                     <div>
                         <div className="icon-editLabel-Div" onClick={editInvoiceInfo}>
-                            <img src="./src/assets/images/Icon_edit-Invoice.png" alt="Home Icon" width="25" height="25"/>
+                            <img src={InvoiceIcon} alt="Home Icon" width="25" height="25"/>
                             <label className="edit-Label">Administrar datos <br></br>de facturación</label>
                         </div>
                     </div>

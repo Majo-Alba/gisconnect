@@ -5,6 +5,20 @@ import axios from "axios"
 import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import Basket from "/src/assets/images/BG-veggieBasket.png";
+import HomeIcon from "/src/assets/images/Icono_Home.png";
+import UserIcon from "/src/assets/images/Icono_User.png";
+import SettingsIcon from "/src/assets/images/Icono_Settings.png";
+
+import CotizaIcono from "/src/assets/images/Icono_Cotiza.png";
+import CarritoIcono from "/src/assets/images/Icono_Carrito.png";
+import CotizacionIcon from "/src/assets/images/Icono_cotizacionesNuevas.png";
+import PorEmpacarIcono from "/src/assets/images/Icono_porEmpacar.png"
+import GestionaIcono from "/src/assets/images/Icono_gestionarEntrega.png"
+import PorEntregarIcono from "/src/assets/images/Icono_porEntregar.png"
+import EntregadoIcono from "/src/assets/images/Icono_entregado.png"
+
 export default function AdminHome() {
 
     const navigate = useNavigate();
@@ -54,8 +68,8 @@ export default function AdminHome() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="userHome-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="230" height="70"/>
-                <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/>
+                <img className="userHome-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
+                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
             </div>
             {/* LOGOS END*/}
 
@@ -67,31 +81,31 @@ export default function AdminHome() {
             <div className="userHome-BodyDiv">
                 {/* INDIVIDUAL BLOCKS */}
                 <div className="adminHome-iconLabel-Div" onClick={goToNewQuotes}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Cotiza.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={CotizaIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Cotizaciones <br></br>nuevas</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToNewOrders}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Carrito.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={CarritoIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Pedidos <br></br>nuevos</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToGeneratedQuotes}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_cotizacionesNuevas.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={CotizacionIcon} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Facturas <br></br>generadas</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToForPacking}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_porEmpacar.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={PorEmpacarIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Por <br></br>empacar</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToManageDelivery}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_gestionarEntrega.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={GestionaIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Gestionar <br></br>entrega</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToPackageReady}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_porEntregar.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={PorEntregarIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Por <br></br>entregar</label>
                 </div>
                 <div className="adminHome-iconLabel-Div" onClick={goToDelivered}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_entregado.png" alt="Home Icon" width="50" height="50"/>
+                    <img className="homeQuoter-Icon" src={EntregadoIcono} alt="Home Icon" width="50" height="50"/>
                     <label className="homeIcon-Label">Pedidos <br></br>Entregados</label>
                 </div>
             </div>

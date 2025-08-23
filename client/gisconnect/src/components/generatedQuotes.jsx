@@ -2,6 +2,14 @@ import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import axios from "axios"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import FileDownloadIcon from "/src/assets/images/Icono_fileDownload.png";
+
+import HomeIcon from "/src/assets/images/Icono_Home.png";
+import UserIcon from "/src/assets/images/Icono_User.png";
+import SettingsIcon from "/src/assets/images/Icono_Settings.png";
+
+
 export default function GeneratedQuotes() {
 
     function downloadQuote(){
@@ -126,7 +134,7 @@ export default function GeneratedQuotes() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+                <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
@@ -156,7 +164,7 @@ export default function GeneratedQuotes() {
                         <label className="summary-Label">30/Abr/2025</label>
                     </div>
                     <div className="downloadBtn-Div">
-                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src="./src/assets/images/Icono_fileDownload.png" width="25" height="25"></img></button>
+                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src={FileDownloadIcon} width="25" height="25"></img></button>
                     </div>
                 </div>
 
@@ -169,7 +177,7 @@ export default function GeneratedQuotes() {
                         <label className="summary-Label">30/Abr/2025</label>
                     </div>
                     <div className="downloadBtn-Div">
-                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src="./src/assets/images/Icono_fileDownload.png" width="25" height="25"></img></button>
+                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src={FileDownloadIcon} width="25" height="25"></img></button>
                     </div>
                 </div>
 
@@ -182,7 +190,7 @@ export default function GeneratedQuotes() {
                         <label className="summary-Label">30/Abr/2025</label>
                     </div>
                     <div className="downloadBtn-Div">
-                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src="./src/assets/images/Icono_fileDownload.png" width="25" height="25"></img></button>
+                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src={FileDownloadIcon} width="25" height="25"></img></button>
                     </div>
                 </div>
 
@@ -197,7 +205,7 @@ export default function GeneratedQuotes() {
                         <label className="summary-Label">29/Abr/2025</label>
                     </div>
                     <div className="downloadBtn-Div">
-                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src="./src/assets/images/Icono_fileDownload.png" width="25" height="25"></img></button>
+                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src={FileDownloadIcon} width="25" height="25"></img></button>
                     </div>
                 </div>
 
@@ -210,7 +218,7 @@ export default function GeneratedQuotes() {
                         <label className="summary-Label">29/Abr/2025</label>
                     </div>
                     <div className="downloadBtn-Div">
-                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src="./src/assets/images/Icono_fileDownload.png" width="25" height="25"></img></button>
+                        <button className="downloadQuote-Btn" type="submit" onClick={downloadQuote}><img src={FileDownloadIcon} width="25" height="25"></img></button>
                     </div>
                 </div>
                 
@@ -221,19 +229,19 @@ export default function GeneratedQuotes() {
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_Home.png" alt="Home Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={HomeIcon} alt="Home Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">PRINCIPAL</label>
                     </div>
 
                     {/* USER FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_User.png" alt="User Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={UserIcon} alt="User Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">AVANCES</label>
                     </div>
 
                     {/* SETTINGS FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_Settings.png" alt="Settings Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={SettingsIcon} alt="Settings Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">AJUSTES</label>
                     </div>
                 </div>

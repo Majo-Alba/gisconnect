@@ -7,6 +7,15 @@ import axios from "axios"
 import { faCircleQuestion, faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import Basket from "/src/assets/images/BG-veggieBasket.png";
+import CotizaIcon from "/src/assets/images/Icono_Cotiza.png"
+import CarritoIcon from "/src/assets/images/Icono_Carrito.png"
+import PedidosIcon from "/src/assets/images/Icono_Pedidos.png"
+import RecompraIcon from "/src/assets/images/Icono_Recompra.png"
+import PerfilIcon from "/src/assets/images/Icono_Perfil.png"
+import CatalogoIcon from "/src/assets/images/Icono_Catalogo.png"
+
 import Modal from "./Modal";
 
 export default function UserHome() {
@@ -65,8 +74,8 @@ export default function UserHome() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="userHome-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="230" height="70"/>
-                <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/>
+                <img className="userHome-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
+                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
             </div>
             {/* LOGOS END*/}
 
@@ -78,27 +87,27 @@ export default function UserHome() {
             <div className="userHome-BodyDiv">
                 {/* INDIVIDUAL BLOCKS */}
                 <div className="home-iconLabel-Div" onClick={goToExpressQuote}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Cotiza.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={CotizaIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Cotiza al <br></br>instante</label>
                 </div>
                 <div className="home-iconLabel-Div" onClick={goToNewOrder}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Carrito.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={CarritoIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Pedido <br></br>nuevo</label>
                 </div>
                 <div className="home-iconLabel-Div" onClick={goToMyOrders}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Pedidos.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={PedidosIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Mis <br></br>pedidos</label>
                 </div>
                 <div className="home-iconLabel-Div" onClick={goToReOrder}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Recompra.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={RecompraIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Comprar <br></br>de nuevo</label>
                 </div>
                 <div className="home-iconLabel-Div" onClick={goToMyProfile}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Perfil.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={PerfilIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Mi <br></br>perfil</label>
                 </div>
                 <div className="home-iconLabel-Div" onClick={goToCatalogue}>
-                    <img className="homeQuoter-Icon" src="./src/assets/images/Icono_Catalogo.png" alt="Home Icon" width="60" height="60"/>
+                    <img className="homeQuoter-Icon" src={CatalogoIcon} alt="Home Icon" width="60" height="60"/>
                     <label className="homeIcon-Label">Nuestro <br></br>catálogo</label>
                 </div>
             </div>

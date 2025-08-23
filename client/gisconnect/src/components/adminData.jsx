@@ -2,6 +2,11 @@ import { useState } from "react"
 import { Link } from "react-router-dom"
 import axios from "axios"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import Basket from "/src/assets/images/BG-veggieBasket.png";
+import HomeIcon from "/src/assets/images/Icono_Home.png"
+import UserIcon from "/src/assets/images/Icono_User.png"
+import SettingsIcon from "/src/assets/images/Icono_Settings.png"
 // function goToAdminCode() {
 //     console.log("Go to admin code")
 // }
@@ -73,8 +78,8 @@ export default function AdminData() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="signup-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="230" height="70"/>
-                <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/>
+                <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
+                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
             </div>
             {/* LOGOS END*/}
 
@@ -123,19 +128,19 @@ export default function AdminData() {
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_Home.png" alt="Home Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={HomeIcon} alt="Home Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">PRINCIPAL</label>
                     </div>
 
                     {/* USER FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_User.png" alt="User Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={UserIcon} alt="User Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">AVANCES</label>
                     </div>
 
                     {/* SETTINGS FOOTER DIV */}
                     <div className="footerIcon-NameDiv">
-                        <img className="footerIcons" src="./src/assets/images/Icono_Settings.png" alt="Settings Icon" width="25" height="25"/>
+                        <img className="footerIcons" src={SettingsIcon} alt="Settings Icon" width="25" height="25"/>
                         <label className="footerIcon-Name">AJUSTES</label>
                     </div>
                 </div>

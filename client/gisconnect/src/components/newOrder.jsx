@@ -5,6 +5,8 @@ import axios from "axios";
 import { faHouse, faUser, faCartShopping, faTrash } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+
 import { API } from "/src/lib/api";
 
 export default function NewOrder() {
@@ -287,7 +289,7 @@ export default function NewOrder() {
       <div className="loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
-          src="./src/assets/images/GIS_Logo.png"
+          src={Logo}
           alt="Home Icon"
           width="180"
           height="55"

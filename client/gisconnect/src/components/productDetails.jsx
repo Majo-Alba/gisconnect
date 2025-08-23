@@ -4,6 +4,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+
 export default function ProductDetails() {
   const { state } = useLocation();
   const product = state?.product;
@@ -45,7 +47,7 @@ function prodImgBtnClicked() {
 
         {/* LOGOS DIV */}
         <div className="loginLogo-ParentDiv">
-            <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+            <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
         </div>
         {/* LOGOS END*/}
 

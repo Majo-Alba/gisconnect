@@ -14,6 +14,8 @@ import iconLocation from "../assets/images/iconLocation.png";
 import iconPhone from "../assets/images/iconPhone.png";
 import iconEmail from "../assets/images/iconEmail.png";
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+
 export default function ExpressQuote() {
   const navigate = useNavigate();
 
@@ -642,7 +644,7 @@ export default function ExpressQuote() {
       <div className="loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
-          src="./src/assets/images/GIS_Logo.png"
+          src={Logo}
           alt="Home Icon"
           width="180"
           height="55"

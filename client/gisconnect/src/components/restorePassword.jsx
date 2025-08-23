@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import Basket from "/src/assets/images/BG-veggieBasket.png";
+
 export default function RestorePassword() {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -25,8 +28,8 @@ export default function RestorePassword() {
             <form onSubmit={handleSubmit} className="form-card">
                 {/* LOGOS DIV */}
                 <div className="loginLogo-ParentDiv">
-                    <img className="signup-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="230" height="70"/>
-                    <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/>
+                    <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
+                    <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
                     <label className="welcome-Label">Restablecer<br></br>Contraseña</label>
                 </div>
                 {/* LOGOS END*/}

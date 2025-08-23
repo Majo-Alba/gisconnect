@@ -6,6 +6,9 @@ import { UserContext } from "../contexts/UserContext"
 import { faEye } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import Basket from "/src/assets/images/BG-veggieBasket.png";
+
 export default function GeneralLogin() {
 
     // LOGIN FUNCTION
@@ -96,8 +99,8 @@ export default function GeneralLogin() {
             <form onSubmit={handleSubmit}>
 
                 <div className="loginLogo-ParentDiv">
-                    <img className="signup-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="230" height="70"/>
-                    <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/>
+                    <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
+                    <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
                     <label className="welcome-Label">Where passion<br></br>meets nature</label>
 
                 </div>

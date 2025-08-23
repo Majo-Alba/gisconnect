@@ -9,6 +9,9 @@ import autoTable from "jspdf-autotable";
 import Papa from "papaparse";
 import fallbackImg from "../assets/images/Product_GISSample.png";
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import CarritoIcono from "/src/assets/images/Icono_Carrito.png";
+
 import iconBuilding from "../assets/images/iconBuilding.png";
 import iconContact from "../assets/images/iconContact.png";
 import iconLocation from "../assets/images/iconLocation.png";
@@ -770,7 +773,7 @@ export default function OrderNow() {
       <div className="loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
-          src="./src/assets/images/GIS_Logo.png"
+          src={Logo}
           alt="Home Icon"
           width="180"
           height="55"
@@ -780,7 +783,7 @@ export default function OrderNow() {
 
       <div className="edit-titleIcon-Div">
         <label className="editAddress-headerLabel">Detalles de Orden</label>
-        <img src="./src/assets/images/Icono_Carrito.png" alt="Carrito" width="35" height="35" />
+        <img src={CarritoIcono} alt="Carrito" width="35" height="35" />
       </div>
 
       <div className="orderNowBody-Div">

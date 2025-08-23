@@ -7,6 +7,9 @@ import axios from "axios"
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import LocationIcono from "/src/assets/images/Icon_location-pin.png"
+
 export default function EditAddress() {
 
     const navigate = useNavigate();
@@ -135,13 +138,13 @@ export default function EditAddress() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+                <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
             <div className="edit-titleIcon-Div">
                 <label className="editAddress-headerLabel">Edita tus domicilios</label>
-                <img src="./src/assets/images/Icon_location-pin.png" alt="Home Icon" width="35" height="35"/>
+                <img src={LocationIcono} alt="Home Icon" width="35" height="35"/>
             </div>
 
             <div className="editInstructions-Div">

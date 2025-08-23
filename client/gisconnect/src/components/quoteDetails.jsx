@@ -59,7 +59,7 @@ export default function QuoteDetails() {
         <div className="loginLogo-ParentDiv">
           <img
             className="secondaryPages-GISLogo"
-            src="./src/assets/images/GIS_Logo.png"
+            src={Logo}
             alt="Home Icon"
             width="180"
             height="55"

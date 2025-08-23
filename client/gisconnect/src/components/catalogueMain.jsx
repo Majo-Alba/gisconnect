@@ -9,6 +9,9 @@ import Papa from 'papaparse';
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
+import Logo from "/src/assets/images/GIS_Logo.png";
+import CatalogoIcono from "/src/assets/images/Icono_Catalogo.png"
+
 export default function CatalogueMain() {
 
     const navigate = useNavigate();
@@ -93,13 +96,13 @@ export default function CatalogueMain() {
 
             {/* LOGOS DIV */}
             <div className="loginLogo-ParentDiv">
-                <img className="secondaryPages-GISLogo" src="./src/assets/images/GIS_Logo.png" alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
+                <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
             <div className="edit-titleIcon-Div">
                 <label className="editAddress-headerLabel">Productos</label>
-                <img src="./src/assets/images/Icono_Catalogo.png" alt="Home Icon" width="35" height="35"/>
+                <img src={CatalogoIcono} alt="Home Icon" width="35" height="35"/>
             </div>
 
             {/* JUL04 */}
