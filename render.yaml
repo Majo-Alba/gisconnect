@@ -1,0 +1,53 @@
+services:
+  # -------------------------
+  # BACKEND: Node/Express API
+  # -------------------------
+  - type: web
+    name: gisconnect-api
+    env: node
+    region: oregon                 # pick your closest region in Render UI if you prefer
+    repo: https://github.com/Majo-Alba/gisconnect
+    branch: main                   # or your deploy branch
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    plan: starter                  # starter/free/… adjust as needed
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # IMPORTANT: Fill the following secrets in the Render dashboard when prompted
+      - key: DB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      # Non-secret; you can keep the default here
+      - key: S3_URL_TTL_SECONDS
+        value: "900"
+      # Add your frontend origin here after it exists; keep localhost for local dev
+      - key: CORS_ORIGINS
+        value: https://gisconnect-web.onrender.com,http://localhost:5173
+
+  # -------------------------
+  # FRONTEND: Vite static app
+  # -------------------------
+  - type: static
+    name: gisconnect-web
+    repo: https://github.com/Majo-Alba/gisconnect
+    branch: main
+    rootDir: client/gisconnect
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      # After the API is live, replace with the API URL Render shows (e.g. https://gisconnect-api.onrender.com)
+      - key: VITE_API_BASE
+        value: https://gisconnect-api.onrender.com
