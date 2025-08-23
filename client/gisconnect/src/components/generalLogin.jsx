@@ -118,15 +118,11 @@ export default function GeneralLogin() {
                     </div>
                 </div>
 
-                {/* <p className="forgotPassword-Subnote">¿Olvidaste tu contraseña?  <Link to="/restorePassword" className="login-SubLink">Da click aquí</Link></p> */}
-                <p className="forgotPassword-Subnote">¿Olvidaste tu contraseña?  <button onClick={() => navigate("/restorePassword")}>Da click aquí</button>
-                </p>
+                <p className="forgotPassword-Subnote">¿Olvidaste tu contraseña?  <Link to="/restorePassword" className="login-SubLink">Da click aquí</Link></p>
 
                 <button className="returningUser-GeneralLoginButton" type="submit" onClick={goToUser}>Ingresar</button>
 
-                {/* <p className="login-Subnote">¿Aún no te registras?  <Link to="/newSignup" className="login-SubLink">Crea una cuenta</Link></p> */}
-                <p className="login-Subnote">¿Aún no te registras?  <button onClick={() => navigate("/newData")}>Crea una cuenta</button>
-                </p>
+                <p className="login-Subnote">¿Aún no te registras?  <Link to="/newSignup" className="login-SubLink">Crea una cuenta</Link></p>
 
                 <label className="login-Slogan">Bienvenido<br></br> a casa</label>
 

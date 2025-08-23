@@ -283,7 +283,7 @@ button, .btn, .clickable {
   border: none;
 
   position: absolute;
-  bottom:47%;
+  bottom:42%;
   left: 60%;
 
   width:fit-content;
@@ -304,7 +304,7 @@ button, .btn, .clickable {
 
 .returningUser-GeneralLoginButton:hover{
   position: absolute;
-  bottom: 47%;
+  bottom: 42%;
   left: 60%;
 
   width:fit-content;

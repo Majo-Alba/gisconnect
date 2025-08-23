@@ -60,8 +60,8 @@ function App() {
 
             {/* GISCONNECT START */}
             <Route path='/' element={<GeneralLogin/>}/>
-            <Route path='/restorePassword' element={<Private Component={RestorePassword}/>}/>
-            <Route path="/reset-password/:token" element={<Private Component={ResetPassword} />} />
+            <Route path='/restorePassword' element={<RestorePassword/>}/>
+            <Route path="/reset-password/:token" element={<ResetPassword/>} />
 
             <Route path='/newSignup' element={<Private Component={NewSignupData}/>}/>
             <Route path='/userHome' element={<Private Component={UserHome}/>}/>
