@@ -1,3 +1,5 @@
+// You rock! Next fix is in orderNow.jsx... Two situations here 1) cant seem to connect with DOF Rate and console throws this error: GET https://gisconnect-api.onrender.com:4000/fx/usd-dof net::ERR_CONNECTION_TIMED_OUT. And 2) when hitting "Descargar Orden", both in computer and in app version, I get the following pop up message "Ocurrió un error al guardar la orden o al reservar inventario". Can you give me a direct copy-paste edit 
+
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -87,7 +89,7 @@ export default function OrderNow() {
     const getDofRate = async () => {
       try {
 
-        const res = await fetch(`${API}:4000/fx/usd-dof`);
+        const res = await fetch(`${API}/fx/usd-dof`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
         setDofRate(Number(data.rate));
@@ -728,11 +730,9 @@ export default function OrderNow() {
 
       const form = new FormData();
       form.append("order", JSON.stringify(orderInfo));
-      form.append("pdf", file);
+      form.append("pdf", pdfBlob, file);
 
       // 1) Create order + upload PDF
-      await axios.get(`${API}/orders/${orderId}`);
-
       const createRes = await axios.post(`${API}/orderDets`, form, {
         headers: { "Content-Type": "multipart/form-data" },
       });
