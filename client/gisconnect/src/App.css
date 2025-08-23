@@ -12,6 +12,14 @@ body{
 /* GISCONNECT NEW - APR/06 */
 @media only screen and (max-width: 600px) {
 
+  @font-face {
+    font-family: "FiraSansExtraCondensed";
+    src: url("/fonts/FiraSansExtraCondensed-Regular.ttf") format("truetype");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+
 @font-face {
   font-family: 'FiraSans'; 
   src: url('/src/assets/fonts/FiraSansExtraCondensed-Regular.ttf');
