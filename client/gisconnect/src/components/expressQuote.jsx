@@ -37,7 +37,7 @@ export default function ExpressQuote() {
   const [csvClientData, setCsvClientData] = useState([]); // Client DB (for name/email → client column)
   const [specialPrices, setSpecialPrices] = useState([]);  // Special prices sheet
 
-  // NEW (Option A): LATEST inventory map -> { "<product>__<peso><unidad>": EXISTENCIA }
+  // NEW: LATEST inventory by PRODUCT NAME ONLY → { "<normalized product>": totalExistencia }
   const [stockByKey, setStockByKey] = useState({});
 
   const [user, setUser] = useState(null);
@@ -47,6 +47,34 @@ export default function ExpressQuote() {
   const [dofRate, setDofRate] = useState(null);
   const [dofDate, setDofDate] = useState(null);
   const [fxError, setFxError] = useState(null);
+
+  // ---------- helpers (placed up here so they’re usable below) ----------
+  const normalize = (s) =>
+    (s ?? "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " "); // collapse multiple spaces
+
+  function toClientHeader(name) {
+    if (!name) return "";
+    const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  }
+  function getClientColumnName(user, clientRows) {
+    if (!user?.correo || clientRows.length === 0) return "";
+    const hit = clientRows.find(
+      (r) => normalize(r.CORREO_EMPRESA) === normalize(user.correo)
+    );
+    return toClientHeader(hit?.NOMBRE_APELLIDO);
+  }
+  const n = (v) => {
+    const x = parseFloat((v ?? "").toString().replace(/,/g, ""));
+    return Number.isFinite(x) ? x : null;
+  };
+  // ---------------------------------------------------------------------
 
   // Fetch DOF rate once
   useEffect(() => {
@@ -82,34 +110,29 @@ export default function ExpressQuote() {
   const SPECIAL_PRICES_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=231220133&single=true&output=csv";
 
-  // 🔗 NEW: LIVE "LATEST" inventory CSV (publish LATEST sheet as CSV and paste that link here)
+  // 🔗 LIVE "LATEST" inventory CSV (publish LATEST sheet as CSV and paste that link here)
   const INVENTORY_LATEST_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3w6YJjBrIDz56fkcJmjeBNlsfI55v9ilSXOzmnJBLi4h97ePj433ibiqXIRQ1KHOae-mYb21zydwS/pub?gid=0&single=true&output=csv";
-    // "https://docs.google.com/spreadsheets/d/<YOUR_LIVE_SHEET_ID>/pub?gid=<LATEST_GID>&single=true&output=csv";
 
-    
   useEffect(() => {
     fetchCSV(PRODUCTS_CSV_URL, setCsvData);
     fetchCSV(CLIENT_DB_URL, setCsvClientData);
     fetchCSV(SPECIAL_PRICES_URL, setSpecialPrices);
 
-    // fetch LATEST inventory
+    // ==== LATEST inventory by PRODUCT NAME ONLY ====
     axios
       .get(INVENTORY_LATEST_CSV_URL)
       .then((res) => {
         const rows = parseCSV(res.data);
-        // Expect headers: NOMBRE_PRODUCTO, PESO_PRODUCTO, UNIDAD_MEDICION, EXISTENCIA
-        const map = {};
+        // Expect headers: NOMBRE_PRODUCTO, EXISTENCIA (PESO/UNIDAD may exist but are IGNORED)
+        const byName = {};
         rows.forEach((r) => {
-          const prod = (r.NOMBRE_PRODUCTO || "").trim();
-          const pres = (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || "");
-          const key = (prod + "__" + pres).toLowerCase().trim();
-          const ex = parseFloat((r.EXISTENCIA || "0").toString().replace(/,/g, ""));
-          if (prod && pres && Number.isFinite(ex)) {
-            map[key] = ex;
-          }
+          const prod = normalize(r.NOMBRE_PRODUCTO || "");
+          const ex = parseFloat((r.EXISTENCIA ?? r.EXISTENCIAS ?? "0").toString().replace(/,/g, ""));
+          if (!prod || !Number.isFinite(ex)) return;
+          byName[prod] = (byName[prod] || 0) + ex; // sum if repeated rows
         });
-        setStockByKey(map);
+        setStockByKey(byName);
       })
       .catch((err) => console.error("Error fetching LATEST inventory CSV:", err));
   }, []);
@@ -131,25 +154,6 @@ export default function ExpressQuote() {
       return obj;
     });
   }
-
-  // Utils
-  const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
-  function toClientHeader(name) {
-    if (!name) return "";
-    const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-  }
-  function getClientColumnName(user, clientRows) {
-    if (!user?.correo || clientRows.length === 0) return "";
-    const hit = clientRows.find(
-      (r) => normalize(r.CORREO_EMPRESA) === normalize(user.correo)
-    );
-    return toClientHeader(hit?.NOMBRE_APELLIDO);
-  }
-  const n = (v) => {
-    const x = parseFloat((v ?? "").toString().replace(/,/g, ""));
-    return Number.isFinite(x) ? x : null;
-  };
 
   // Resolve product data & price whenever selection changes
   useEffect(() => {
@@ -173,11 +177,11 @@ export default function ExpressQuote() {
     setWeight(baseRow.PESO_PRODUCTO || "");
     setPackPresentation(baseRow.PRESENTACION_EMPAQUE || "");
 
-    // 🔁 STOCK SOURCE: LATEST CSV (fallback to products CSV if missing)
-    const key = (selectedProduct + "__" + presentation).toLowerCase().trim();
-    const latestStock = stockByKey[key];
+    // 🔁 STOCK SOURCE: LATEST CSV (by product only) with fallback to products CSV
+    const prodKey = normalize(selectedProduct);
+    const latestStock = stockByKey[prodKey];
     const fallbackStock = baseRow.CANTIDAD_EXISTENCIA
-      ? parseInt(baseRow.CANTIDAD_EXISTENCIA, 10)
+      ? parseFloat((baseRow.CANTIDAD_EXISTENCIA || "0").toString().replace(/,/g, ""))
       : 0;
     setStock(Number.isFinite(latestStock) ? String(latestStock) : String(fallbackStock));
 
@@ -304,6 +308,315 @@ export default function ExpressQuote() {
   // Formatting helpers
   const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
   const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
+  
+// // yes please! Here is my full expressQuote.jsx code, can you give me the full copy-paste version of it?
+
+// import { useState, useEffect } from "react";
+// import { Link, useNavigate } from "react-router-dom";
+// import axios from "axios";
+// import jsPDF from "jspdf";
+// import autoTable from "jspdf-autotable";
+// import { faHouse, faUser, faCartShopping, faTrash } from "@fortawesome/free-solid-svg-icons";
+// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
+// import { docDesign } from "/src/components/documentDesign";
+
+// import iconBuilding from "../assets/images/iconBuilding.png";
+// import iconContact from "../assets/images/iconContact.png";
+// import iconLocation from "../assets/images/iconLocation.png";
+// import iconPhone from "../assets/images/iconPhone.png";
+// import iconEmail from "../assets/images/iconEmail.png";
+
+// import Logo from "/src/assets/images/GIS_Logo.png";
+
+// import { API } from "/src/lib/api";
+
+// export default function ExpressQuote() {
+//   const navigate = useNavigate();
+
+//   const [selectedProduct, setSelectedProduct] = useState("");
+//   const [presentation, setPresentation] = useState("");
+//   const [amount, setAmount] = useState("");
+//   const [items, setItems] = useState([]);
+
+//   const [price, setPrice] = useState("");                 // numeric string
+//   const [priceCurrency, setPriceCurrency] = useState("USD"); // "USD" | "MXN"
+//   const [weight, setWeight] = useState("");
+//   const [stock, setStock] = useState("");
+//   const [specialApplied, setSpecialApplied] = useState(false);
+//   const [packPresentation, setPackPresentation] = useState(""); // PRESENTACION_EMPAQUE
+
+//   const [csvData, setCsvData] = useState([]);             // Products
+//   const [csvClientData, setCsvClientData] = useState([]); // Client DB (for name/email → client column)
+//   const [specialPrices, setSpecialPrices] = useState([]);  // Special prices sheet
+
+//   // NEW (Option A): LATEST inventory map -> { "<product>__<peso><unidad>": EXISTENCIA }
+//   const [stockByKey, setStockByKey] = useState({});
+
+//   const [user, setUser] = useState(null);
+//   const [isActive, setIsActive] = useState(false);
+
+//   // DOF rate (MXN per USD)
+//   const [dofRate, setDofRate] = useState(null);
+//   const [dofDate, setDofDate] = useState(null);
+//   const [fxError, setFxError] = useState(null);
+
+//   // Fetch DOF rate once
+//   useEffect(() => {
+//     const getDofRate = async () => {
+//       try {
+//         const res = await fetch(`${API}/fx/usd-dof`);
+//         const data = await res.json();
+//         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
+//         setDofRate(Number(data.rate)); // e.g. 18.23 (MXN per USD)
+//         setDofDate(data.date);
+//         setFxError(null);
+//       } catch (err) {
+//         console.error("DOF fetch error:", err);
+//         setFxError("No se pudo obtener el tipo de cambio DOF.");
+//       }
+//     };
+//     getDofRate();
+//   }, []);
+
+//   // Logged-in user (expects localStorage.userLoginCreds with { correo })
+//   useEffect(() => {
+//     const creds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+//     setUser(creds);
+//   }, []);
+
+//   // CSV URLs
+//   const PRODUCTS_CSV_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
+
+//   const CLIENT_DB_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
+
+//   const SPECIAL_PRICES_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=231220133&single=true&output=csv";
+
+//   // 🔗 NEW: LIVE "LATEST" inventory CSV (publish LATEST sheet as CSV and paste that link here)
+//   const INVENTORY_LATEST_CSV_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3w6YJjBrIDz56fkcJmjeBNlsfI55v9ilSXOzmnJBLi4h97ePj433ibiqXIRQ1KHOae-mYb21zydwS/pub?gid=0&single=true&output=csv";
+//     // "https://docs.google.com/spreadsheets/d/<YOUR_LIVE_SHEET_ID>/pub?gid=<LATEST_GID>&single=true&output=csv";
+
+    
+//   useEffect(() => {
+//     fetchCSV(PRODUCTS_CSV_URL, setCsvData);
+//     fetchCSV(CLIENT_DB_URL, setCsvClientData);
+//     fetchCSV(SPECIAL_PRICES_URL, setSpecialPrices);
+
+//     // fetch LATEST inventory
+//     axios
+//       .get(INVENTORY_LATEST_CSV_URL)
+//       .then((res) => {
+//         const rows = parseCSV(res.data);
+//         // Expect headers: NOMBRE_PRODUCTO, PESO_PRODUCTO, UNIDAD_MEDICION, EXISTENCIA
+//         const map = {};
+//         rows.forEach((r) => {
+//           const prod = (r.NOMBRE_PRODUCTO || "").trim();
+//           const pres = (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || "");
+//           const key = (prod + "__" + pres).toLowerCase().trim();
+//           const ex = parseFloat((r.EXISTENCIA || "0").toString().replace(/,/g, ""));
+//           if (prod && pres && Number.isFinite(ex)) {
+//             map[key] = ex;
+//           }
+//         });
+//         setStockByKey(map);
+//       })
+//       .catch((err) => console.error("Error fetching LATEST inventory CSV:", err));
+//   }, []);
+
+//   function fetchCSV(url, setter) {
+//     axios
+//       .get(url)
+//       .then((res) => setter(parseCSV(res.data)))
+//       .catch((err) => console.error("Error fetching CSV:", err));
+//   }
+
+//   function parseCSV(csvText) {
+//     const rows = csvText.split(/\r\n/).filter(Boolean);
+//     const headers = rows[0].split(",").map((h) => h.trim());
+//     return rows.slice(1).map((line) => {
+//       const cols = line.split(",");
+//       const obj = {};
+//       headers.forEach((h, i) => (obj[h] = (cols[i] || "").trim()));
+//       return obj;
+//     });
+//   }
+
+//   // Utils
+//   const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
+//   function toClientHeader(name) {
+//     if (!name) return "";
+//     const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+//     return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+//   }
+//   function getClientColumnName(user, clientRows) {
+//     if (!user?.correo || clientRows.length === 0) return "";
+//     const hit = clientRows.find(
+//       (r) => normalize(r.CORREO_EMPRESA) === normalize(user.correo)
+//     );
+//     return toClientHeader(hit?.NOMBRE_APELLIDO);
+//   }
+//   const n = (v) => {
+//     const x = parseFloat((v ?? "").toString().replace(/,/g, ""));
+//     return Number.isFinite(x) ? x : null;
+//   };
+
+//   // Resolve product data & price whenever selection changes
+//   useEffect(() => {
+//     const baseRow = csvData.find(
+//       (r) =>
+//         r.NOMBRE_PRODUCTO === selectedProduct &&
+//         (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+//     );
+
+//     if (!baseRow) {
+//       setWeight("");
+//       setStock("");
+//       setPrice("");
+//       setPackPresentation("");
+//       setSpecialApplied(false);
+//       setPriceCurrency("USD");
+//       return;
+//     }
+
+//     // Common attributes
+//     setWeight(baseRow.PESO_PRODUCTO || "");
+//     setPackPresentation(baseRow.PRESENTACION_EMPAQUE || "");
+
+//     // 🔁 STOCK SOURCE: LATEST CSV (fallback to products CSV if missing)
+//     const key = (selectedProduct + "__" + presentation).toLowerCase().trim();
+//     const latestStock = stockByKey[key];
+//     const fallbackStock = baseRow.CANTIDAD_EXISTENCIA
+//       ? parseInt(baseRow.CANTIDAD_EXISTENCIA, 10)
+//       : 0;
+//     setStock(Number.isFinite(latestStock) ? String(latestStock) : String(fallbackStock));
+
+//     const clientCol = getClientColumnName(user, csvClientData);
+
+//     // Match in special sheet by product + presentation
+//     const spRow = specialPrices.find(
+//       (row) =>
+//         normalize(row.NOMBRE_PRODUCTO) === normalize(selectedProduct) &&
+//         normalize(row.PESO_PRODUCTO) === normalize(baseRow.PESO_PRODUCTO) &&
+//         normalize(row.UNIDAD_MEDICION) === normalize(baseRow.UNIDAD_MEDICION)
+//     );
+
+//     // Decide price WITHOUT converting MXN→USD
+//     let resolvedPrice = null;
+//     let resolvedCurrency = "USD";
+//     let applied = false;
+
+//     // 1) Client-specific price (assume client-column is USD)
+//     if (spRow && clientCol) {
+//       const clientVal = n(spRow[clientCol]);
+//       if (clientVal && clientVal > 0) {
+//         resolvedPrice = clientVal;
+//         resolvedCurrency = "USD";
+//         applied = true;
+//       }
+//     }
+
+//     // 2) Fallback to general USD on special sheet, then products sheet
+//     if (resolvedPrice === null) {
+//       const usdFallback =
+//         n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+//         n(spRow?.PRECIO_PIEZA_DOLARES) ??
+//         n(baseRow.PRECIO_PIEZA_DOLARES);
+//       if (usdFallback && usdFallback > 0) {
+//         resolvedPrice = usdFallback;
+//         resolvedCurrency = "USD";
+//       }
+//     }
+
+//     // 3) If still nothing in USD, try MXN columns (special first, then products) — DO NOT CONVERT
+//     if (resolvedPrice === null) {
+//       const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
+//       if (mxnVal && mxnVal > 0) {
+//         resolvedPrice = mxnVal;
+//         resolvedCurrency = "MXN";
+//       }
+//     }
+
+//     // Apply
+//     if (resolvedPrice === null) {
+//       setPrice("");
+//       setPriceCurrency("USD");
+//       setSpecialApplied(false);
+//       return;
+//     }
+
+//     setPrice(String(resolvedPrice));
+//     setPriceCurrency(resolvedCurrency);
+//     setSpecialApplied(applied);
+//   }, [selectedProduct, presentation, csvData, specialPrices, csvClientData, user, stockByKey]);
+
+//   // Presentation list for the chosen product
+//   const presentationOptions = csvData
+//     .filter((r) => r.NOMBRE_PRODUCTO === selectedProduct)
+//     .map((r) => (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || ""));
+
+//   // Add item to wishlist (keep currency on each item)
+//   const handleAddItem = () => {
+//     const baseRow = csvData.find(
+//       (r) =>
+//         r.NOMBRE_PRODUCTO === selectedProduct &&
+//         (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+//     );
+//     if (!baseRow) return;
+
+//     if (amount && parseInt(amount) <= parseInt(stock || "0") && price) {
+//       setItems((prev) => [
+//         ...prev,
+//         {
+//           product: selectedProduct,
+//           presentation,
+//           packPresentation,
+//           amount: Number(amount),
+//           price: Number(price),          // do not convert; keep numeric
+//           currency: priceCurrency,       // "USD" or "MXN"
+//           weight: Number(baseRow.PESO_PRODUCTO || 0),
+//         },
+//       ]);
+//       setSelectedProduct("");
+//       setPresentation("");
+//       setPackPresentation("");
+//       setAmount("");
+//       setPrice("");
+//       setPriceCurrency("USD");
+//       setWeight("");
+//       setStock("");
+//       setSpecialApplied(false);
+//     }
+//   };
+
+//   const removeItem = (idx) => {
+//     setItems((prev) => prev.filter((_, i) => i !== idx));
+//   };
+
+//   // ===== Totals =====
+//   const usdItems = items.filter((it) => (it.currency || "USD") === "USD");
+//   const mxnItems = items.filter((it) => (it.currency || "USD") === "MXN");
+
+//   const totalUSD = usdItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native USD subtotal
+//   const totalMXN = mxnItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native MXN subtotal
+
+//   // Cross-currency totals using DOF rate
+//   const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
+//   const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
+
+//   // IVA (apply only to the all-products totals to keep UI tidy)
+//   const ivaAllUSD = isActive && allUSD != null ? +(allUSD * 0.16).toFixed(2) : null;
+//   const ivaAllMXN = isActive && allMXN != null ? +(allMXN * 0.16).toFixed(2) : null;
+
+//   const allUSDWithIVA = ivaAllUSD != null ? +(allUSD + ivaAllUSD).toFixed(2) : null;
+//   const allMXNWithIVA = ivaAllMXN != null ? +(allMXN + ivaAllMXN).toFixed(2) : null;
+
+//   // Formatting helpers
+//   const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+//   const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
 
   // ======== PDF + Upload (unchanged design; now shows split+global totals & currency) ========
   const downloadPDF = async () => {
@@ -712,11 +1025,11 @@ export default function ExpressQuote() {
             value={price ? `${price} ${priceCurrency}` : ""}
             readOnly
           />
-          {specialApplied && (
+          {/* {specialApplied && (
             <div style={{ fontSize: 12, color: "#26a269", marginTop: 4 }}>
               Precio especial aplicado para tu cuenta
             </div>
-          )}
+          )} */}
           {!price && presentation && (
             <div style={{ fontSize: 12, color: "#b00", marginTop: 4 }}>
               No hay precio disponible.
