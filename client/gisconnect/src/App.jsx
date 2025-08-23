@@ -81,28 +81,29 @@ function App() {
             <Route path='/product' element={<Private Component={ProductDetails}/>}/>
 
             <Route path='/adminHome' element={<AdminHome/>}/>
+            {/* <Route path='/newQuotes' element={<Private Component={NewQuotes}/>}/> */}
 
-            <Route path='/newQuotes' element={<Private Component={NewQuotes}/>}/>
-            <Route path="/quoteDetails/:id" element={<Private Component={QuoteDetails}/>} />
-            <Route path='/newOrders' element={<Private Component={NewOrders}/>}/>
-            <Route path="/newOrders/:orderId" element={<Private Component={NewOrderDetails}/>} />
+            <Route path='/newQuotes' element={<NewQuotes/>}/>
+            <Route path="/quoteDetails/:id" element={<QuoteDetails/>} />
+            <Route path='/newOrders' element={<NewOrders/>}/>
+            <Route path="/newOrders/:orderId" element={<NewOrderDetails/>} />
 
             {/* <Route path='/paymentValidation' element={<Private Component={PaymentValidation}/>}/> */}
-            <Route path='/quotes' element={<Private Component={GeneratedQuotes}/>}/>
+            <Route path='/quotes' element={<GeneratedQuotes/>}/>
 
-            <Route path='/toPack' element={<Private Component={PendingPack}/>}/>
-            <Route path="/packDetails/:orderId" element={<Private Component ={PackDetails}/>} />
+            <Route path='/toPack' element={<PendingPack/>}/>
+            <Route path="/packDetails/:orderId" element={<PackDetails/>} />
 
-            <Route path='/manageDelivery' element={<Private Component={ManageDelivery}/>}/>
-            <Route path="/manageDelivery/:orderId" element={<Private Component={ManageDeliveryDetails} />} />
+            <Route path='/manageDelivery' element={<ManageDelivery/>}/>
+            <Route path="/manageDelivery/:orderId" element={<ManageDeliveryDetails />} />
 
             {/* <Route path='/shippingDetails' element={<Private Component={ShippingDetails}/>}/> */}
 
-            <Route path='/deliverReady' element={<Private Component={DeliverReady}/>}/>
-            <Route path='/deliveryDetails/:orderId' element={<Private Component={DeliveryDetails}/>}/>
+            <Route path='/deliverReady' element={<DeliverReady/>}/>
+            <Route path='/deliveryDetails/:orderId' element={<DeliveryDetails/>}/>
 
-            <Route path='/delivered' element={<Private Component={DeliveredOrders}/>}/>
-            <Route path='/deliveredSummary/:orderId' element={<Private Component={DeliveredSummary}/>}/>
+            <Route path='/delivered' element={<DeliveredOrders/>}/>
+            <Route path='/deliveredSummary/:orderId' element={<DeliveredSummary/>}/>
 
             {/* GISCONNECT END */}
 

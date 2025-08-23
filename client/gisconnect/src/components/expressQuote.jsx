@@ -308,7 +308,7 @@ export default function ExpressQuote() {
   // Formatting helpers
   const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
   const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
-  
+
 // // yes please! Here is my full expressQuote.jsx code, can you give me the full copy-paste version of it?
 
 // import { useState, useEffect } from "react";
@@ -916,7 +916,9 @@ export default function ExpressQuote() {
       const pdfBlob = doc.output("blob");
       const file = new File([pdfBlob], "Cotizacion_Express.pdf", { type: "application/pdf" });
       const formData = new FormData();
-      formData.append("pdf", file); // field name must match your multer/endpoint
+      formData.append("pdf", pdfBlob, file); // field name must match your multer/endpoint
+
+      // formData.append("pdf", file); // field name must match your multer/endpoint
   
       // Optional: include metadata alongside the file
       formData.append(
@@ -939,11 +941,14 @@ export default function ExpressQuote() {
         })
       );
   
-      await axios.post(`${API}/save-pdf`, formData);
+      await axios.post(`${API}/save-pdf`, formData, { withCredentials: false });
       alert("PDF generado y guardado exitosamente.");
     } catch (err) {
-      console.error("Error saving PDF:", err);
-      alert("No se pudo guardar el PDF.");
+      console.error("Error saving PDF:", err?.response?.data || err.message || err);
+      alert(
+        `No se pudo guardar el PDF.\n` +
+        `${err?.response?.data?.error || err.message || "Revisa tu conexión y vuelve a intentar."}`
+      );
     }
   };
   
