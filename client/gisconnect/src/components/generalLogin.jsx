@@ -8,7 +8,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 import Logo from "/src/assets/images/GIS_Logo.png";
 import Basket from "/src/assets/images/BG-veggieBasket.png";
-
+import axios from "axios";
 import { API } from "/src/lib/api";
 
 export default function GeneralLogin() {

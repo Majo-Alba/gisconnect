@@ -1,3 +1,4 @@
+import axios from "axios";
 import { API } from "/src/lib/api";
 
 function isImageMime(m) {

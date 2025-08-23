@@ -6,7 +6,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 import Logo from "/src/assets/images/GIS_Logo.png";
 import OrdersIcon from "/src/assets/images/Icono_Pedidos.png"
-
+import axios from "axios";
 import { API } from "/src/lib/api";
 
 export default function MyOrders() {
