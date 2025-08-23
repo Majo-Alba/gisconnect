@@ -1,5 +1,3 @@
-# render.yaml (at your repo root)
-
 services:
   # ───────────────────────────
   # Backend API (Express/Mongo)
@@ -7,7 +5,6 @@ services:
   - type: web
     name: gisconnect-api
     runtime: node
-    region: oregon
     plan: starter
     branch: main
     rootDir: server
@@ -43,7 +40,6 @@ services:
   - type: web
     name: gisconnect-web
     runtime: static
-    region: oregon
     plan: free
     branch: main
     rootDir: client/gisconnect
@@ -52,6 +48,4 @@ services:
     autoDeployTrigger: commit
     envVars:
       - key: VITE_API_BASE
-        # During first-time Blueprint creation, type the API URL Render gives to gisconnect-api.
-        # After the API deploys, you can update this to the final https://<api>.onrender.com
         value: https://gisconnect-api.onrender.com
