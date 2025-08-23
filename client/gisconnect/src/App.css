@@ -10,6 +10,49 @@ body{
 }
 
 /* GISCONNECT NEW - APR/06 */
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #fff; /* or your gradient wrapper */
+}
+
+/* Prevent horizontal scroll on small screens */
+* {
+  box-sizing: border-box;
+}
+
+img, svg, video, canvas {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Common container helper for mobile padding */
+.container {
+  width: 100%;
+  max-width: 600px;   /* keeps things comfy on tablets */
+  margin: 0 auto;
+  padding: 0 12px;
+}
+
+/* Touch target sizing for buttons */
+button, .btn, .clickable {
+  min-height: 44px; /* Apple HIG */
+}
+
+/* Labels that wrapped awkwardly */
+.orderNumber-Label,
+.orderDate-Label,
+.productDetail-Label {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
 @media only screen and (max-width: 600px) {
 
   @font-face {
