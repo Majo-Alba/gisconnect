@@ -63,7 +63,7 @@ function App() {
             <Route path='/restorePassword' element={<RestorePassword/>}/>
             <Route path="/reset-password/:token" element={<ResetPassword/>} />
             <Route path='/newSignup' element={<NewSignupData/>}/>
-            
+
             <Route path='/userHome' element={<Private Component={UserHome}/>}/>
 
             <Route path='/expressQuote' element={<Private Component={ExpressQuote}/>}/>
@@ -80,7 +80,7 @@ function App() {
             <Route path='/catalogue' element={<Private Component={CatalogueMain}/>}/>
             <Route path='/product' element={<Private Component={ProductDetails}/>}/>
 
-            <Route path='/adminHome' element={<Private Component={AdminHome}/>}/>
+            <Route path='/adminHome' element={<AdminHome/>}/>
 
             <Route path='/newQuotes' element={<Private Component={NewQuotes}/>}/>
             <Route path="/quoteDetails/:id" element={<Private Component={QuoteDetails}/>} />
