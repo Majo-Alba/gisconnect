@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
+import { API } from "/src/lib/api";
+import { useParams, useNavigate } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo } from "react";
 
 import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -149,6 +151,17 @@ export default function NewOrderDetails() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isLightboxOpen, closeLightbox]);
+
+  useEffect(() => { load(); }, [orderId]);
+
+  async function load() {
+    try {
+      const res = await axios.get(`${API}/orders/${orderId}`);
+      setOrder(res.data);
+    } catch (e) {
+      console.error("Load order error:", e);
+    }
+  }
 
   // Navigation
   function goToAdminHome() {
@@ -321,24 +334,37 @@ export default function NewOrderDetails() {
           <div className="paymentDets-Dropdown">
             <div className="headerEditIcon-Div">
               <label className="newUserData-Label">Evidencia de Pago</label>
+              <div className="existingQuote-Div">
+                {order?.evidenceFileExt ? (
+                  <EvidenceGallery
+                    orderId={orderId}
+                    evidenceFileExt={order.evidenceFileExt}
+                  />
+                ) : (
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    Aún no hay evidencia de pago cargada por el cliente.
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           {/* Evidence preview + actions */}
           <div className="paymentEvidence-Div" style={{ gap: 12, alignItems: "center" }}>
             <img
-              src={evidenceUrl || TicketFallback}
-              alt="Evidencia de pago"
-              width="85"
-              height="85"
+              src={evidenceUrl}
+              // src={evidenceUrl || TicketFallback}
+              // alt="Evidencia de pago"
+              // width="85"
+              // height="85"
               style={{ cursor: evidenceUrl ? "zoom-in" : "default", objectFit: "cover" }}
               onClick={evidenceUrl ? () => setIsLightboxOpen(true) : undefined}
-              onError={(e) => {
-                e.currentTarget.src = TicketFallback;
-              }}
+              // onError={(e) => {
+              //   e.currentTarget.src = TicketFallback;
+              // }}
             />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               <a
                 href={evidenceUrl || "#"}
                 download={
@@ -350,7 +376,7 @@ export default function NewOrderDetails() {
               >
                 Descargar evidencia
               </a>
-            </div>
+            </div> */}
           </div>
         </div>
 

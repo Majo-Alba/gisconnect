@@ -1,0 +1,51 @@
+services:
+  # ───────────────────────────
+  # Backend API (Express/Mongo)
+  # ───────────────────────────
+  - type: web
+    name: gisconnect-api
+    runtime: node
+    branch: main
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: node index.js
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: PORT
+        value: 4000
+      - key: CORS_ORIGINS
+        # update this AFTER the web URL is known to include it exactly
+        value: https://gisconnect-web.onrender.com,http://localhost:5173
+      - key: DB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: S3_URL_TTL_SECONDS
+        value: "900"
+
+  # ───────────────────────────
+  # Frontend (Vite static site)
+  # ───────────────────────────
+  - type: web
+    name: gisconnect-web
+    runtime: static
+    branch: main
+    rootDir: client/gisconnect
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: true
+    envVars:
+      - key: VITE_API_BASE
+        # set to the final API URL Render gives to gisconnect-api, then redeploy
+        value: https://gisconnect-api.onrender.com

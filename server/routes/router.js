@@ -854,6 +854,12 @@ router.get("/:orderId/evidence/packing/:index", async (req, res) => {
   }
 });
 
+router.get("/:orderId", async (req, res) => {
+  const o = await newOrderModel.findById(req.params.orderId).lean();
+  if (!o) return res.status(404).json({ error: "Not found" });
+  return res.json(o);
+});
+
 // 🔎 Route inspector (visit /__routes to list routes)
 router.get("/__routes", (_req, res) => {
   const flatten = (s) =>
