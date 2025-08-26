@@ -1,3 +1,4 @@
+/* ---------- Fonts (served from /public/fonts) ---------- */
 @font-face {
   font-family: "FiraSansExtraCondensed";
   src: url("/fonts/FiraSansExtraCondensed-Regular.ttf") format("truetype");
@@ -11,11 +12,16 @@ font-family: 'FiraSans';
 src: url('/fonts/FiraSansExtraCondensed-Regular.ttf');
 }
 
+/* ---------- Base resets ---------- */
+
+/* GISCONNECT NEW - APR/06 */
+html, body, #root {
+  height: 100%;
+}
+
 body {
-  min-height: 100vh;
   margin: 0;
   padding: 0;
-  /* Prefer your custom family first, then system fallbacks */
   font-family: "FiraSansExtraCondensed", -apple-system, BlinkMacSystemFont, "Segoe UI",
                Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -23,25 +29,6 @@ body {
   background: #fff; /* or your gradient wrapper */
 }
 
-/* body{
-  min-height: 100vh;
-  padding: 0px;
-  font-family: 'Poppins', sans-serif;
-} */
-
-/* GISCONNECT NEW - APR/06 */
-html, body, #root {
-  height: 100%;
-}
-
-/* body {
-  margin: 0;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  background: #fff;
-} */
-
-/* Prevent horizontal scroll on small screens */
 * {
   box-sizing: border-box;
 }
@@ -52,7 +39,44 @@ img, svg, video, canvas {
   display: block;
 }
 
-/* Common container helper for mobile padding */
+/* Avoid iOS zoom on form focus */
+input, select, textarea, button { font-size: 16px; }
+
+/* ---------- Mobile-safe layout helpers ---------- */
+.app-shell {
+  /* prefer dynamic viewport heights on mobile */
+  min-height: 100svh;
+  min-height: 100dvh;
+  min-height: -webkit-fill-available; /* iOS fallback */
+  display: flex;
+  flex-direction: column;
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top);
+  background: transparent; /* or a color if you need */
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-height: 0;                  /* critical so children can scroll */
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.app-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ---------- Your existing utility/styles ---------- */
+
 .container {
   width: 100%;
   max-width: 600px;   /* keeps things comfy on tablets */
@@ -60,12 +84,10 @@ img, svg, video, canvas {
   padding: 0 12px;
 }
 
-/* Touch target sizing for buttons */
 button, .btn, .clickable {
   min-height: 44px; /* Apple HIG */
 }
 
-/* Labels that wrapped awkwardly */
 .orderNumber-Label,
 .orderDate-Label,
 .productDetail-Label {
@@ -73,45 +95,29 @@ button, .btn, .clickable {
   overflow-wrap: anywhere;
 }
 
-@media only screen and (max-width: 600px) {
-
-  /* @font-face {
-    font-family: "FiraSansExtraCondensed";
-    src: url("/fonts/FiraSansExtraCondensed-Regular.ttf") format("truetype");
-    font-weight: 400;
-    font-style: normal;
-    font-display: swap;
-  }
-
-@font-face {
-  font-family: 'FiraSans'; 
-  src: url('/src/assets/fonts/FiraSansExtraCondensed-Regular.ttf');
-} */
-
-/* after this point we have all other css styling */
-
 .body-BG-Gradient{
   background-color: rgb(255, 255, 255);
   background: linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 37%, rgba(158,215,135,1) 100%);
-  /* background-image: url("./assets/images/BG_SolidBlue.png"); */
   background-size: contain;
   background-repeat: no-repeat;
 }
 
+/* ---------- Footer menu: replace absolute with sticky ---------- */
+
 .footerMenuDiv {
-  /* background: #000000; */
-  /* background: #086e32; */
   background: #075f2b;
 
-
   width: 100%;
-
   height: 50px;
 
-  position: absolute;
+  position: sticky;
   bottom: 0px;
   z-index: 2;
 }
+
+@media only screen and (max-width: 600px) {
+
+.container { padding: 0 10px; }
 
 /* GIS: newData.jsx */
 .newUser-SendButton{
