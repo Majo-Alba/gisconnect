@@ -40,12 +40,12 @@ export default function UserProfile() {
 
     function editAddresses(){
         console.log("Edit addresses clicked")
-        location.replace("/editAddress")
+        navigate("/editAddress")
     }
 
     function editInvoiceInfo(){
         console.log("Edit invoice info clicked")
-        location.replace("/editInvoice")
+        navigate("/editInvoice")
     }
 
     // NEW APR21
