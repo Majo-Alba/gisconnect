@@ -51,35 +51,37 @@ export default function ResetPassword() {
   };
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
         {/* <div className="body-BG-Gradient"> */}
             <form onSubmit={handleSubmit} className="form-card">
                 {/* LOGOS DIV */}
-                <div className="loginLogo-ParentDiv">
+                <div className="app-header loginLogo-ParentDiv">
                     <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70" />
                     <img className="signup-VeggieBasket" src={Basket} alt="Veggie Basket" width="400" height="250" />
                     <label className="welcome-Label">Establece una<br></br>nueva contraseña</label>
                 </div>
                 {/* LOGOS END*/}
 
-                <p className="restorePass-Subnote">Ingresa una nueva contraseña <br></br>para tu cuenta de GISConnect</p>
+                <div className="app-main">
+                  <p className="restorePass-Subnote">Ingresa una nueva contraseña <br></br>para tu cuenta de GISConnect</p>
 
-                <div>
-                    <div className="newUserPassword-Div">
-                        <input className="resetPass-Input" minLength={5} type="password" id="password" placeholder="Nueva contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required/>
-                        <FontAwesomeIcon className="resetPass-EyeIcon" onClick={toggleEye} icon={faEye}/>
-                    </div>
-                </div>  
+                  <div>
+                      <div className="newUserPassword-Div">
+                          <input className="resetPass-Input" minLength={5} type="password" id="password" placeholder="Nueva contraseña" value={password} onChange={(e) => setPassword(e.target.value)} required/>
+                          <FontAwesomeIcon className="resetPass-EyeIcon" onClick={toggleEye} icon={faEye}/>
+                      </div>
+                  </div>  
 
-                <button className="resetPass-Btn" type="submit">Restablecer</button>
-                {message && <p>{message}</p>}
+                  <button className="resetPass-Btn" type="submit">Restablecer</button>
+                  {message && <p>{message}</p>}
 
-                <label className="restorePass-Slogan">Bienvenido<br></br> a casa</label>
+                  <label className="restorePass-Slogan">Bienvenido<br></br> a casa</label>
+                </div>
 
             </form>
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
             </div> 
             {/* FOOTER MENU */}
         </body>

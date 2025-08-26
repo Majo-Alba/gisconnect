@@ -70,15 +70,16 @@ export default function UserHome() {
     // END JUN25
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
 
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className="app-header loginLogo-ParentDiv">
                 <img className="userHome-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
                 <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
             </div>
             {/* LOGOS END*/}
 
+            <div className="app-main">
             {/* NEW JUN05 */}
             <label className="userHomeHeader-Label">Bienvenido de vuelta!</label>
             {/* END JUN05 */}
@@ -113,12 +114,13 @@ export default function UserHome() {
             </div>
             {/* BODY END */}
 
-            <div className="footerIcon-NameDiv" onClick={() => setShowModal(true)}>
+            <div className="app-footer footerIcon-NameDiv" onClick={() => setShowModal(true)}>
                 <button className="userHomeQuestions-Btn"><FontAwesomeIcon icon={faCircleQuestion}/></button>
             </div>
             {/* new jun03 */}
             {showModal && <Modal onClose={() => setShowModal(false)}/>}
             {/* end jun03 */}
+            </div>
 
 
             {/* FOOTER MENU */}

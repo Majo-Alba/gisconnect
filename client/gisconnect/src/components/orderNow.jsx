@@ -775,8 +775,8 @@ export default function OrderNow() {
   };
 
   return (
-    <body className="body-BG-Gradient">
-      <div className="loginLogo-ParentDiv">
+    <body className="app-shell body-BG-Gradient">
+      <div className="app-header loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
           src={Logo}
@@ -787,6 +787,7 @@ export default function OrderNow() {
         />
       </div>
 
+      <div className="app-main">
       <div className="edit-titleIcon-Div">
         <label className="editAddress-headerLabel">Detalles de Orden</label>
         <img src={CarritoIcono} alt="Carrito" width="35" height="35" />
@@ -1022,8 +1023,9 @@ export default function OrderNow() {
           </button>
         </div>
       </div>
+      </div>
 
-      <div className="footerMenuDiv">
+      <div className="app-footer footerMenuDiv">
         <div className="footerHolder">
           <div className="footerIcon-NameDiv" onClick={() => navigate("/userHome")}>
             <FontAwesomeIcon icon={faHouse} className="footerIcons" />{" "}

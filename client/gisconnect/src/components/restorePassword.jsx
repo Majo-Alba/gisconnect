@@ -26,29 +26,30 @@ export default function RestorePassword() {
   };
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
             <form onSubmit={handleSubmit} className="form-card">
                 {/* LOGOS DIV */}
-                <div className="loginLogo-ParentDiv">
+                <div className="app-header loginLogo-ParentDiv">
                     <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
                     <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
                     <label className="welcome-Label">Restablecer<br></br>Contraseña</label>
                 </div>
                 {/* LOGOS END*/}
 
-                <p className="restorePass-Subnote">Ingresa el correo electrónico con el que <br></br>te registraste en la plataforma</p>
+                <div className="app-main">
+                  <p className="restorePass-Subnote">Ingresa el correo electrónico con el que <br></br>te registraste en la plataforma</p>
 
-                <input className="returningUser-Input" type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required/>
-                <button className="restorePass-Btn" type="submit">Enviar enlace <br></br> a correo</button>
-                <div className="restorePass-popUpMessage">
-                    {message && <p className={message.type}>{message}</p>}
+                  <input className="returningUser-Input" type="email" placeholder="Correo electrónico" value={email} onChange={(e) => setEmail(e.target.value)} required/>
+                  <button className="restorePass-Btn" type="submit">Enviar enlace <br></br> a correo</button>
+                  <div className="restorePass-popUpMessage">
+                      {message && <p className={message.type}>{message}</p>}
+                  </div>
+                  <label className="restorePass-Slogan">Bienvenido<br></br> a casa</label>
                 </div>
-                <label className="restorePass-Slogan">Bienvenido<br></br> a casa</label>
-
             </form>
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
             </div> 
             {/* FOOTER MENU */}
         </body>

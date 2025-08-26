@@ -651,8 +651,8 @@ export default function ExpressQuote() {
   };
 
   return (
-    <body className="body-BG-Gradient">
-      <div className="loginLogo-ParentDiv">
+    <body className="app-shell body-BG-Gradient">
+      <div className="app-header loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
           src={Logo}
@@ -663,6 +663,7 @@ export default function ExpressQuote() {
         />
       </div>
 
+      <div className="app-main">
       <label className="sectionHeader-Label">¡Cotiza ahora!</label>
 
       <div className="quoterBody-Div">
@@ -832,8 +833,9 @@ export default function ExpressQuote() {
           </button>
         </div> */}
       </div>
+      </div>
 
-      <div className="footerMenuDiv">
+      <div className="app-footer footerMenuDiv">
         <div className="footerHolder">
           <div className="footerIcon-NameDiv" onClick={() => navigate("/userHome")}>
             <FontAwesomeIcon icon={faHouse} className="footerIcons" />

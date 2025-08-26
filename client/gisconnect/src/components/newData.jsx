@@ -77,15 +77,16 @@ export default function NewSignupData() {
     // UPLOAD DATA END
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
 
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className="app-header loginLogo-ParentDiv">
                 <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
                 <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
             </div>
             {/* LOGOS END*/}
 
+            <div className="app-main">
             {/* INPUTS DIV */}
             <div className="newUser-LabelsAndInputs-Div">
                 <div>
@@ -115,6 +116,7 @@ export default function NewSignupData() {
             </div>
 
             <button className="newUser-SendButton" type="submit" onClick={handleSubmit}>Agregar</button>
+            </div>
             
         </body>
     )

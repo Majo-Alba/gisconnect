@@ -100,7 +100,7 @@ export default function GeneralLogin() {
         <body className="app-shell body-BG-Gradient">
             <form onSubmit={handleSubmit}>
 
-                <div className="loginLogo-ParentDiv">
+                <div className="app-header loginLogo-ParentDiv">
                     <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
                     <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
                     <label className="welcome-Label">Where passion<br></br>meets nature</label>

@@ -136,14 +136,15 @@ export default function EditAddress() {
     // END APR21
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
 
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className="app-header loginLogo-ParentDiv">
                 <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
+            <div className="app-main">
             <div className="edit-titleIcon-Div">
                 <label className="editAddress-headerLabel">Edita tus domicilios</label>
                 <img src={LocationIcono} alt="Home Icon" width="35" height="35"/>
@@ -187,10 +188,11 @@ export default function EditAddress() {
                 <input className="addressInfo-Input" type="text" value={newShippingAddress.cpEnvio} onChange={handleInput} required placeholder="Código postal"  name="cpEnvio"></input>
             </div>
 
-            <button className="addAddress-Button" type="submit" onClick={handleSubmit}>Agregar</button>            
+            <button className="addAddress-Button" type="submit" onClick={handleSubmit}>Agregar</button>     
+            </div>       
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToHome}>

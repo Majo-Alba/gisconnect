@@ -96,14 +96,15 @@ export default function EditInvoice() {
       };
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
 
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className="app-header loginLogo-ParentDiv">
                 <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
+            <div className="app-main">
             <div className="edit-titleIcon-Div">
                 <label className="editAddress-headerLabel">Edita tus datos de facturación</label>
                 <img src={InvoiceIcon} alt="Home Icon" width="35" height="35"/>
@@ -179,10 +180,11 @@ export default function EditInvoice() {
                 </select>
 
             <button className="addInvoiceInfo-Button" type="submit" onClick={handleSubmit}>Agregar</button>   
-            </div>            
+            </div>      
+            </div>      
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToHome}>

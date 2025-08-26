@@ -366,8 +366,8 @@ export default function OrderTrackDetails() {
     userEmail === "mj_albanes@kangaroocacti.com" || getCurrentPosition(order.orderStatus) >= 2;
 
   return (
-    <body className="body-BG-Gradient">
-      <div className="loginLogo-ParentDiv">
+    <body className="app-shell body-BG-Gradient">
+      <div className="app-header loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
           src={logoImage}
@@ -378,6 +378,7 @@ export default function OrderTrackDetails() {
         />
       </div>
 
+      <div className="app-main">
       <div className="orderTracker-LimitedScroll">
         <div className="edit-titleIcon-Div">
           <label className="editAddress-headerLabel">Rastrea tu orden</label>
@@ -543,8 +544,9 @@ export default function OrderTrackDetails() {
           </div>
         </div>
       </div>
+      </div>
 
-      <div className="footerMenuDiv">
+      <div className="app-footer footerMenuDiv">
         <div className="footerHolder">
           <div className="footerIcon-NameDiv" onClick={() => navigate("/userHome")}>
             <FontAwesomeIcon icon={faHouse} className="footerIcons" />

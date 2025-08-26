@@ -216,14 +216,15 @@ export default function UserProfile() {
    
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className="app-header loginLogo-ParentDiv">
                 <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
                 {/* <img className="signup-VeggieBasket" src="./src/assets/images/BG-veggieBasket.png" alt="Home Icon" width="400" height="250"/> */}
             </div>
             {/* LOGOS END*/}
 
+            <div className="app-main">
             <h3 className="clientProfile-headerLabel">Hola {nombreUsuario}</h3>
             {/* <h3 className="clientProfile-headerLabel">Hola {nombreUsuario}</h3> */}
 
@@ -285,9 +286,10 @@ export default function UserProfile() {
                     <label className="summary-Label"><b>Estado:</b> {estadoFiscal}</label> 
                 </div>
             </div>            
+            </div>
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToHome}>

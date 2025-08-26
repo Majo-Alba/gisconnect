@@ -61,15 +61,15 @@ export default function MyOrders() {
     };
 
     return (
-        <body className="body-BG-Gradient" >
+        <body className="app-shell body-BG-Gradient" >
 
             {/* LOGOS DIV */}
-            <div className="loginLogo-ParentDiv">
+            <div className=" loginLogo-ParentDiv">
                 <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo}/>
             </div>
             {/* LOGOS END*/}
 
-
+            <div className="app-main">
             <div className="order-tracker-container">
                 <div className="edit-titleIcon-Div">
                     <label className="editAddress-headerLabel">Mis Pedidos</label>
@@ -119,9 +119,10 @@ export default function MyOrders() {
                 )}
                 </div>
             </div>
+            </div>
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            <div className="app-footer footerMenuDiv">
                 <div className="footerHolder">
                     {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToHome}>
