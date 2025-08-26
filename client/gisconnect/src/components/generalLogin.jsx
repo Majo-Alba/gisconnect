@@ -97,7 +97,7 @@ export default function GeneralLogin() {
     }
 
     return (
-        <body className="body-BG-Gradient">
+        <body className="app-shell body-BG-Gradient">
             <form onSubmit={handleSubmit}>
 
                 <div className="loginLogo-ParentDiv">
