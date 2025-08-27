@@ -342,7 +342,7 @@ button, .btn, .clickable {
   padding-bottom: 10px;
 
   margin-top: 10%;
-  margin-left: 50%;
+  margin-left: 55%;
 
   color: white;
   font-weight: bold;
@@ -353,9 +353,9 @@ button, .btn, .clickable {
 }
 
 .returningUser-GeneralLoginButton:hover{
-  position: absolute;
+  /* position: absolute;
   bottom: 42%;
-  left: 60%;
+  left: 60%; */
 
   width:fit-content;
   padding-left: 30px;
@@ -363,7 +363,8 @@ button, .btn, .clickable {
   padding-top: 10px;
   padding-bottom: 10px;
 
-  margin-top: 15px;
+  margin-top: 10%;
+  margin-left: 55%;
 
   color: white;
   font-weight: bold;
@@ -427,7 +428,7 @@ button, .btn, .clickable {
 }
 
 .login-Subnote{
-  margin-top: 30%;
+  margin-top: 10%;
   text-align: center;
 
   font-family:'FiraSans';
