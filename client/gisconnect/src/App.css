@@ -3160,12 +3160,6 @@ input:checked + .slider:before {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  /* height: 50px;
-  width: 90%;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between; */
 }
 
 /* .footerHolder{
@@ -3180,7 +3174,7 @@ input:checked + .slider:before {
   display: grid;
   width:fit-content;
 
-  margin-top: 2%;
+  margin-top: 3%;
 }
 
 .footerIcons{
