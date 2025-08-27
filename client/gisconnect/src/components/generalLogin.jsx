@@ -102,7 +102,7 @@ export default function GeneralLogin() {
 
                 <div className="app-header loginLogo-ParentDiv">
                     <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
-                    <img className="og-signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
+                    {/* <img className="og-signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/> */}
                     <label className="welcome-Label">Where passion<br></br>meets nature</label>
 
                 </div>
@@ -125,6 +125,7 @@ export default function GeneralLogin() {
                 <p className="login-Subnote">¿Aún no te registras?  <Link to="/newSignup" className="login-SubLink">Crea una cuenta</Link></p>
 
                 <label className="login-Slogan">Bienvenido<br></br> a casa</label>
+                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
 
                 <div className="popUp-Message">
                     <p className={message.type}>{message.text}</p>
