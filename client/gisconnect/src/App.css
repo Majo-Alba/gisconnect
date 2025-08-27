@@ -192,7 +192,7 @@ button, .btn, .clickable {
   opacity: 0.9; /* optional for a subtle effect */
 }
 
-/* .signup-VeggieBasket{
+.og-signup-VeggieBasket{
   -webkit-transform: scaleX(-1);
   transform: scaleX(-1);
 
@@ -201,7 +201,7 @@ button, .btn, .clickable {
   left: -25%;
 
   z-index: -2;
-} */
+}
 
 .newUser-LabelsAndInputs-Div{ 
   position: absolute;
