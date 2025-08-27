@@ -110,13 +110,13 @@ button, .btn, .clickable {
   position: relative;
   width: 100%;
   /* ensures the sticky footer works at the very bottom */
-  padding-bottom: 56px; /* same as footer height */
+  padding-bottom: 60px; /* same as footer height */
 }
 .footerMenuDiv {
   /* here */
   position: fixed;
   left: 0; right: 0; bottom: 0;
-  height: 56px;                 /* footer height */
+  height: 60px;                 /* footer height */
   background: #075f2b;
   z-index: 1000;
 }
