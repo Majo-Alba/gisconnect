@@ -3174,7 +3174,7 @@ input:checked + .slider:before {
   display: grid;
   width:fit-content;
 
-  margin-top: 3%;
+  margin-top: 5%
 }
 
 .footerIcons{
