@@ -75,7 +75,7 @@ export default function UserHome() {
             {/* LOGOS DIV */}
             <div className="app-header loginLogo-ParentDiv">
                 <img className="userHome-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
-                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
+                {/* <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/> */}
             </div>
             {/* LOGOS END*/}
 
@@ -114,7 +114,7 @@ export default function UserHome() {
             </div>
             {/* BODY END */}
 
-            <div className="app-footer footerIcon-NameDiv" onClick={() => setShowModal(true)}>
+            <div className="footerIcon-NameDiv" onClick={() => setShowModal(true)}>
                 <button className="userHomeQuestions-Btn"><FontAwesomeIcon icon={faCircleQuestion}/></button>
             </div>
             {/* new jun03 */}
@@ -122,30 +122,61 @@ export default function UserHome() {
             {/* end jun03 */}
             </div>
 
+            {/* FOOTER MENU */}
+            <div className="app-footer footerMenuDiv">
+            <div className="basketWrapper">
+                <img
+                className="signup-VeggieBasket"
+                src={Basket}
+                alt="Basket"
+                width="400"
+                height="250"
+                />
+            </div>
+
+            <div className="footerHolder">
+                {/* HOME FOOTER DIV */}
+                <div className="footerIcon-NameDiv" onClick={goToHome}>
+                <FontAwesomeIcon icon={faHouse} className="footerIcons" />
+                <label className="footerIcon-Name">PRINCIPAL</label>
+                </div>
+
+                {/* USER FOOTER DIV */}
+                <div className="footerIcon-NameDiv" onClick={goToMyProfile}>
+                <FontAwesomeIcon icon={faUser} className="footerIcons" />
+                <label className="footerIcon-Name">MI PERFIL</label>
+                </div>
+
+                {/* SETTINGS FOOTER DIV */}
+                <div className="footerIcon-NameDiv" onClick={goToNewOrder}>
+                <FontAwesomeIcon icon={faCartShopping} className="footerIcons" />
+                <label className="footerIcon-Name">ORDENA</label>
+                </div>
+            </div>
+            </div>
+            {/* FOOTER MENU END */}
 
             {/* FOOTER MENU */}
-            <div className="footerMenuDiv">
+            {/* <div className="app-footer footerMenuDiv">
+                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
+
                 <div className="footerHolder">
-                    {/* HOME FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToHome}>
                         <FontAwesomeIcon icon={faHouse} className="footerIcons"/>
                         <label className="footerIcon-Name">PRINCIPAL</label>
                     </div>
 
-                    {/* USER FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToMyProfile}>
                         <FontAwesomeIcon icon={faUser} className="footerIcons"/>
                         <label className="footerIcon-Name">MI PERFIL</label>
                     </div>
 
-                    {/* SETTINGS FOOTER DIV */}
                     <div className="footerIcon-NameDiv" onClick={goToNewOrder}>
                         <FontAwesomeIcon icon={faCartShopping} className="footerIcons"/>
                         <label className="footerIcon-Name">ORDENA</label>
                     </div>
                 </div>
-
-            </div>
+            </div> */}
             {/* FOOTER MENU END */}
         </body>
     )
