@@ -110,6 +110,7 @@ button, .btn, .clickable {
   position: relative;
   width: 100%;
   /* ensures the sticky footer works at the very bottom */
+  /* OG padding: 56px */
   padding-bottom: 60px; /* same as footer height */
 }
 .footerMenuDiv {
@@ -330,9 +331,9 @@ button, .btn, .clickable {
 .returningUser-GeneralLoginButton{
   border: none;
 
-  position: absolute;
+  /* position: absolute;
   bottom:42%;
-  left: 60%;
+  left: 60%; */
 
   width:fit-content;
   padding-left: 30px;
@@ -340,7 +341,8 @@ button, .btn, .clickable {
   padding-top: 10px;
   padding-bottom: 10px;
 
-  margin-top: 15px;
+  margin-top: 10%;
+  margin-left: 50%;
 
   color: white;
   font-weight: bold;
