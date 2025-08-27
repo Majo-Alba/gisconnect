@@ -15,6 +15,9 @@ src: url('/fonts/FiraSansExtraCondensed-Regular.ttf');
 /* ---------- Base resets ---------- */
 
 /* GISCONNECT NEW - APR/06 */
+/* here */
+html, body { overflow-x: hidden; }
+
 html, body, #root {
   height: 100%;
 }
@@ -107,35 +110,16 @@ button, .btn, .clickable {
   position: relative;
   width: 100%;
   /* ensures the sticky footer works at the very bottom */
-  padding-bottom: 50px; /* same as footer height */
+  padding-bottom: 56px; /* same as footer height */
 }
 .footerMenuDiv {
-  position: sticky;      /* stays at bottom when content scrolls */
-  bottom: 0;
-  width: 100%;
-  height: 50px;
+  /* here */
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  height: 56px;                 /* footer height */
   background: #075f2b;
-  z-index: 2;            /* above the basket */
+  z-index: 1000;
 }
-
-/* .footerMenuDiv {
-  position: sticky;
-  bottom: 0;
-  width: 100%;
-  height: 50px;
-  background: #075f2b;
-  overflow: hidden;
-} */
-
-/* .footerMenuDiv {
-  background: #075f2b;
-
-  width: 100%;
-  height: 50px;
-
-  position: sticky;
-  bottom: 0px;
-} */
 
 @media only screen and (max-width: 600px) {
 
@@ -207,19 +191,18 @@ button, .btn, .clickable {
   opacity: 0.9;
 } */
 .signup-VeggieBasket {
-  position: absolute;
-  left: -22%;           /* adjust framing */
-  bottom: 0;            /* anchor to bottom of viewport */
+  position: fixed;              /* pin to viewport too */
+  bottom: 0;
+  left: -22%;
   transform: scaleX(-1);
-  pointer-events: none; /* never blocks taps on footer */
-  z-index: 0;           /* behind footer */
-  /* Lift it up so it peeks above the footer top edge */
-  translate: 0 -35px;   /* tweak this value to control how much shows */
-  opacity: 0.95;        /* optional */
+  translate: 0 -20px;           /* controls how much peeks above footer */
+  z-index: 900;                 /* behind the footer */
+  pointer-events: none;         /* won’t block taps */
+  opacity: .95;                 /* optional */
 }
 
 .page-has-sticky-footer {
-  padding-bottom: 60px; /* give content breathing room above footer */
+  padding-bottom: 60px;
 }
 
 .og-signup-VeggieBasket{
@@ -3163,12 +3146,18 @@ input:checked + .slider:before {
 
 /* Footer icons stay on top */
 .footerHolder {
-  height: 50px;
+  height: 100%;
   width: 90%;
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /* height: 50px;
+  width: 90%;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between; */
 }
 
 /* .footerHolder{
