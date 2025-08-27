@@ -206,14 +206,22 @@ button, .btn, .clickable {
 }
 
 .og-signup-VeggieBasket{
-  -webkit-transform: scaleX(-1);
+  /* -webkit-transform: scaleX(-1);
   transform: scaleX(-1);
 
   position: absolute;
   bottom: 1%;
   left: -25%;
 
-  z-index: -2;
+  z-index: -2; */
+  position: fixed;              /* pin to viewport too */
+  bottom: 0;
+  left: -22%;
+  transform: scaleX(-1);
+  translate: 0 -20px;           /* controls how much peeks above footer */
+  z-index: 900;                 /* behind the footer */
+  pointer-events: none;         /* won’t block taps */
+  opacity: .95;                 /* optional */
 }
 
 .newUser-LabelsAndInputs-Div{ 
