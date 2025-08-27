@@ -103,8 +103,16 @@ button, .btn, .clickable {
 }
 
 /* ---------- Footer menu: replace absolute with sticky ---------- */
-
 .footerMenuDiv {
+  position: sticky;
+  bottom: 0;
+  width: 100%;
+  height: 50px;
+  background: #075f2b;
+  overflow: hidden; /* ensures only part of basket shows */
+}
+
+/* .footerMenuDiv {
   background: #075f2b;
 
   width: 100%;
@@ -112,8 +120,7 @@ button, .btn, .clickable {
 
   position: sticky;
   bottom: 0px;
-  z-index: 2;
-}
+} */
 
 @media only screen and (max-width: 600px) {
 
@@ -171,7 +178,21 @@ button, .btn, .clickable {
   margin-top: 20%;
 }
 
-.signup-VeggieBasket{
+.basketWrapper {
+  position: absolute;
+  bottom: -30px; /* pushes most of basket below footer, only top peeks */
+  left: -25%;
+  width: 100%;
+  pointer-events: none; /* avoid blocking footer clicks */
+}
+
+.signup-VeggieBasket {
+  -webkit-transform: scaleX(-1);
+  transform: scaleX(-1);
+  opacity: 0.9; /* optional for a subtle effect */
+}
+
+/* .signup-VeggieBasket{
   -webkit-transform: scaleX(-1);
   transform: scaleX(-1);
 
@@ -179,8 +200,8 @@ button, .btn, .clickable {
   bottom: 1%;
   left: -25%;
 
-  z-index: 1;
-}
+  z-index: -2;
+} */
 
 .newUser-LabelsAndInputs-Div{ 
   position: absolute;
@@ -3110,13 +3131,24 @@ input:checked + .slider:before {
   z-index: 2;
 } */
 
-.footerHolder{
+/* Footer icons stay on top */
+.footerHolder {
+  position: relative;
+  width: 90%;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 1; /* ensures it’s above the basket */
+}
+
+/* .footerHolder{
   width: 90%;
 
   display: flex;
   justify-content: space-between;
   justify-self: center;
-}
+} */
 
 .footerIcon-NameDiv{
   display: grid;
