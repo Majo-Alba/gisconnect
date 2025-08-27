@@ -125,7 +125,7 @@ export default function UserHome() {
 
             {/* FOOTER MENU */}
             {/* Basket image (behind) */}
-            <img className="signup-VeggieBasket" src={Basket} alt="Basket" width="420" height="260" />
+            {/* <img className="signup-VeggieBasket" src={Basket} alt="Basket" width="420" height="260" /> */}
 
             {/* Footer bar (front) */}
             <div className="app-footer footerMenuDiv">
