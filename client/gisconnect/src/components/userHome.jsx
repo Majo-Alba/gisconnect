@@ -134,25 +134,55 @@ export default function UserHome() {
                 />
             </div>
 
-            <div className="footerHolder">
-                {/* HOME FOOTER DIV */}
+            {/* FOOTER STACK */}
+<div className="footerStack">
+  {/* Basket sits behind the footer and peeks above it */}
+  <img
+    className="signup-VeggieBasket"
+    src={Basket}
+    alt="Basket"
+    width="420"
+    height="260"
+  />
+
+  {/* Footer bar (in front) */}
+  <div className="app-footer footerMenuDiv">
+    <div className="footerHolder">
+      <div className="footerIcon-NameDiv" onClick={goToHome}>
+        <FontAwesomeIcon icon={faHouse} className="footerIcons" />
+        <label className="footerIcon-Name">PRINCIPAL</label>
+      </div>
+
+      <div className="footerIcon-NameDiv" onClick={goToMyProfile}>
+        <FontAwesomeIcon icon={faUser} className="footerIcons" />
+        <label className="footerIcon-Name">MI PERFIL</label>
+      </div>
+
+      <div className="footerIcon-NameDiv" onClick={goToNewOrder}>
+        <FontAwesomeIcon icon={faCartShopping} className="footerIcons" />
+        <label className="footerIcon-Name">ORDENA</label>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+            {/* <div className="footerHolder">
                 <div className="footerIcon-NameDiv" onClick={goToHome}>
                 <FontAwesomeIcon icon={faHouse} className="footerIcons" />
                 <label className="footerIcon-Name">PRINCIPAL</label>
                 </div>
 
-                {/* USER FOOTER DIV */}
                 <div className="footerIcon-NameDiv" onClick={goToMyProfile}>
                 <FontAwesomeIcon icon={faUser} className="footerIcons" />
                 <label className="footerIcon-Name">MI PERFIL</label>
                 </div>
 
-                {/* SETTINGS FOOTER DIV */}
                 <div className="footerIcon-NameDiv" onClick={goToNewOrder}>
                 <FontAwesomeIcon icon={faCartShopping} className="footerIcons" />
                 <label className="footerIcon-Name">ORDENA</label>
                 </div>
-            </div>
+            </div> */}
             </div>
             {/* FOOTER MENU END */}
 
