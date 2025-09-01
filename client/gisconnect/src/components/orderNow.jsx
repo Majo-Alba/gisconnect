@@ -1,4 +1,4 @@
-// You rock! Next fix is in orderNow.jsx... Two situations here 1) cant seem to connect with DOF Rate and console throws this error: GET https://gisconnect-api.onrender.com:4000/fx/usd-dof net::ERR_CONNECTION_TIMED_OUT. And 2) when hitting "Descargar Orden", both in computer and in app version, I get the following pop up message "Ocurrió un error al guardar la orden o al reservar inventario". Can you give me a direct copy-paste edit 
+// I dont seem to be finding the line you mention inside "handleDownloadAndSave". Can you help me edit the changes you mention?
 
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -689,22 +689,22 @@ export default function OrderNow() {
 
     doc.save("order_summary.pdf");
 
+    //  ----> 
     // Save order in DB
     const userEmail = userCredentials?.correo;
     const creditDue =
-      paymentOption === "Crédito" && creditAllowed ? addDays(new Date(), creditDays).toISOString() : null;
+      paymentOption === "Crédito" && creditAllowed
+        ? addDays(new Date(), creditDays).toISOString()
+        : null;
 
     const orderInfo = {
       userEmail,
-      items, // now includes currency and packPresentation when present
+      items,
       totals: {
         totalUSDNative: Number(totalUSDNative.toFixed(2)),
         totalMXNNative: Number(totalMXNNative.toFixed(2)),
         totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
-        totalAllMXN:
-          totalAllMXN !== null
-            ? Number(totalAllMXN.toFixed(2))
-            : null,
+        totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
         dofRate,
         dofDate,
         discountUSD: Number(discountTotal || 0),
@@ -724,54 +724,162 @@ export default function OrderNow() {
     };
 
     try {
-      // IMPORTANT: use arraybuffer to preserve binary; jsPDF's blob is okay too
-      const pdfBlob = doc.output('blob');
-      const file = new File([pdfBlob], "order_summary.pdf", { type: "application/pdf" });
+      // Build the PDF blob once
+      const pdfBlob = doc.output("blob");
 
+      // Prepare multipart form
       const form = new FormData();
       form.append("order", JSON.stringify(orderInfo));
-      form.append("pdf", pdfBlob, file);
+      form.append("pdf", pdfBlob, "order_summary.pdf"); // <-- filename as string
 
-      // 1) Create order + upload PDF
-      const createRes = await axios.post(`${API}/orderDets`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Mobile-friendly upload: try fetch (no keepalive), then axios fallback
+      let createdOrderId = null;
 
-      // Try several common shapes to find the new order id
-      const createdOrderId =
-        createRes?.data?.order?._id ||
-        createRes?.data?.data?._id ||
-        createRes?.data?._id ||
-        createRes?.data?.id ||
-        null;
+      try {
+        const res = await fetch(`${API}/orderDets`, {
+          method: "POST",
+          body: form,
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
 
-      // 2) NEW — Place a 120-minute hold for selected items
+        if (!res.ok) {
+          const errJson = await res.json().catch(() => ({}));
+          throw new Error(errJson?.error || `Error ${res.status}`);
+        }
+        const data = await res.json();
+        createdOrderId =
+          data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+      } catch (fetchErr) {
+        // Fallback for quirky mobile engines
+        const { data } = await axios.post(`${API}/orderDets`, form, {
+          headers: { Accept: "application/json" },
+          withCredentials: false,
+        });
+        createdOrderId =
+          data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+      }
+
+      // Optional: Place a 120-minute hold if we have an order ID
       try {
         const holdLines = buildHoldLines();
         if (createdOrderId && holdLines.length > 0) {
-
           await axios.post(`${API}/inventory/hold`, {
             orderId: createdOrderId,
             holdMinutes: 120,
             lines: holdLines,
           });
         } else {
-          console.warn("No se pudo colocar la reserva: faltan orderId o líneas.", {
+          console.warn("Reserva omitida: faltan orderId o líneas.", {
             createdOrderId,
             holdLines,
           });
         }
       } catch (holdErr) {
         console.error("Error al reservar inventario:", holdErr);
-        // You can still allow navigation; the order exists, but without a hold.
+        // don't block the flow if the hold fails
       }
+
+      // Trigger local download AFTER a successful upload (helps mobile)
+      doc.save("order_summary.pdf");
 
       alert("Orden guardada exitosamente");
       navigate("/myOrders");
     } catch (error) {
       console.error("Error al guardar la orden o al reservar inventario", error);
-      alert("Ocurrió un error al guardar la orden o al reservar inventario");
+      const msg =
+        error?.message ||
+        error?.response?.data?.error ||
+        "Revisa tu conexión y vuelve a intentar.";
+      alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
     }
+
+    // Save order in DB
+    // const userEmail = userCredentials?.correo;
+    // const creditDue =
+    //   paymentOption === "Crédito" && creditAllowed ? addDays(new Date(), creditDays).toISOString() : null;
+
+    // const orderInfo = {
+    //   userEmail,
+    //   items, // now includes currency and packPresentation when present
+    //   totals: {
+    //     totalUSDNative: Number(totalUSDNative.toFixed(2)),
+    //     totalMXNNative: Number(totalMXNNative.toFixed(2)),
+    //     totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+    //     totalAllMXN:
+    //       totalAllMXN !== null
+    //         ? Number(totalAllMXN.toFixed(2))
+    //         : null,
+    //     dofRate,
+    //     dofDate,
+    //     discountUSD: Number(discountTotal || 0),
+    //     vatUSD: Number(vatUSD.toFixed(2)),
+    //     finalAllUSD: Number(finalAllUSD.toFixed(2)),
+    //     vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+    //     finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+    //   },
+    //   requestBill: requestBill === "true",
+    //   shippingInfo: { ...currentShipping },
+    //   billingInfo: { ...currentBilling },
+    //   orderDate: new Date().toISOString(),
+    //   orderStatus: "Pedido Realizado",
+    //   paymentOption,
+    //   creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+    //   creditDueDate: creditDue,
+    // };
+
+    // try {
+    //   // IMPORTANT: use arraybuffer to preserve binary; jsPDF's blob is okay too
+    //   const pdfBlob = doc.output('blob');
+    //   // const file = new File([pdfBlob], "order_summary.pdf", { type: "application/pdf" });
+
+    //   const form = new FormData();
+    //   form.append("order", JSON.stringify(orderInfo));
+    //   form.append("pdf", pdfBlob, "order_summary.pdf");
+    //   // form.append("pdf", pdfBlob, file);
+
+    //   // 1) Create order + upload PDF
+    //   const createRes = await axios.post(`${API}/orderDets`, form, {
+    //     headers: { "Content-Type": "multipart/form-data" },
+    //   });
+
+    //   // Try several common shapes to find the new order id
+    //   const createdOrderId =
+    //     createRes?.data?.order?._id ||
+    //     createRes?.data?.data?._id ||
+    //     createRes?.data?._id ||
+    //     createRes?.data?.id ||
+    //     null;
+
+    //   // 2) NEW — Place a 120-minute hold for selected items
+    //   try {
+    //     const holdLines = buildHoldLines();
+    //     if (createdOrderId && holdLines.length > 0) {
+
+    //       await axios.post(`${API}/inventory/hold`, {
+    //         orderId: createdOrderId,
+    //         holdMinutes: 120,
+    //         lines: holdLines,
+    //       });
+    //     } else {
+    //       console.warn("No se pudo colocar la reserva: faltan orderId o líneas.", {
+    //         createdOrderId,
+    //         holdLines,
+    //       });
+    //     }
+    //   } catch (holdErr) {
+    //     console.error("Error al reservar inventario:", holdErr);
+    //     // You can still allow navigation; the order exists, but without a hold.
+    //   }
+
+    //   alert("Orden guardada exitosamente");
+    //   navigate("/myOrders");
+    // } catch (error) {
+    //   console.error("Error al guardar la orden o al reservar inventario", error);
+    //   alert("Ocurrió un error al guardar la orden o al reservar inventario");
+    // }
+
+    // ----->
   };
 
   return (
