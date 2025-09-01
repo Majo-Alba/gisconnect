@@ -687,45 +687,158 @@ export default function OrderNow() {
     doc.text(`BANCO: BANCO INVEX, S.A.`, 120, y + 125);
     doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
 
+    // HERE
     doc.save("order_summary.pdf");
 
-    // SEP01
-    const pdfBlob = doc.output("blob");
+      // 2) Prepare Order payload (same as before)
+      const userEmail = userCredentials?.correo;
+      const creditDue =
+        paymentOption === "Crédito" && creditAllowed
+          ? addDays(new Date(), creditDays).toISOString()
+          : null;
 
-    const form = new FormData();
-    form.append("order", JSON.stringify(orderInfo));
-    form.append("pdf", pdfBlob, "order_summary.pdf"); // filename must be a string
+      const orderInfo = {
+        userEmail,
+        items, // includes currency + packPresentation if present
+        totals: {
+          totalUSDNative: Number(totalUSDNative.toFixed(2)),
+          totalMXNNative: Number(totalMXNNative.toFixed(2)),
+          totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+          totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+          dofRate,
+          dofDate,
+          discountUSD: Number(discountTotal || 0),
+          vatUSD: Number(vatUSD.toFixed(2)),
+          finalAllUSD: Number(finalAllUSD.toFixed(2)),
+          vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+          finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+        },
+        requestBill: requestBill === "true",
+        shippingInfo: { ...currentShipping },
+        billingInfo: { ...currentBilling },
+        orderDate: new Date().toISOString(),
+        orderStatus: "Pedido Realizado",
+        paymentOption,
+        creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+        creditDueDate: creditDue,
+      };
 
-    let createdOrderId = null;
+      try {
+        // 3) Create the PDF blob & multipart form
+        const pdfBlob = doc.output("blob"); // mobile-safe blob
+        const form = new FormData();
+        form.append("order", JSON.stringify(orderInfo));
+        form.append("pdf", pdfBlob, "order_summary.pdf"); // filename MUST be a string
 
-    // Prefer fetch on mobile (simpler CORS), no custom headers = no forced preflight
-    try {
-      const res = await fetch(`${API}/orderDets`, {
-        method: "POST",
-        body: form,
-        cache: "no-store",
-        credentials: "omit", // we don’t need cookies
-        mode: "cors",
-      });
-      if (!res.ok) {
-        let errText = await res.text().catch(() => "");
-        throw new Error(errText || `HTTP ${res.status}`);
+        // 4) Upload (create order + upload PDF)
+        // Try fetch first (minimal headers = fewer CORS preflights)
+        let createdOrderId = null;
+        try {
+          const res = await fetch(`${API}/orderDets`, {
+            method: "POST",
+            body: form,
+            mode: "cors",
+            cache: "no-store",
+            credentials: "omit",
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(text || `HTTP ${res.status}`);
+          }
+          const data = await res.json().catch(() => ({}));
+          createdOrderId =
+            data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+        } catch (fetchErr) {
+          // Fallback to axios if some mobile engines choke on fetch+FormData
+          const { data } = await axios.post(`${API}/orderDets`, form, {
+            withCredentials: false,
+            // DO NOT set Content-Type; axios will set proper multipart boundary
+          });
+          createdOrderId =
+            data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+        }
+
+        // 5) Optional: place a 120-minute inventory hold (don’t block success if it fails)
+        try {
+          const holdLines = buildHoldLines();
+          if (createdOrderId && holdLines.length > 0) {
+            await axios.post(
+              `${API}/inventory/hold`,
+              {
+                orderId: createdOrderId,
+                holdMinutes: 120,
+                lines: holdLines,
+              },
+              { withCredentials: false }
+            );
+          } else {
+            console.warn("Reserva omitida: faltan orderId o líneas.", {
+              createdOrderId,
+              holdLines,
+            });
+          }
+        } catch (holdErr) {
+          console.error("Error al reservar inventario:", holdErr);
+          // continue anyway
+        }
+
+        // 6) Trigger the local download AFTER server save (best for mobile)
+        doc.save("order_summary.pdf");
+
+        // 7) Success UX: go to My Orders so the new order is visible
+        alert("Orden guardada exitosamente");
+        navigate("/myOrders");
+      } catch (error) {
+        console.error("Error al guardar la orden o al reservar inventario", error);
+        const msg =
+          error?.message ||
+          error?.response?.data?.error ||
+          "Revisa tu conexión y vuelve a intentar.";
+        alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
       }
-      const data = await res.json();
-      createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
-    } catch (e) {
-      // Axios fallback if fetch fails on some engines
-      const { data } = await axios.post(`${API}/orderDets`, form, {
-        withCredentials: false,
-        // DO NOT set Content-Type; let Axios set multipart boundary
-        // timeout: 20000, // optional
-      });
-      createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
-    }
+
+    // END
+
+    // NEW VERSION
+    // doc.save("order_summary.pdf");
 
     // SEP01
+    // const pdfBlob = doc.output("blob");
 
-    //  ----> 
+    // const form = new FormData();
+    // form.append("order", JSON.stringify(orderInfo));
+    // form.append("pdf", pdfBlob, "order_summary.pdf"); // filename must be a string
+
+    // let createdOrderId = null;
+
+    // // Prefer fetch on mobile (simpler CORS), no custom headers = no forced preflight
+    // try {
+    //   const res = await fetch(`${API}/orderDets`, {
+    //     method: "POST",
+    //     body: form,
+    //     cache: "no-store",
+    //     credentials: "omit", // we don’t need cookies
+    //     mode: "cors",
+    //   });
+    //   if (!res.ok) {
+    //     let errText = await res.text().catch(() => "");
+    //     throw new Error(errText || `HTTP ${res.status}`);
+    //   }
+    //   const data = await res.json();
+    //   createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    // } catch (e) {
+    //   // Axios fallback if fetch fails on some engines
+    //   const { data } = await axios.post(`${API}/orderDets`, form, {
+    //     withCredentials: false,
+    //     // DO NOT set Content-Type; let Axios set multipart boundary
+    //     // timeout: 20000, // optional
+    //   });
+    //   createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    // }
+
+    // END OF NEW VERSION
+
+    //  ORIGINAL VERSION 
     // Save order in DB
     // const userEmail = userCredentials?.correo;
     // const creditDue =
@@ -829,6 +942,8 @@ export default function OrderNow() {
     //     "Revisa tu conexión y vuelve a intentar.";
     //   alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
     // }
+
+    // END OF ORIGINAL VERSION
 
 
     // ------
