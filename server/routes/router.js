@@ -210,33 +210,83 @@ router.get('/register', (req,res) => {
 })
 
 // ENDPOINT FOR UPLOADING A NEW ORDER INTO MONGO
+// Create order + (optional) PDF upload
 router.post('/orderDets', upload.single('pdf'), async (req, res) => {
   try {
-    // 1) Parse order JSON from the "order" field
-    const raw = req.body.order
-    if (!raw) {
-      return res.status(400).json({ error: 'Missing order JSON in "order" field' })
+    // --- 1) Parse the "order" field (multipart text). Be tolerant. ---
+    let orderRaw = req.body?.order;
+    if (!orderRaw) {
+      return res.status(400).json({ error: 'Missing order JSON in "order" field.' });
     }
-    const order = JSON.parse(raw)
 
-    // 2) If a PDF was sent, embed it
-    if (req.file) {
-      const { originalname, mimetype, buffer } = req.file
+    let order;
+    try {
+      // Some engines may already send it as object; most send it as string.
+      order = typeof orderRaw === 'string' ? JSON.parse(orderRaw) : orderRaw;
+    } catch (e) {
+      return res.status(400).json({ error: 'Invalid JSON in "order" field.' });
+    }
+
+    // --- 2) Optional PDF (multer memoryStorage provides buffer) ---
+    if (req.file && req.file.buffer) {
+      const { originalname, mimetype, buffer } = req.file;
       order.quotePdf = {
-        filename: originalname,
-        contentType: mimetype,
+        filename: originalname || "order_summary.pdf",
+        contentType: mimetype || "application/pdf",
         data: buffer,
-      }
+      };
     }
 
-    // 3) Create order
-    const created = await newOrderModel.create(order)
-    res.status(201).json({ data: created, message: "Nueva orden registrada exitosamente" })
+    // --- 3) Minimal normalization / defaults (don’t overwrite user intent) ---
+    if (!order.orderDate) order.orderDate = new Date().toISOString();
+    if (!order.orderStatus) order.orderStatus = "Pedido Realizado";
+
+    // --- 4) Persist ---
+    const created = await newOrderModel.create(order);
+
+    // --- 5) Reply (stable shape + id surfaced) ---
+    return res.status(201).json({
+      message: "Nueva orden registrada exitosamente",
+      data: created,
+      id: created?._id,
+    });
   } catch (err) {
-    console.error("Error creating order:", err)
-    res.status(500).json({ error: "Failed to create order" })
+    console.error("Error creating order:", err);
+    // Try to surface a bit more detail for client logs (but keep it safe)
+    return res.status(500).json({ error: "Failed to create order" });
   }
-})
+});
+
+// OFF SEP01 - 5:22
+// router.post('/orderDets', upload.single('pdf'), async (req, res) => {
+//   try {
+//     // 1) Parse order JSON from the "order" field
+//     const raw = req.body.order
+//     if (!raw) {
+//       return res.status(400).json({ error: 'Missing order JSON in "order" field' })
+//     }
+//     const order = JSON.parse(raw)
+
+//     // 2) If a PDF was sent, embed it
+//     if (req.file) {
+//       const { originalname, mimetype, buffer } = req.file
+//       order.quotePdf = {
+//         filename: originalname,
+//         contentType: mimetype,
+//         data: buffer,
+//       }
+//     }
+
+//     // 3) Create order
+//     const created = await newOrderModel.create(order)
+//     res.status(201).json({ data: created, message: "Nueva orden registrada exitosamente" })
+//   } catch (err) {
+//     console.error("Error creating order:", err)
+//     res.status(500).json({ error: "Failed to create order" })
+//   }
+// })
+// OFF SEP01 - 5:22
+
 // router.post('/orderDets', (req,res) => {
 //     let newOrder = req.body
 //     console.log(newOrder)

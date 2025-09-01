@@ -681,123 +681,240 @@ export default function OrderNow() {
     doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 112);
     doc.text(`TRANSFERENCIA`, 15, y + 119);
 
+    // lastly, this is my handleDownloadAndSave bottom part (where most likely all updates you highlight should be made). Can you direct edit too
     doc.setFont("helvetica", "normal");
     doc.text(`BANCO: GRUPO FINANCIERO MONEX`, 15, y + 125);
     doc.text(`CLABE: 112 180 000 028 258 341`, 15, y + 130);
     doc.text(`BANCO: BANCO INVEX, S.A.`, 120, y + 125);
     doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
 
-    // HERE
-    doc.save("order_summary.pdf");
+    // SEP01 5:32
+    // 2) Prepare Order payload (same as before)
+    const userEmail = userCredentials?.correo;
+    const creditDue =
+      paymentOption === "Crédito" && creditAllowed
+        ? addDays(new Date(), creditDays).toISOString()
+        : null;
 
-      // 2) Prepare Order payload (same as before)
-      const userEmail = userCredentials?.correo;
-      const creditDue =
-        paymentOption === "Crédito" && creditAllowed
-          ? addDays(new Date(), creditDays).toISOString()
-          : null;
+    const orderInfo = {
+      userEmail,
+      items, // includes currency + packPresentation if present
+      totals: {
+        totalUSDNative: Number(totalUSDNative.toFixed(2)),
+        totalMXNNative: Number(totalMXNNative.toFixed(2)),
+        totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+        totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+        dofRate,
+        dofDate,
+        discountUSD: Number(discountTotal || 0),
+        vatUSD: Number(vatUSD.toFixed(2)),
+        finalAllUSD: Number(finalAllUSD.toFixed(2)),
+        vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+        finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+      },
+      requestBill: requestBill === "true",
+      shippingInfo: { ...currentShipping },
+      billingInfo: { ...currentBilling },
+      orderDate: new Date().toISOString(),
+      orderStatus: "Pedido Realizado",
+      paymentOption,
+      creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+      creditDueDate: creditDue,
+    };
 
-      const orderInfo = {
-        userEmail,
-        items, // includes currency + packPresentation if present
-        totals: {
-          totalUSDNative: Number(totalUSDNative.toFixed(2)),
-          totalMXNNative: Number(totalMXNNative.toFixed(2)),
-          totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
-          totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
-          dofRate,
-          dofDate,
-          discountUSD: Number(discountTotal || 0),
-          vatUSD: Number(vatUSD.toFixed(2)),
-          finalAllUSD: Number(finalAllUSD.toFixed(2)),
-          vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
-          finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
-        },
-        requestBill: requestBill === "true",
-        shippingInfo: { ...currentShipping },
-        billingInfo: { ...currentBilling },
-        orderDate: new Date().toISOString(),
-        orderStatus: "Pedido Realizado",
-        paymentOption,
-        creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
-        creditDueDate: creditDue,
-      };
+    try {
+      // 3) Create the PDF blob & multipart form
+      const pdfBlob = doc.output("blob"); // mobile-safe
+      const form = new FormData();
+      form.append("order", JSON.stringify(orderInfo));
+      form.append("pdf", pdfBlob, "order_summary.pdf"); // filename MUST be a string
 
+      // 4) Upload (create order + upload PDF)
+      let createdOrderId = null;
+
+      // Prefer fetch first (no custom Content-Type → fewer CORS preflights)
       try {
-        // 3) Create the PDF blob & multipart form
-        const pdfBlob = doc.output("blob"); // mobile-safe blob
-        const form = new FormData();
-        form.append("order", JSON.stringify(orderInfo));
-        form.append("pdf", pdfBlob, "order_summary.pdf"); // filename MUST be a string
+        // Optional: small timeout for fetch on some mobile browsers
+        const ac = new AbortController();
+        const timer = setTimeout(() => ac.abort("timeout"), 20000);
 
-        // 4) Upload (create order + upload PDF)
-        // Try fetch first (minimal headers = fewer CORS preflights)
-        let createdOrderId = null;
-        try {
-          const res = await fetch(`${API}/orderDets`, {
-            method: "POST",
-            body: form,
-            mode: "cors",
-            cache: "no-store",
-            credentials: "omit",
-          });
-          if (!res.ok) {
-            const text = await res.text().catch(() => "");
-            throw new Error(text || `HTTP ${res.status}`);
-          }
-          const data = await res.json().catch(() => ({}));
-          createdOrderId =
-            data?.order?._id || data?.data?._id || data?._id || data?.id || null;
-        } catch (fetchErr) {
-          // Fallback to axios if some mobile engines choke on fetch+FormData
-          const { data } = await axios.post(`${API}/orderDets`, form, {
-            withCredentials: false,
-            // DO NOT set Content-Type; axios will set proper multipart boundary
-          });
-          createdOrderId =
-            data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+        const res = await fetch(`${API}/orderDets`, {
+          method: "POST",
+          body: form,
+          mode: "cors",
+          cache: "no-store",
+          credentials: "omit",
+          signal: ac.signal,
+        });
+
+        clearTimeout(timer);
+
+        if (!res.ok) {
+          const text = await res.text().catch(() => "");
+          throw new Error(text || `HTTP ${res.status}`);
         }
 
-        // 5) Optional: place a 120-minute inventory hold (don’t block success if it fails)
-        try {
-          const holdLines = buildHoldLines();
-          if (createdOrderId && holdLines.length > 0) {
-            await axios.post(
-              `${API}/inventory/hold`,
-              {
-                orderId: createdOrderId,
-                holdMinutes: 120,
-                lines: holdLines,
-              },
-              { withCredentials: false }
-            );
-          } else {
-            console.warn("Reserva omitida: faltan orderId o líneas.", {
-              createdOrderId,
-              holdLines,
-            });
-          }
-        } catch (holdErr) {
-          console.error("Error al reservar inventario:", holdErr);
-          // continue anyway
-        }
-
-        // 6) Trigger the local download AFTER server save (best for mobile)
-        doc.save("order_summary.pdf");
-
-        // 7) Success UX: go to My Orders so the new order is visible
-        alert("Orden guardada exitosamente");
-        navigate("/myOrders");
-      } catch (error) {
-        console.error("Error al guardar la orden o al reservar inventario", error);
-        const msg =
-          error?.message ||
-          error?.response?.data?.error ||
-          "Revisa tu conexión y vuelve a intentar.";
-        alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+        const data = await res.json().catch(() => ({}));
+        createdOrderId =
+          data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+      } catch (fetchErr) {
+        // Fallback: axios handles some quirky engines better
+        const { data } = await axios.post(`${API}/orderDets`, form, {
+          // DO NOT set Content-Type; axios will set proper multipart boundary
+          withCredentials: false,
+          timeout: 20000,
+        });
+        createdOrderId =
+          data?.id || data?.data?._id || data?._id || data?.order?._id || null;
       }
 
-    // END
+      // 5) Optional: place a 120-minute inventory hold
+      try {
+        const holdLines = buildHoldLines();
+        if (createdOrderId && holdLines.length > 0) {
+          await axios.post(
+            `${API}/inventory/hold`,
+            { orderId: createdOrderId, holdMinutes: 120, lines: holdLines },
+            { withCredentials: false, timeout: 15000 }
+          );
+        } else {
+          console.warn("Reserva omitida: faltan orderId o líneas.", {
+            createdOrderId,
+            holdLines,
+          });
+        }
+      } catch (holdErr) {
+        console.error("Error al reservar inventario:", holdErr);
+        // don’t block success
+      }
+
+      // 6) NOW trigger the local download (after successful server save)
+      doc.save("order_summary.pdf");
+
+      // 7) Success → show it in My Orders
+      alert("Orden guardada exitosamente");
+      navigate("/myOrders");
+    } catch (error) {
+      console.error("Error al guardar la orden o al reservar inventario", error);
+      const msg =
+        error?.message ||
+        error?.response?.data?.error ||
+        "Revisa tu conexión y vuelve a intentar.";
+      alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+    }
+    // SEP01 5:32
+
+    // // HERE
+    // doc.save("order_summary.pdf");
+
+    //   // 2) Prepare Order payload (same as before)
+    //   const userEmail = userCredentials?.correo;
+    //   const creditDue =
+    //     paymentOption === "Crédito" && creditAllowed
+    //       ? addDays(new Date(), creditDays).toISOString()
+    //       : null;
+
+    //   const orderInfo = {
+    //     userEmail,
+    //     items, // includes currency + packPresentation if present
+    //     totals: {
+    //       totalUSDNative: Number(totalUSDNative.toFixed(2)),
+    //       totalMXNNative: Number(totalMXNNative.toFixed(2)),
+    //       totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+    //       totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+    //       dofRate,
+    //       dofDate,
+    //       discountUSD: Number(discountTotal || 0),
+    //       vatUSD: Number(vatUSD.toFixed(2)),
+    //       finalAllUSD: Number(finalAllUSD.toFixed(2)),
+    //       vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+    //       finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+    //     },
+    //     requestBill: requestBill === "true",
+    //     shippingInfo: { ...currentShipping },
+    //     billingInfo: { ...currentBilling },
+    //     orderDate: new Date().toISOString(),
+    //     orderStatus: "Pedido Realizado",
+    //     paymentOption,
+    //     creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+    //     creditDueDate: creditDue,
+    //   };
+
+    //   try {
+    //     // 3) Create the PDF blob & multipart form
+    //     const pdfBlob = doc.output("blob"); // mobile-safe blob
+    //     const form = new FormData();
+    //     form.append("order", JSON.stringify(orderInfo));
+    //     form.append("pdf", pdfBlob, "order_summary.pdf"); // filename MUST be a string
+
+    //     // 4) Upload (create order + upload PDF)
+    //     // Try fetch first (minimal headers = fewer CORS preflights)
+    //     let createdOrderId = null;
+    //     try {
+    //       const res = await fetch(`${API}/orderDets`, {
+    //         method: "POST",
+    //         body: form,
+    //         mode: "cors",
+    //         cache: "no-store",
+    //         credentials: "omit",
+    //       });
+    //       if (!res.ok) {
+    //         const text = await res.text().catch(() => "");
+    //         throw new Error(text || `HTTP ${res.status}`);
+    //       }
+    //       const data = await res.json().catch(() => ({}));
+    //       createdOrderId =
+    //         data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    //     } catch (fetchErr) {
+    //       // Fallback to axios if some mobile engines choke on fetch+FormData
+    //       const { data } = await axios.post(`${API}/orderDets`, form, {
+    //         withCredentials: false,
+    //         // DO NOT set Content-Type; axios will set proper multipart boundary
+    //       });
+    //       createdOrderId =
+    //         data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    //     }
+
+    //     // 5) Optional: place a 120-minute inventory hold (don’t block success if it fails)
+    //     try {
+    //       const holdLines = buildHoldLines();
+    //       if (createdOrderId && holdLines.length > 0) {
+    //         await axios.post(
+    //           `${API}/inventory/hold`,
+    //           {
+    //             orderId: createdOrderId,
+    //             holdMinutes: 120,
+    //             lines: holdLines,
+    //           },
+    //           { withCredentials: false }
+    //         );
+    //       } else {
+    //         console.warn("Reserva omitida: faltan orderId o líneas.", {
+    //           createdOrderId,
+    //           holdLines,
+    //         });
+    //       }
+    //     } catch (holdErr) {
+    //       console.error("Error al reservar inventario:", holdErr);
+    //       // continue anyway
+    //     }
+
+    //     // 6) Trigger the local download AFTER server save (best for mobile)
+    //     doc.save("order_summary.pdf");
+
+    //     // 7) Success UX: go to My Orders so the new order is visible
+    //     alert("Orden guardada exitosamente");
+    //     navigate("/myOrders");
+    //   } catch (error) {
+    //     console.error("Error al guardar la orden o al reservar inventario", error);
+    //     const msg =
+    //       error?.message ||
+    //       error?.response?.data?.error ||
+    //       "Revisa tu conexión y vuelve a intentar.";
+    //     alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+    //   }
+
+    // // END
 
     // NEW VERSION
     // doc.save("order_summary.pdf");
