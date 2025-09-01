@@ -689,111 +689,151 @@ export default function OrderNow() {
 
     doc.save("order_summary.pdf");
 
-    //  ----> 
-    // Save order in DB
-    const userEmail = userCredentials?.correo;
-    const creditDue =
-      paymentOption === "Crédito" && creditAllowed
-        ? addDays(new Date(), creditDays).toISOString()
-        : null;
+    // SEP01
+    const pdfBlob = doc.output("blob");
 
-    const orderInfo = {
-      userEmail,
-      items,
-      totals: {
-        totalUSDNative: Number(totalUSDNative.toFixed(2)),
-        totalMXNNative: Number(totalMXNNative.toFixed(2)),
-        totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
-        totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
-        dofRate,
-        dofDate,
-        discountUSD: Number(discountTotal || 0),
-        vatUSD: Number(vatUSD.toFixed(2)),
-        finalAllUSD: Number(finalAllUSD.toFixed(2)),
-        vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
-        finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
-      },
-      requestBill: requestBill === "true",
-      shippingInfo: { ...currentShipping },
-      billingInfo: { ...currentBilling },
-      orderDate: new Date().toISOString(),
-      orderStatus: "Pedido Realizado",
-      paymentOption,
-      creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
-      creditDueDate: creditDue,
-    };
+    const form = new FormData();
+    form.append("order", JSON.stringify(orderInfo));
+    form.append("pdf", pdfBlob, "order_summary.pdf"); // filename must be a string
 
+    let createdOrderId = null;
+
+    // Prefer fetch on mobile (simpler CORS), no custom headers = no forced preflight
     try {
-      // Build the PDF blob once
-      const pdfBlob = doc.output("blob");
-
-      // Prepare multipart form
-      const form = new FormData();
-      form.append("order", JSON.stringify(orderInfo));
-      form.append("pdf", pdfBlob, "order_summary.pdf"); // <-- filename as string
-
-      // Mobile-friendly upload: try fetch (no keepalive), then axios fallback
-      let createdOrderId = null;
-
-      try {
-        const res = await fetch(`${API}/orderDets`, {
-          method: "POST",
-          body: form,
-          headers: { Accept: "application/json" },
-          cache: "no-store",
-        });
-
-        if (!res.ok) {
-          const errJson = await res.json().catch(() => ({}));
-          throw new Error(errJson?.error || `Error ${res.status}`);
-        }
-        const data = await res.json();
-        createdOrderId =
-          data?.order?._id || data?.data?._id || data?._id || data?.id || null;
-      } catch (fetchErr) {
-        // Fallback for quirky mobile engines
-        const { data } = await axios.post(`${API}/orderDets`, form, {
-          headers: { Accept: "application/json" },
-          withCredentials: false,
-        });
-        createdOrderId =
-          data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+      const res = await fetch(`${API}/orderDets`, {
+        method: "POST",
+        body: form,
+        cache: "no-store",
+        credentials: "omit", // we don’t need cookies
+        mode: "cors",
+      });
+      if (!res.ok) {
+        let errText = await res.text().catch(() => "");
+        throw new Error(errText || `HTTP ${res.status}`);
       }
-
-      // Optional: Place a 120-minute hold if we have an order ID
-      try {
-        const holdLines = buildHoldLines();
-        if (createdOrderId && holdLines.length > 0) {
-          await axios.post(`${API}/inventory/hold`, {
-            orderId: createdOrderId,
-            holdMinutes: 120,
-            lines: holdLines,
-          });
-        } else {
-          console.warn("Reserva omitida: faltan orderId o líneas.", {
-            createdOrderId,
-            holdLines,
-          });
-        }
-      } catch (holdErr) {
-        console.error("Error al reservar inventario:", holdErr);
-        // don't block the flow if the hold fails
-      }
-
-      // Trigger local download AFTER a successful upload (helps mobile)
-      doc.save("order_summary.pdf");
-
-      alert("Orden guardada exitosamente");
-      navigate("/myOrders");
-    } catch (error) {
-      console.error("Error al guardar la orden o al reservar inventario", error);
-      const msg =
-        error?.message ||
-        error?.response?.data?.error ||
-        "Revisa tu conexión y vuelve a intentar.";
-      alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+      const data = await res.json();
+      createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    } catch (e) {
+      // Axios fallback if fetch fails on some engines
+      const { data } = await axios.post(`${API}/orderDets`, form, {
+        withCredentials: false,
+        // DO NOT set Content-Type; let Axios set multipart boundary
+        // timeout: 20000, // optional
+      });
+      createdOrderId = data?.order?._id || data?.data?._id || data?._id || data?.id || null;
     }
 
+    // SEP01
+
+    //  ----> 
+    // Save order in DB
+    // const userEmail = userCredentials?.correo;
+    // const creditDue =
+    //   paymentOption === "Crédito" && creditAllowed
+    //     ? addDays(new Date(), creditDays).toISOString()
+    //     : null;
+
+    // const orderInfo = {
+    //   userEmail,
+    //   items,
+    //   totals: {
+    //     totalUSDNative: Number(totalUSDNative.toFixed(2)),
+    //     totalMXNNative: Number(totalMXNNative.toFixed(2)),
+    //     totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+    //     totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+    //     dofRate,
+    //     dofDate,
+    //     discountUSD: Number(discountTotal || 0),
+    //     vatUSD: Number(vatUSD.toFixed(2)),
+    //     finalAllUSD: Number(finalAllUSD.toFixed(2)),
+    //     vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+    //     finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+    //   },
+    //   requestBill: requestBill === "true",
+    //   shippingInfo: { ...currentShipping },
+    //   billingInfo: { ...currentBilling },
+    //   orderDate: new Date().toISOString(),
+    //   orderStatus: "Pedido Realizado",
+    //   paymentOption,
+    //   creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+    //   creditDueDate: creditDue,
+    // };
+
+    // try {
+    //   // Build the PDF blob once
+    //   const pdfBlob = doc.output("blob");
+
+    //   // Prepare multipart form
+    //   const form = new FormData();
+    //   form.append("order", JSON.stringify(orderInfo));
+    //   form.append("pdf", pdfBlob, "order_summary.pdf"); // <-- filename as string
+
+    //   // Mobile-friendly upload: try fetch (no keepalive), then axios fallback
+    //   let createdOrderId = null;
+
+    //   try {
+    //     const res = await fetch(`${API}/orderDets`, {
+    //       method: "POST",
+    //       body: form,
+    //       headers: { Accept: "application/json" },
+    //       cache: "no-store",
+    //     });
+
+    //     if (!res.ok) {
+    //       const errJson = await res.json().catch(() => ({}));
+    //       throw new Error(errJson?.error || `Error ${res.status}`);
+    //     }
+    //     const data = await res.json();
+    //     createdOrderId =
+    //       data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    //   } catch (fetchErr) {
+    //     // Fallback for quirky mobile engines
+    //     const { data } = await axios.post(`${API}/orderDets`, form, {
+    //       headers: { Accept: "application/json" },
+    //       withCredentials: false,
+    //     });
+    //     createdOrderId =
+    //       data?.order?._id || data?.data?._id || data?._id || data?.id || null;
+    //   }
+
+    //   // Optional: Place a 120-minute hold if we have an order ID
+    //   try {
+    //     const holdLines = buildHoldLines();
+    //     if (createdOrderId && holdLines.length > 0) {
+    //       await axios.post(`${API}/inventory/hold`, {
+    //         orderId: createdOrderId,
+    //         holdMinutes: 120,
+    //         lines: holdLines,
+    //       });
+    //     } else {
+    //       console.warn("Reserva omitida: faltan orderId o líneas.", {
+    //         createdOrderId,
+    //         holdLines,
+    //       });
+    //     }
+    //   } catch (holdErr) {
+    //     console.error("Error al reservar inventario:", holdErr);
+    //     // don't block the flow if the hold fails
+    //   }
+
+    //   // Trigger local download AFTER a successful upload (helps mobile)
+    //   doc.save("order_summary.pdf");
+
+    //   alert("Orden guardada exitosamente");
+    //   navigate("/myOrders");
+    // } catch (error) {
+    //   console.error("Error al guardar la orden o al reservar inventario", error);
+    //   const msg =
+    //     error?.message ||
+    //     error?.response?.data?.error ||
+    //     "Revisa tu conexión y vuelve a intentar.";
+    //   alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+    // }
+
+
+    // ------
+
+    // OG
     // Save order in DB
     // const userEmail = userCredentials?.correo;
     // const creditDue =

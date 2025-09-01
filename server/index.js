@@ -38,7 +38,7 @@ const corsOptions = {
     return cb(new Error(`CORS not allowed for origin: ${origin}`), false);
   },
   methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
-  allowedHeaders: ["Content-Type","Authorization"],
+  allowedHeaders: ["Content-Type","Accept","Authorization"],
   credentials: true,
   maxAge: 86400, // cache preflight 24h
 };
