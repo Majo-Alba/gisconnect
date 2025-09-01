@@ -909,67 +909,79 @@ export default function ExpressQuote() {
     doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
   
     // Save locally
-    doc.save("Cotización_Express.pdf");
+    // doc.save("Cotización_Express.pdf");
 
+    // --- Build the PDF once ---
     const pdfBlob = doc.output("blob");
 
-  // --- Upload FIRST (mobile-safe) ---
-  try {
-    if (!navigator.onLine) throw new Error("Sin conexión a Internet.");
+    // --- Upload FIRST (mobile-safe with keepalive only if small) ---
+    try {
+      if (!navigator.onLine) throw new Error("Sin conexión a Internet.");
 
-    const formData = new FormData();
-    // IMPORTANT: pass a real filename string as the 3rd arg
-    formData.append("pdf", pdfBlob, "Cotización_Express.pdf");
-    formData.append(
-      "metadata",
-      JSON.stringify({
-        userEmail: userCreds?.correo,
-        createdAt: new Date().toISOString(),
-        totals: {
-          totalUSD,
-          totalMXN,
-          allUSD,
-          allMXN,
-          allUSDWithIVA,
-          allMXNWithIVA,
-          dofRate,
-          dofDate,
-          ivaApplied: !!isActive,
-        },
-        items,
-      })
-    );
+      const formData = new FormData();
+      formData.append("pdf", pdfBlob, "Cotización_Express.pdf"); // filename is important
+      formData.append(
+        "metadata",
+        JSON.stringify({
+          userEmail: userCreds?.correo,
+          createdAt: new Date().toISOString(),
+          totals: {
+            totalUSD,
+            totalMXN,
+            allUSD,
+            allMXN,
+            allUSDWithIVA,
+            allMXNWithIVA,
+            dofRate,
+            dofDate,
+            ivaApplied: !!isActive,
+          },
+          items,
+        })
+      );
 
-    // Prefer fetch on mobile with keepalive
-    const res = await fetch(`${API}/save-pdf`, {
-      method: "POST",
-      body: formData,
-      keepalive: true,                   // <- helps on mobile when tab is backgrounded
-      headers: { Accept: "application/json" },
-      // no need to set Content-Type; the browser adds the correct multipart boundary
-      cache: "no-store",
-    });
+      // keepalive has a ~64 KB body limit; only enable for tiny payloads
+      const useKeepalive = pdfBlob.size <= 60 * 1024;
 
-    if (!res.ok) {
-      const errJson = await res.json().catch(() => ({}));
-      throw new Error(errJson?.error || `Error ${res.status}`);
+      let res;
+      try {
+        res = await fetch(`${API}/save-pdf`, {
+          method: "POST",
+          body: formData,
+          // only set keepalive if the body is tiny
+          ...(useKeepalive ? { keepalive: true } : {}),
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+      } catch (e) {
+        // Fallback to Axios if fetch fails (some mobile Safari/Chrome quirks)
+        const axiosRes = await axios.post(`${API}/save-pdf`, formData, {
+          headers: { "Accept": "application/json" },
+          withCredentials: false,
+        });
+        res = new Response(JSON.stringify(axiosRes.data), { status: 200 });
+      }
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson?.error || `Error ${res.status}`);
+      }
+
+      // Optional: tiny pause helps some mobile UIs settle
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Now trigger the local download
+      doc.save("Cotización_Express.pdf");
+
+      alert("PDF generado y guardado exitosamente.");
+    } catch (err) {
+      console.error("Error saving PDF:", err);
+      alert(
+        `No se pudo guardar el PDF.\n${
+          err?.message || "Revisa tu conexión y vuelve a intentar."
+        }`
+      );
     }
-
-    // Optional tiny pause to let the event loop settle on some mobiles
-    await new Promise((r) => setTimeout(r, 100));
-
-    // --- Now trigger the local download ---
-    doc.save("Cotización_Express.pdf");
-
-    alert("PDF generado y guardado exitosamente.");
-  } catch (err) {
-    console.error("Error saving PDF:", err);
-    alert(
-      `No se pudo guardar el PDF.\n${
-        err?.message || "Revisa tu conexión y vuelve a intentar."
-      }`
-    );
-  }
   
     // // Upload to server (Mongo)
     // try {
