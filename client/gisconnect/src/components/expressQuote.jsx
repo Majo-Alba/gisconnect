@@ -777,27 +777,28 @@ export default function ExpressQuote() {
     // Totals text
     let line = 0;
     const lineH = 5;
-    const rightX = 196; // ~ inside box
+    const rightX = 190; // ~ inside box
+    // const rightX = 196; // ~ inside box
   
     doc.setFontSize(10);
     doc.setFont("helvetica", "bold");
   
-    doc.text(`USD (solo): ${fmtUSD(totalUSD)}`, rightX, extraY + line, { align: "right" });
-    line += lineH;
-    doc.text(`MXN (solo): ${fmtMXN(totalMXN)}`, rightX, extraY + line, { align: "right" });
-    line += lineH;
+    // doc.text(`USD (solo): ${fmtUSD(totalUSD)}`, rightX, extraY + line, { align: "right" });
+    // line += lineH;
+    // doc.text(`MXN (solo): ${fmtMXN(totalMXN)}`, rightX, extraY + line, { align: "right" });
+    // line += lineH;
   
     // All-products totals (conversion)
-    doc.text(
-      `USD (todos): ${allUSD != null ? fmtUSD(allUSD) : (dofRate ? fmtUSD(0) : "Cargando...")}`,
-      rightX, extraY + line, { align: "right" }
-    );
-    line += lineH;
-    doc.text(
-      `MXN (todos): ${allMXN != null ? fmtMXN(allMXN) : (dofRate ? fmtMXN(0) : "Cargando...")}`,
-      rightX, extraY + line, { align: "right" }
-    );
-    line += lineH;
+    // doc.text(
+    //   `USD (todos): ${allUSD != null ? fmtUSD(allUSD) : (dofRate ? fmtUSD(0) : "Cargando...")}`,
+    //   rightX, extraY + line, { align: "right" }
+    // );
+    // line += lineH;
+    // doc.text(
+    //   `MXN (todos): ${allMXN != null ? fmtMXN(allMXN) : (dofRate ? fmtMXN(0) : "Cargando...")}`,
+    //   rightX, extraY + line, { align: "right" }
+    // );
+    // line += lineH;
   
     // IVA (only on all-products)
     if (isActive) {
