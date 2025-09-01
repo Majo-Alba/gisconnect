@@ -777,7 +777,7 @@ export default function ExpressQuote() {
     // Totals text
     let line = 0;
     const lineH = 5;
-    const rightX = 190; // ~ inside box
+    const rightX = 10; // ~ inside box
     // const rightX = 196; // ~ inside box
   
     doc.setFontSize(10);
