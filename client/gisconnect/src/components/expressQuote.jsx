@@ -804,12 +804,12 @@ export default function ExpressQuote() {
     if (isActive) {
       doc.text(
         `IVA USD: ${ivaAllUSD != null ? fmtUSD(ivaAllUSD) : "—"}`,
-        rightX, extraY + line, { align: "right" }
+        rightX, extraY + line, { align: "left" }
       );
       line += lineH;
       doc.text(
         `IVA MXN: ${ivaAllMXN != null ? fmtMXN(ivaAllMXN) : "—"}`,
-        rightX, extraY + line, { align: "right" }
+        rightX, extraY + line, { align: "left" }
       );
       line += lineH;
     }
@@ -817,12 +817,12 @@ export default function ExpressQuote() {
     // Totals with IVA
     doc.text(
       `TOTAL USD: ${allUSDWithIVA != null ? fmtUSD(allUSDWithIVA) : "—"}`,
-      rightX, extraY + line, { align: "right" }
+      rightX, extraY + line, { align: "left" }
     );
     line += lineH;
     doc.text(
       `TOTAL MXN: ${allMXNWithIVA != null ? fmtMXN(allMXNWithIVA) : "—"}`,
-      rightX, extraY + line, { align: "right" }
+      rightX, extraY + line, { align: "left" }
     );
   
     // FX note
@@ -831,7 +831,7 @@ export default function ExpressQuote() {
     const fxNoteY = extraY + line + 6;
     doc.text(
       dofRate ? `${dofRate.toFixed(2)} MXN/USD (DOF ${dofDate || ""})` : "Tipo de cambio DOF no disponible",
-      rightX, fxNoteY, { align: "right" }
+      rightX, fxNoteY, { align: "left" }
     );
   
     // --- PAGE 2: Payment instructions (keep your design) ---
