@@ -571,34 +571,97 @@ router.get("/shipping-preferences", async (req, res) => {
   });
 
 // ENDPOINT FOR UPLOADING NEW QUOTES TO MONGO
-router.post('/save-pdf', upload.single('pdf'), async (req, res) => {
+// Preflight for mobile/Safari/etc.
+router.options("/save-pdf", cors());
+
+// Accept a PDF blob (field name: "pdf") with optional JSON "metadata"
+router.post("/save-pdf", cors(), upload.single("pdf"), async (req, res) => {
   try {
+    // Basic CORS/cache hygiene on the response
+    res.set({
+      "Cache-Control": "no-store",
+      "Access-Control-Expose-Headers": "Content-Type, Content-Length",
+    });
+
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded under field "pdf".' });
+      return res.status(400).json({ ok: false, error: 'No file uploaded under field "pdf".' });
     }
 
-    const { originalname, mimetype, buffer } = req.file;
+    const { originalname = "document.pdf", mimetype = "", buffer } = req.file;
 
-    // optional metadata sent as JSON string
+    // Allow common PDF types; relax if you also accept images here
+    const allowed = new Set(["application/pdf", "application/octet-stream"]);
+    if (!allowed.has(mimetype)) {
+      // Some mobiles send octet-stream for blobs; we still allow that
+      console.warn("Unexpected mimetype for /save-pdf:", mimetype);
+    }
+
+    // Optional metadata string → object
     let metadata = {};
-    if (req.body?.metadata) {
-      try { metadata = JSON.parse(req.body.metadata); } catch { /* ignore */ }
+    if (typeof req.body?.metadata === "string" && req.body.metadata.trim()) {
+      try {
+        metadata = JSON.parse(req.body.metadata);
+      } catch (e) {
+        return res.status(400).json({ ok: false, error: "Invalid JSON in metadata." });
+      }
+    }
+
+    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length === 0) {
+      return res.status(400).json({ ok: false, error: "Empty or invalid file buffer." });
     }
 
     const doc = new PdfQuote({
       filename: originalname,
-      contentType: mimetype,
-      pdfBuffer: buffer, // <-- this must exist; memoryStorage ensures it
-      metadata,
+      contentType: mimetype || "application/pdf",
+      pdfBuffer: buffer,              // multer memoryStorage provides this
+      metadata: metadata || {},
+      createdAt: new Date(),
     });
 
     await doc.save();
-    res.status(200).json({ message: 'PDF saved to MongoDB successfully', id: doc._id });
+
+    return res.status(200).json({
+      ok: true,
+      message: "PDF saved to MongoDB successfully",
+      id: doc._id,
+      filename: originalname,
+      bytes: buffer.length,
+    });
   } catch (err) {
-    console.error('Error saving PDF:', err);
-    res.status(500).json({ error: 'Failed to save PDF' });
+    console.error("Error saving PDF:", err);
+    return res.status(500).json({ ok: false, error: "Failed to save PDF" });
   }
 });
+// OFF SEP01
+// router.post('/save-pdf', upload.single('pdf'), async (req, res) => {
+//   try {
+//     if (!req.file) {
+//       return res.status(400).json({ error: 'No file uploaded under field "pdf".' });
+//     }
+
+//     const { originalname, mimetype, buffer } = req.file;
+
+//     // optional metadata sent as JSON string
+//     let metadata = {};
+//     if (req.body?.metadata) {
+//       try { metadata = JSON.parse(req.body.metadata); } catch { /* ignore */ }
+//     }
+
+//     const doc = new PdfQuote({
+//       filename: originalname,
+//       contentType: mimetype,
+//       pdfBuffer: buffer, // <-- this must exist; memoryStorage ensures it
+//       metadata,
+//     });
+
+//     await doc.save();
+//     res.status(200).json({ message: 'PDF saved to MongoDB successfully', id: doc._id });
+//   } catch (err) {
+//     console.error('Error saving PDF:', err);
+//     res.status(500).json({ error: 'Failed to save PDF' });
+//   }
+// });
+// OFF SEP01
 
   // ENDPOINT FOR FETCHING DOF EXCHANGE
   //try3
