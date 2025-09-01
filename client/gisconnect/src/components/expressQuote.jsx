@@ -910,17 +910,28 @@ export default function ExpressQuote() {
   
     // Save locally
     doc.save("Cotización_Express.pdf");
-  
-    // Upload to server (Mongo)
-    try {
-      const pdfBlob = doc.output("blob");
-      const file = new File([pdfBlob], "Cotizacion_Express.pdf", { type: "application/pdf" });
-      const formData = new FormData();
-      formData.append("pdf", pdfBlob, file); // field name must match your multer/endpoint
 
-      // formData.append("pdf", file); // field name must match your multer/endpoint
-  
-      // Optional: include metadata alongside the file
+    try {
+      // 1) Quick guards for mobile
+      if (!navigator.onLine) {
+        throw new Error("Sin conexión a Internet.");
+      }
+    
+      const pdfBlob = doc.output("blob"); // Blob from jsPDF
+      if (!pdfBlob || !pdfBlob.size) {
+        throw new Error("El PDF está vacío.");
+      }
+      // Optional size guard (e.g., 8MB)
+      const MAX_BYTES = 8 * 1024 * 1024;
+      if (pdfBlob.size > MAX_BYTES) {
+        throw new Error("El PDF excede el tamaño máximo permitido.");
+      }
+    
+      // 2) Build multipart body
+      const formData = new FormData();
+      // IMPORTANT: third param is a filename STRING (not a File object)
+      formData.append("pdf", pdfBlob, "Cotizacion_Express.pdf");
+    
       formData.append(
         "metadata",
         JSON.stringify({
@@ -940,16 +951,67 @@ export default function ExpressQuote() {
           items, // includes currency per item
         })
       );
-  
-      await axios.post(`${API}/save-pdf`, formData, { withCredentials: false });
+    
+      // 3) Post (let the browser set Content-Type & boundary)
+      await axios.post(`${API}/save-pdf`, formData, {
+        withCredentials: false,
+        timeout: 20000, // 20s network guard for mobile
+        headers: {
+          // DO NOT set 'Content-Type' here — the browser will include the correct boundary
+          "Accept": "application/json",
+        },
+        // Helps some environments avoid decompression quirks
+        transitional: { forcedJSONParsing: true, silentJSONParsing: true },
+        validateStatus: (s) => s >= 200 && s < 400, // treat 2xx–3xx as success
+      });
+    
       alert("PDF generado y guardado exitosamente.");
     } catch (err) {
-      console.error("Error saving PDF:", err?.response?.data || err.message || err);
-      alert(
-        `No se pudo guardar el PDF.\n` +
-        `${err?.response?.data?.error || err.message || "Revisa tu conexión y vuelve a intentar."}`
-      );
+      const msg =
+        err?.response?.data?.error ||
+        err?.message ||
+        "Revisa tu conexión y vuelve a intentar.";
+      console.error("Error saving PDF:", err?.response?.data || err);
+      alert(`No se pudo guardar el PDF.\n${msg}`);
     }
+  
+    // // Upload to server (Mongo)
+    // try {
+    //   const pdfBlob = doc.output("blob");
+    //   const file = new File([pdfBlob], "Cotizacion_Express.pdf", { type: "application/pdf" });
+    //   const formData = new FormData();
+    //   formData.append("pdf", pdfBlob, file); // field name must match your multer/endpoint
+  
+    //   // Optional: include metadata alongside the file
+    //   formData.append(
+    //     "metadata",
+    //     JSON.stringify({
+    //       userEmail: userCreds?.correo,
+    //       createdAt: new Date().toISOString(),
+    //       totals: {
+    //         totalUSD,
+    //         totalMXN,
+    //         allUSD,
+    //         allMXN,
+    //         allUSDWithIVA,
+    //         allMXNWithIVA,
+    //         dofRate,
+    //         dofDate,
+    //         ivaApplied: !!isActive,
+    //       },
+    //       items, // includes currency per item
+    //     })
+    //   );
+  
+    //   await axios.post(`${API}/save-pdf`, formData, { withCredentials: false });
+    //   alert("PDF generado y guardado exitosamente.");
+    // } catch (err) {
+    //   console.error("Error saving PDF:", err?.response?.data || err.message || err);
+    //   alert(
+    //     `No se pudo guardar el PDF.\n` +
+    //     `${err?.response?.data?.error || err.message || "Revisa tu conexión y vuelve a intentar."}`
+    //   );
+    // }
   };
   
   const submitOrder = () => {
