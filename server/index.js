@@ -137,6 +137,19 @@ app.get("/__routes", (_req, res) => {
 app.use("/files", express.static("files"));
 /* ----------------------------------------------------------------------- */
 
+// SEP01 6:04
+app.use((req, res, next) => {
+  // Only touch reads; uploads (POST) don’t matter for caching
+  if (req.method === "GET" && req.path.startsWith("/myOrders")) {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+  }
+  next();
+});
+// SEP01 6:04
+
 /* -------------------------------- Routers ------------------------------ */
 // Evidence routes live under /orders
 if (evidenceRouter) app.use("/orders", evidenceRouter);
