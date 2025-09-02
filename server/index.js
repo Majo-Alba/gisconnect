@@ -152,7 +152,7 @@ app.use((req, res, next) => {
 
 /* -------------------------------- Routers ------------------------------ */
 // Evidence routes live under /orders
-if (evidenceRouter) app.use("/orders", evidenceRouter);
+if (evidenceRouter) app.use("/myOrders", evidenceRouter);
 
 // Main app router last
 app.use("/", router);
