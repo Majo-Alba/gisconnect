@@ -4,8 +4,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
-import Logo from "/src/assets/images/GIS_Logo.png";
-import OrdersIcon from "/src/assets/images/Icono_Pedidos.png";
+// import Logo from "/src/assets/images/GIS_Logo.png";
+// import OrdersIcon from "/src/assets/images/Icono_Pedidos.png";
+import Logo from "../assets/images/GIS_Logo.png";
+import OrdersIcon from "../assets/images/Icono_Pedidos.png";
+
 import { API } from "/src/lib/api";
 
 export default function MyOrders() {
@@ -108,14 +111,36 @@ export default function MyOrders() {
     <body className="app-shell body-BG-Gradient">
       {/* LOGOS DIV */}
       <div className="loginLogo-ParentDiv">
-        <img
+        {/* <img
           className="secondaryPages-GISLogo"
           src={Logo}
           alt="Home Icon"
           width="180"
           height="55"
           onClick={goHomeLogo}
-        />
+        /> */}
+        <img
+            key={location.key}                     // ✅ forces a fresh render after navigation
+            className="secondaryPages-GISLogo"
+            src={Logo}
+            alt="Home Icon"
+            width="180"
+            height="55"
+            loading="eager"
+            decoding="sync"
+            onError={(e) => {
+                // Very defensive: if the hashed asset failed (rare), clear src once to retry,
+                // or swap in a 1x1 png to avoid broken UI.
+                if (!e.currentTarget.dataset._retry) {
+                e.currentTarget.dataset._retry = "1";
+                e.currentTarget.src = Logo;        // retry once
+                } else {
+                e.currentTarget.src =
+                    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4nGNgYAAAAAMAASsJTYQAAAAASUVORK5CYII=";
+                }
+            }}
+            onClick={goHomeLogo}
+            />
       </div>
       {/* LOGOS END */}
 
