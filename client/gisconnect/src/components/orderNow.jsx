@@ -793,10 +793,10 @@ export default function OrderNow() {
 
       // 7) Success → show it in My Orders
       alert("Orden guardada exitosamente");
-      // navigate("/myOrders");
-      navigate("/myOrders", {
-        state: { refresh: true, justCreatedOrderId: createdOrderId, ts: Date.now() }
-      });
+      navigate("/myOrders");
+      // navigate("/myOrders", {
+      //   state: { refresh: true, justCreatedOrderId: createdOrderId, ts: Date.now() }
+      // });
     } catch (error) {
       console.error("Error al guardar la orden o al reservar inventario", error);
       const msg =
