@@ -14,6 +14,7 @@ export default defineConfig({
       devOptions: { enabled: true },
 
       workbox: {
+        cleanupOutdatedCaches: true,
         // make sure common assets are precached
         globPatterns: [
           '**/*.{js,css,html,ico,png,svg,ttf,woff,woff2,jpg,jpeg,webp}'
