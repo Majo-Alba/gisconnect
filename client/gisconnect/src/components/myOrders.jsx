@@ -33,7 +33,7 @@ export default function MyOrders() {
   };
 
   // Fetcher with no-store + cache-buster (important for installed PWA)
-  const fetchOrders = async (email) => {
+  const fetchOrders = async (userEmail) => {
     const url = `${API}/userOrders?email=${encodeURIComponent(userEmail)}&t=${Date.now()}`;
     // const url = `${API}/orders?email=${encodeURIComponent(email)}&_t=${Date.now()}`;
     // const url = `${API}/orders/user?email=${encodeURIComponent(email)}&_t=${Date.now()}`;
