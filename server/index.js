@@ -118,6 +118,19 @@ app.use("/files", express.static("files"));
 
 /* --------- No-cache for API reads that the PWA tends to stale-cache ----- */
 // Don’t target "/myOrders" (that’s a client route). Target the API path.
+// OFF SEP02 - 1:19
+// app.use((req, res, next) => {
+//   if (req.method === "GET" && (req.path.startsWith("/userOrders") || req.path.startsWith("/orders/user"))) {
+//     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+//     res.setHeader("Pragma", "no-cache");
+//     res.setHeader("Expires", "0");
+//     res.setHeader("Surrogate-Control", "no-store");
+//   }
+//   next();
+// });
+// OFF SEP02 - 1:19
+/* ----------------------------------------------------------------------- */
+// SEP02 - 1:19
 app.use((req, res, next) => {
   if (req.method === "GET" && (req.path.startsWith("/userOrders") || req.path.startsWith("/orders/user"))) {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
@@ -127,7 +140,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-/* ----------------------------------------------------------------------- */
+// SEP02 - 1:19
 
 /* -------------------------------- Routers ------------------------------ */
 // Evidence routes live under /orders  (PUT/POST for evidence, GETs, etc.)

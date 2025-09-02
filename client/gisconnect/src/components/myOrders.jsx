@@ -33,28 +33,70 @@ export default function MyOrders() {
         navigate("/userProfile")
     }
 
+    // SEP02 - 1:22
     const [orders, setOrders] = useState([]);
     const [loading, setLoading] = useState(true);
-    const userEmail = localStorage.getItem("userEmail");
+
+    // Prefer the same source used on order creation
+    const creds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+    const emailFromCreds = creds?.correo ? String(creds.correo).trim().toLowerCase() : "";
+    const emailFallback = localStorage.getItem("userEmail") || "";
+    const userEmail = (emailFromCreds || emailFallback).trim().toLowerCase();
 
     useEffect(() => {
-        if (!userEmail) {
-        console.warn("User email not found in localStorage");
-        setLoading(false);
-        return;
-        }
+        let cancelled = false;
+        const load = async () => {
+            try {
+                if (!userEmail) {
+                    console.warn("User email not found");
+                    if (!cancelled) {
+                        setLoading(false);
+                    }
+                    return;
+                }
+                const url = `${API}/userOrders?email=${encodeURIComponent(userEmail)}&t=${Date.now()}`;
+                const res = await fetch(url, {
+                    method: "GET",
+                    cache: "no-store",
+                    credentials: "omit",
+                    headers: { Accept: "application/json" }, // no custom headers → no preflight
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                if (!cancelled) setOrders(Array.isArray(data) ? data : []);
+            } catch (e) {
+                console.error("Failed to fetch user orders:", e);
+                if (!cancelled) setOrders([]);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+        load();
+        return () => { cancelled = true; };
+    }, [userEmail]);
+    // const [orders, setOrders] = useState([]);
+    // const [loading, setLoading] = useState(true);
+    // const userEmail = localStorage.getItem("userEmail");
 
-        fetch(`${API}/userOrders?email=${userEmail}`)
-        .then((res) => res.json())
-        .then((data) => {
-            setOrders(data);
-            setLoading(false);
-        })
-        .catch((err) => {
-            console.error("Failed to fetch user orders:", err);
-            setLoading(false);
-        });
-    }, []);
+    // useEffect(() => {
+    //     if (!userEmail) {
+    //     console.warn("User email not found in localStorage");
+    //     setLoading(false);
+    //     return;
+    //     }
+
+    //     fetch(`${API}/userOrders?email=${userEmail}`)
+    //     .then((res) => res.json())
+    //     .then((data) => {
+    //         setOrders(data);
+    //         setLoading(false);
+    //     })
+    //     .catch((err) => {
+    //         console.error("Failed to fetch user orders:", err);
+    //         setLoading(false);
+    //     });
+    // }, []);
+    // SEP02 - 1:22
 
     const goToTrackingTimeline = (order) => {
         navigate(`/orderDetail/${order._id}`, { state: { order } });
