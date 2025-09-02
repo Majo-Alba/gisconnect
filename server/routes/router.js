@@ -62,7 +62,6 @@ const upload = multer({
 //USER RELATED API's
 
 // GISCONNECT START!
-
 //API || ENDPOINT FOR REGISTERING USER & PASSWORD HASHING
 router.post('/register', (req,res) => {
     let user = req.body
@@ -507,14 +506,37 @@ router.get('/billing-address/:email', async (req, res) => {
   });
 
 // ENDPOINT FOR RETRIEVING ALL NEW ORDERS - ADMIN SIDE
+// SEP02 - 2:17
 router.get('/orders', async (req, res) => {
-    try {
-      const orders = await newOrderModel.find().sort({ orderDate: -1 });
-      res.json(orders);
-    } catch (err) {
-      res.status(500).json({ error: 'Error fetching orders' });
-    }
-  });
+  try {
+    const email = (req.query.email || "").trim();
+
+    // prevent SW/proxies from caching user-specific lists
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+
+    const findQuery = email ? { userEmail: email } : {};
+    const orders = await newOrderModel
+      .find(findQuery)
+      .sort({ orderDate: -1, _id: -1 });
+
+    return res.json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    return res.status(500).json({ error: "Error fetching orders" });
+  }
+});
+// router.get('/orders', async (req, res) => {
+//     try {
+//       const orders = await newOrderModel.find().sort({ orderDate: -1 });
+//       res.json(orders);
+//     } catch (err) {
+//       res.status(500).json({ error: 'Error fetching orders' });
+//     }
+//   });
+// SEP02 - 2:17
 
 // ENDPOINT FOR RETRIEVING ALL DETAILS OF EACH ORDER - ADMIN SIDE
 router.get('/orders/:id', async (req, res) => {
