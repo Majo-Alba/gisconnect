@@ -681,7 +681,7 @@ export default function NewOrder() {
       </div>
 
       <div className="app-main">
-      <label className="sectionHeader-Label">¡Cotiza ahora!</label>
+      <label className="sectionHeader-Label">¡Haz tu pedido!</label>
 
       <div className="quoterBody-Div">
         <div>
