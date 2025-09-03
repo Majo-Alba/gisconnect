@@ -29,6 +29,14 @@ export default function GeneralLogin() {
   // --- Admin allowlist fallback (use your real admin emails here) ---
   const ADMIN_EMAILS = new Set([
     "majo_test@gmail.com",
+    "ventas@greenimportsol.com",
+    "info@greenimpoortsol.com",
+    "administracion@greenimportsol.com",
+    "administracion2@greenimportsol.com",
+    "logistica@greenimportsol.com",
+    "almacen@greenimportsol.com",
+    "almacen2@greenimportsol.com",
+    "almacen3@greenimportsol.com",
     // "admin@gisconnect.com",
     // "alejandro@gisconnect.com",
     // "miguel@gisconnect.com",
