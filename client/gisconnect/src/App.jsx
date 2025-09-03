@@ -36,11 +36,11 @@ import ResetPassword from './components/resetPassword'
 import NewOrderDetails from './components/newOrderDetails'
 import ManageDeliveryDetails from './components/manageDeliveryDetails'
 import DeliveredSummary from './components/deliveredSummary'
+import NoAccess from './components/NoAccess'
 // GISCONNECT - END
 
 function AdminRoute({ pathPrefix, Component }) {
   const location = useLocation();
-  const navigate = useNavigate();
 
   const isAdmin = (localStorage.getItem("isAdmin") || "false") === "true";
   const rawScope = localStorage.getItem("adminScope");
@@ -48,24 +48,48 @@ function AdminRoute({ pathPrefix, Component }) {
     try { return JSON.parse(rawScope); } catch { return rawScope; }
   }, [rawScope]);
 
-  // Helper: can access?
   const canAccess = () => {
     if (!isAdmin) return false;
     if (adminScope === "ALL") return true;
     if (!Array.isArray(adminScope)) return false;
-    const current = location.pathname; // e.g. /packDetails/123
-    // Allow if any allowed prefix matches the current path
+    const current = location.pathname;
     return adminScope.some((prefix) => current.startsWith(prefix));
   };
 
   if (!canAccess()) {
-    // If not admin or no scope, send to userHome or a 404
-    // You can swap <Notfound/> if preferred
-    navigate("/adminHome", { replace: true });
-    return null;
+    return <NoAccess />;   // ⬅️ here’s the new screen
   }
   return <Component />;
 }
+
+// function AdminRoute({ pathPrefix, Component }) {
+//   const location = useLocation();
+//   const navigate = useNavigate();
+
+//   const isAdmin = (localStorage.getItem("isAdmin") || "false") === "true";
+//   const rawScope = localStorage.getItem("adminScope");
+//   const adminScope = useMemo(() => {
+//     try { return JSON.parse(rawScope); } catch { return rawScope; }
+//   }, [rawScope]);
+
+//   // Helper: can access?
+//   const canAccess = () => {
+//     if (!isAdmin) return false;
+//     if (adminScope === "ALL") return true;
+//     if (!Array.isArray(adminScope)) return false;
+//     const current = location.pathname; // e.g. /packDetails/123
+//     // Allow if any allowed prefix matches the current path
+//     return adminScope.some((prefix) => current.startsWith(prefix));
+//   };
+
+//   if (!canAccess()) {
+//     // If not admin or no scope, send to userHome or a 404
+//     // You can swap <Notfound/> if preferred
+//     navigate("/adminHome", { replace: true });
+//     return null;
+//   }
+//   return <Component />;
+// }
 
 function App() {
   const [loggedUser, setLoggedUser] = useState(localStorage.getItem("orion-user"))
