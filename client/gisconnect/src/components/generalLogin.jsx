@@ -30,7 +30,7 @@ export default function GeneralLogin() {
   const ADMIN_EMAILS = new Set([
     "majo_test@gmail.com",
     "ventas@greenimportsol.com",
-    "info@greenimpoortsol.com",
+    "info@greenimportsol.com",
     "administracion@greenimportsol.com",
     "administracion2@greenimportsol.com",
     "logistica@greenimportsol.com",
