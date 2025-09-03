@@ -32,10 +32,10 @@ export default function GeneralLogin() {
   const LOGISTICA_Y_ALMACEN = new Set([
     "logistica@greenimportsol.com",
     "almacen@greenimportsol.com",
+    "almacen2@greenimportsol.com",
   ]);
 
   const ALMACEN_LIMITADO = new Set([
-    "almacen2@greenimportsol.com",
     "almacen3@greenimportsol.com",
   ]);
 
