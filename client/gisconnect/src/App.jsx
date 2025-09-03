@@ -111,10 +111,10 @@ function App() {
             <Route path='/deliveredSummary/:orderId' element={<AdminRoute pathPrefix="/deliveredSummary" Component={DeliveredSummary} />}/>
 
             {/* If you still need these non-guarded admin pages, keep them; otherwise remove */}
-            <Route path='/newQuotes' element={<NewQuotes/>}/>
+            {/* <Route path='/newQuotes' element={<NewQuotes/>}/>
             <Route path="/quoteDetails/:id" element={<QuoteDetails/>} />
             <Route path='/newOrders' element={<NewOrders/>}/>
-            <Route path="/newOrders/:orderId" element={<NewOrderDetails/>} />
+            <Route path="/newOrders/:orderId" element={<NewOrderDetails/>} /> */}
 
             {/* GISCONNECT END */}
           </Routes>
