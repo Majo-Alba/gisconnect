@@ -133,7 +133,7 @@ export default function OrderTrackDetails() {
     if (s.includes("realizado")) return 0;
     if (s.includes("evidencia")) return 1;
     if (s.includes("verificado")) return 2;
-    if (s.includes("etiqueta")) return 3;
+    if (s.includes("preparando")) return 3;
     if (s.includes("listo")) return 4;
     if (s.includes("entregado")) return 5;
     return 0;
