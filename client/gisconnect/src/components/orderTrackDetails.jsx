@@ -123,7 +123,8 @@ export default function OrderTrackDetails() {
     "Evidencia \n de Pago",
     "Pago \n Verificado",
     "Preparando \n Pedido",
-    "Pedido \n Listo",
+    "Pedido \n Etiquetado",
+    // "Pedido \n Listo",
     "Pedido \n Entregado",
   ];
 
@@ -134,7 +135,7 @@ export default function OrderTrackDetails() {
     if (s.includes("evidencia")) return 1;
     if (s.includes("verificado")) return 2;
     if (s.includes("preparando")) return 3;
-    if (s.includes("listo")) return 4;
+    if (s.includes("etiquetado")) return 4;
     if (s.includes("entregado")) return 5;
     return 0;
   };
