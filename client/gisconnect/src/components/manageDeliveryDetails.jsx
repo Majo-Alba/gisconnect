@@ -187,8 +187,7 @@ export default function ManageDeliveryDetails() {
 
     try {
       await axios.put(`${API}/orders/${order._id}`, {
-        orderStatus: "Pedido Etiquetado",
-        // orderStatus: "Etiqueta Generada",
+        orderStatus: "Etiqueta Generada",
       });
       alert("Etiqueta generada y estado actualizado.");
       navigate("/deliverReady");
