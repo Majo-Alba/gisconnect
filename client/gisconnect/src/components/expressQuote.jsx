@@ -295,8 +295,10 @@ export default function ExpressQuote() {
   const totalMXN = mxnItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native MXN subtotal
 
   // Cross-currency totals using DOF rate
-  const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
-  const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
+  // const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
+  // const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
+  const allUSD = (dofRate.toFixed(2)) ? totalUSD + totalMXN / (dofRate.toFixed(2)) : null; // MXN → USD
+  const allMXN = (dofRate.toFixed(2)) ? totalMXN + totalUSD * (dofRate.toFixed(2)) : null; // USD → MXN
 
   // IVA (apply only to the all-products totals to keep UI tidy)
   const ivaAllUSD = isActive && allUSD != null ? +(allUSD * 0.16).toFixed(2) : null;
@@ -435,8 +437,10 @@ export default function ExpressQuote() {
     const totalUSD = usdItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
     const totalMXN = mxnItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
   
-    const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
-    const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
+    // const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
+    // const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
+    const allUSD = (dofRate.toFixed(2)) ? totalUSD + totalMXN / (dofRate.toFixed(2)) : null; // MXN → USD
+    const allMXN = (dofRate.toFixed(2)) ? totalMXN + totalUSD * (dofRate.toFixed(2)) : null; // USD → MXN
   
     const ivaAllUSD = (typeof isActive === "boolean" && isActive && allUSD != null)
       ? +(allUSD * 0.16).toFixed(2)
