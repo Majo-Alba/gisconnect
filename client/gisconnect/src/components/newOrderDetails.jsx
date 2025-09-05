@@ -306,11 +306,11 @@ export default function NewOrderDetails() {
             >
               <option value="">Selecciona método</option>
               <option value="Efectivo">01: Efectivo</option>
-              <option value="Cheque Nominativo">02: Cheque Nominativo</option>
+              {/* <option value="Cheque Nominativo">02: Cheque Nominativo</option> */}
               <option value="Transferencia electrónica de fondos">
                 03: Transferencia electrónica de fondos
               </option>
-              <option value="Tarjeta de crédito">04: Tarjeta de crédito</option>
+              {/* <option value="Tarjeta de crédito">04: Tarjeta de crédito</option> */}
             </select>
           </div>
 
