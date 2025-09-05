@@ -48,6 +48,10 @@ export default function ExpressQuote() {
   const [dofDate, setDofDate] = useState(null);
   const [fxError, setFxError] = useState(null);
 
+  // SEP05
+  const [preferredCurrency, setPreferredCurrency] = useState("USD"); // "USD" | "MXN"
+  // SEP05 
+
   // ---------- helpers (placed up here so they’re usable below) ----------
   const normalize = (s) =>
     (s ?? "")
@@ -801,10 +805,160 @@ export default function ExpressQuote() {
         </div>
 
         {/* ===== NEW SUMMARY BOX WITH SPLIT + ALL-PRODUCT TOTALS ===== */}
+        {/* SEP05 */}
+        {/* ===== NEW SUMMARY BOX WITH TOGGLE + RULES ===== */}
         <label className="newUserData-Label">Resumen financiero</label>
 
+        {/* Toggle */}
+        <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8, marginLeft: 55, marginTop: 5 }}>
+          <span style={{ fontSize: 13, color: "#333" }}>Moneda preferida:</span>
+
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="radio"
+              name="prefCurrency"
+              value="USD"
+              checked={preferredCurrency === "USD"}
+              onChange={() => setPreferredCurrency("USD")}
+            />
+            USD
+          </label>
+
+          <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <input
+              type="radio"
+              name="prefCurrency"
+              value="MXN"
+              checked={preferredCurrency === "MXN"}
+              onChange={() => setPreferredCurrency("MXN")}
+              disabled={!dofRate} // need FX to combine/convert
+            />
+            MXN
+          </label>
+        </div>
+
+        {(() => {
+          const hasUSD = totalUSD > 0;
+          const hasMXN = totalMXN > 0;
+          const onlyUSD = hasUSD && !hasMXN;
+          const mixed = hasUSD && hasMXN;
+
+          const fx = Number.isFinite(dofRate) ? Number(dofRate) : null;
+
+          // Helpers
+          const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+          const fmtMXN = (v) =>
+            `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+          // IVA helpers
+          const withIVA = (v) => (isActive ? v * 1.16 : v);
+
+          // Precompute subtotals with/without IVA
+          const usdSubtotal = totalUSD;
+          const mxnSubtotal = totalMXN;
+
+          const usdSubtotalIVA = withIVA(usdSubtotal);
+          const mxnSubtotalIVA = withIVA(mxnSubtotal);
+
+          // Combined MXN (for mixed/MXN pref and onlyUSD/MXN pref)
+          const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
+          const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
+
+          // Only-USD cart behavior
+          if (onlyUSD) {
+            return (
+              <div className="quoter-summaryDiv">
+                <label className="summary-Label">
+                  <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+                </label>
+
+                {preferredCurrency === "USD" ? (
+                  <>
+                    <label className="summaryTotal-Label">
+                      <b>Total a pagar en USD:</b> {fmtUSD(usdSubtotalIVA)}
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label className="summary-Label">
+                      <b>Tipo de cambio:</b>{" "}
+                      {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                    </label>
+                    <label className="summaryTotal-Label">
+                      <b>Total a pagar en MXN:</b>{" "}
+                      {fx ? fmtMXN(usdSubtotalIVA * (fx).toFixed(2)) : "—"}
+                    </label>
+                  </>
+                )}
+              </div>
+            );
+          }
+
+          // Mixed cart behavior (USD + MXN)
+          if (mixed) {
+            if (preferredCurrency === "USD") {
+              // USD preferred → MXN items MUST stay in MXN (two amounts)
+              return (
+                <div className="quoter-summaryDiv">
+                  <label className="summary-Label">
+                    <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+                  </label>
+                  <label className="summary-Label">
+                    <b>Subtotal artículos en MXN:</b> {fmtMXN(mxnSubtotal)}
+                  </label>
+
+                  <label className="summaryTotal-Label">
+                    <b>Total a pagar en USD:</b> {fmtUSD(usdSubtotalIVA)}
+                  </label>
+                  <label className="summaryTotal-Label">
+                    <b>Total a pagar en MXN:</b> {fmtMXN(mxnSubtotalIVA)}
+                  </label>
+
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
+                    En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.
+                  </div>
+                </div>
+              );
+            } else {
+              // MXN preferred → combinar todo a MXN
+              return (
+                <div className="quoter-summaryDiv">
+                  <label className="summary-Label">
+                    <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+                  </label>
+                  <label className="summary-Label">
+                    <b>Subtotal artículos en MXN:</b> {fmtMXN(mxnSubtotal)}
+                  </label>
+                  <label className="summary-Label">
+                    <b>Tipo de cambio:</b>{" "}
+                    {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                  </label>
+
+                  <label className="summaryTotal-Label">
+                    <b>Total a pagar (MXN):</b>{" "}
+                    {fx ? fmtMXN(combinedMXNIVA) : "—"}
+                  </label>
+                </div>
+              );
+            }
+          }
+
+          // Only-MXN cart (edge case — no USD)
+          return (
+            <div className="quoter-summaryDiv">
+              <label className="summary-Label">
+                <b>Subtotal MXN (artículos en MXN):</b> {fmtMXN(mxnSubtotal)}
+              </label>
+              <label className="summaryTotal-Label">
+                <b>Total a pagar (MXN):</b> {fmtMXN(mxnSubtotalIVA)}
+              </label>
+            </div>
+          );
+        })()}
+
+        {/* <label className="newUserData-Label">Resumen financiero</label>
+
         <div className="quoter-summaryDiv">
-          {/* Split subtotals (no conversion) */}
           <label className="summary-Label">
             <b>Total USD (solo artículos en USD):</b> {fmtUSD(totalUSD)}
           </label>
@@ -829,7 +983,6 @@ export default function ExpressQuote() {
                   : (allMXN != null ? fmtMXN(allMXN) : "Cargando tipo de cambio..."))}
           </label>
 
-          {/* Little note about rate */}
           <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
             {fxError
               ? fxError
@@ -837,7 +990,8 @@ export default function ExpressQuote() {
               ? `Tipo de cambio DOF ${dofDate}: $${dofRate.toFixed(2)} MXN/USD`
               : "Cargando tipo de cambio DOF..."}
           </div>
-        </div>
+        </div> */}
+        {/* SEP05 */}
 
         <div className="actionButtons-Div">
           <button className="generatePDF-Btn" type="button" onClick={downloadPDF}>
