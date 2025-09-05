@@ -764,9 +764,9 @@ export default function ExpressQuote() {
 
         {amount > stock && (
           <label className="stockAvailability-Label">
-            {/* Por el momento no contamos con suficiente stock. */}
+            Por el momento no contamos con suficiente stock.
             <br />
-            Unidades disponibles: {stock || 0}
+            {/* Unidades disponibles: {stock || 0} */}
           </label>
         )}
 
