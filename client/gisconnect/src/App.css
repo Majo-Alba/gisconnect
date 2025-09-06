@@ -1458,6 +1458,41 @@ input:checked + .quoterSlider:before {
   box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
 
+/* EDIT SHIPPING PREFERENCES */
+.savePrefs-Btn{
+  border: none;
+
+  width:fit-content;
+  padding-left: 25px;
+  padding-right: 25px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+
+  margin-left: 90%;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 10px;
+  background-color: #0B9444;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.savePrefs-Btn:hover{
+  width:fit-content;
+  padding-left: 30px;
+  padding-right: 30px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 10px;
+  background-color: #097838;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
 /* MY ORDERS */
 .myOrders-Icon{
   border-radius: 10px;
