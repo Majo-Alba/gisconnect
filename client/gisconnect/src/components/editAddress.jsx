@@ -186,6 +186,7 @@ export default function EditAddress() {
 
                 <label className="newUserData-Label">Código Postal</label>
                 <input className="addressInfo-Input" type="text" value={newShippingAddress.cpEnvio} onChange={handleInput} required placeholder="Código postal"  name="cpEnvio"></input>
+            
             </div>
 
             <button className="addAddress-Button" type="submit" onClick={handleSubmit}>Agregar</button>     

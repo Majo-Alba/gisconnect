@@ -14,6 +14,7 @@ import ExpressQuote from './components/expressQuote'
 import UserProfile from './components/userProfile'
 import EditAddress from './components/editAddress'
 import EditInvoice from './components/editInvoice'
+import EditShippingPreferences from './components/editShippingPreferences';
 import OrderNow from './components/orderNow'
 import NewOrder from './components/newOrder'
 import NewQuotes from './components/newQuotes'
@@ -113,6 +114,7 @@ function App() {
             <Route path='/userProfile' element={<Private Component={UserProfile}/>}/>
             <Route path='/editAddress' element={<Private Component={EditAddress}/>}/>
             <Route path='/editInvoice' element={<Private Component={EditInvoice}/>}/>
+            <Route path='/editShippingPreferences' element={<Private Component={EditShippingPreferences}/>}/>
             <Route path='/myOrders' element={<Private Component={MyOrders}/>}/>
             <Route path="/orderDetail/:orderId" element={<Private Component={OrderTrackDetails} />} />
             <Route path='/orderNow' element={<Private Component={OrderNow}/>}/>

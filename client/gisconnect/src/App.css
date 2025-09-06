@@ -1362,9 +1362,9 @@ input:checked + .quoterSlider:before {
 .addAddress-Button{
   border: none;
 
-  position: absolute;
+  /* position: absolute;
   bottom: 8%;
-  left: 60%;
+  left: 60%; */
 
   width:fit-content;
   padding-left: 30px;
@@ -1372,7 +1372,11 @@ input:checked + .quoterSlider:before {
   padding-top: 10px;
   padding-bottom: 10px;
 
-  margin-top: 15px;
+  /* margin-top: 15px;
+  margin-bottom: 70px; */
+  margin-top: 5%;
+  margin-bottom: 20%;
+  margin-left: 50%;
 
   color: white;
   font-weight: bold;

@@ -238,7 +238,7 @@ export default function ExpressQuote() {
     // Apply
     if (resolvedPrice === null) {
       setPrice("");
-      setPriceCurrency("USD");
+      setPriceCurrency("");
       setSpecialApplied(false);
       return;
     }
@@ -254,46 +254,107 @@ export default function ExpressQuote() {
     .map((r) => (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || ""));
 
   // Add item to wishlist (keep currency on each item)
-  const handleAddItem = () => {
-    const baseRow = csvData.find(
-      (r) =>
-        r.NOMBRE_PRODUCTO === selectedProduct &&
-        (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
-    );
-    if (!baseRow) return;
+  // sep05
+// Replace your current handleAddItem with this one
+const handleAddItem = () => {
+  const baseRow = csvData.find(
+    (r) =>
+      r.NOMBRE_PRODUCTO === selectedProduct &&
+      (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+  );
+  if (!baseRow) return;
 
-    if (amount && parseInt(amount) <= parseInt(stock || "0") && price) {
-      setItems((prev) => [
-        ...prev,
-        {
-          product: selectedProduct,
-          presentation,
-          packPresentation,
-          amount: Number(amount),
-          price: Number(price),          // do not convert; keep numeric
-          currency: priceCurrency,       // "USD" or "MXN"
-          weight: Number(baseRow.PESO_PRODUCTO || 0),
-        },
-      ]);
-      setSelectedProduct("");
-      setPresentation("");
-      setPackPresentation("");
-      setAmount("");
-      setPrice("");
-      setPriceCurrency("USD");
-      setWeight("");
-      setStock("");
-      setSpecialApplied(false);
-    }
-  };
+  const inStock = parseInt(stock || "0", 10);
+  const qty = Number(amount) || 0;
+  const unitPrice = Number(price) || 0;
 
+  if (qty && qty <= inStock && unitPrice) {
+    // Normalize to upper-case and strictly check
+    const cur = (priceCurrency || "").toUpperCase() === "MXN" ? "MXN" : "USD";
+
+    setItems((prev) => [
+      ...prev,
+      {
+        product: selectedProduct,
+        presentation,
+        packPresentation,
+        amount: qty,
+        price: unitPrice,
+        currency: cur,      // <-- normalized
+        weight: Number(baseRow.PESO_PRODUCTO || 0),
+      },
+    ]);
+
+    // Reset inputs
+    setSelectedProduct("");
+    setPresentation("");
+    setPackPresentation("");
+    setAmount("");
+    setPrice("");
+    setPriceCurrency("USD"); // reset to USD for next entry
+    setWeight("");
+    setStock("");
+    setSpecialApplied(false);
+  }
+};
+
+console.log("Added item:", {
+  product: selectedProduct,
+  price,
+  priceCurrency,
+  finalCurrency: (priceCurrency || "").toUpperCase()
+});
+
+
+  // const handleAddItem = () => {
+  //   const baseRow = csvData.find(
+  //     (r) =>
+  //       r.NOMBRE_PRODUCTO === selectedProduct &&
+  //       (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+  //   );
+  //   if (!baseRow) return;
+
+  //   if (amount && parseInt(amount) <= parseInt(stock || "0") && price) {
+  //     setItems((prev) => [
+  //       ...prev,
+  //       {
+  //         product: selectedProduct,
+  //         presentation,
+  //         packPresentation,
+  //         amount: Number(amount),
+  //         price: Number(price),          // do not convert; keep numeric
+  //         currency: priceCurrency,       // "USD" or "MXN"
+  //         weight: Number(baseRow.PESO_PRODUCTO || 0),
+  //       },
+  //     ]);
+  //     setSelectedProduct("");
+  //     setPresentation("");
+  //     setPackPresentation("");
+  //     setAmount("");
+  //     setPrice("");
+  //     setPriceCurrency("USD");
+  //     setWeight("");
+  //     setStock("");
+  //     setSpecialApplied(false);
+  //   }
+  // };
+
+// sep05
   const removeItem = (idx) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
   // ===== Totals =====
-  const usdItems = items.filter((it) => (it.currency || "USD") === "USD");
-  const mxnItems = items.filter((it) => (it.currency || "USD") === "MXN");
+  const normalizeCur = (val) => {
+    const c = String(val || "").trim().toUpperCase();
+    return c === "MXN" ? "MXN" : "USD";
+  };
+  
+  const usdItems = items.filter((it) => normalizeCur(it.currency) === "USD");
+  const mxnItems = items.filter((it) => normalizeCur(it.currency) === "MXN");
+
+  // const usdItems = items.filter((it) => (it.currency || "USD") === "USD");
+  // const mxnItems = items.filter((it) => (it.currency || "USD") === "MXN");
 
   const totalUSD = usdItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native USD subtotal
   const totalMXN = mxnItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native MXN subtotal
@@ -315,14 +376,18 @@ export default function ExpressQuote() {
   const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
   const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
 
-  // ======== PDF + Upload (unchanged design; now shows split+global totals & currency) ========
+  // ======== PDF + Upload (unchanged design; now shows split+global totals & currency) ========  
   const downloadPDF = async () => {
     const doc = new jsPDF();
   
     // Helpers (use same DOF/IVA values already in component state)
-    const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
-    const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
+    // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+    // const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
   
+    const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+    const fmtMXN = (v) =>
+  `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
   
@@ -435,86 +500,274 @@ export default function ExpressQuote() {
     });
   
     // ===== Totals (split + all-products w/ DOF) =====
-    const usdItems = items.filter((it) => (it.currency || "USD") === "USD");
-    const mxnItems = items.filter((it) => (it.currency || "USD") === "MXN");
-  
-    const totalUSD = usdItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
-    const totalMXN = mxnItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
-  
-    // const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
-    // const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
-    const allUSD = dofRate ? totalUSD + totalMXN / (dofRate.toFixed(2)) : null; // MXN → USD
-    const allMXN = dofRate ? totalMXN + totalUSD * (dofRate.toFixed(2)) : null; // USD → MXN
-  
-    const ivaAllUSD = (typeof isActive === "boolean" && isActive && allUSD != null)
-      ? +(allUSD * 0.16).toFixed(2)
-      : null;
-    const ivaAllMXN = (typeof isActive === "boolean" && isActive && allMXN != null)
-      ? +(allMXN * 0.16).toFixed(2)
-      : null;
-  
-    const allUSDWithIVA = ivaAllUSD != null ? +(allUSD + ivaAllUSD).toFixed(2) : allUSD;
-    const allMXNWithIVA = ivaAllMXN != null ? +(allMXN + ivaAllMXN).toFixed(2) : allMXN;
-  
-    let extraY = doc.lastAutoTable.finalY + 12;
-  
-    // Green rounded box for totals
-    const boxX = 141;
-    const boxY = extraY - 8;
-    const boxWidth = 55;
-    const boxHeight = isActive ? 38 : 30; // a bit taller if IVA lines are shown
-    const radius = 4;
-  
-    if (doc.roundedRect) {
-      doc.setFillColor(207, 242, 137);
-      doc.roundedRect(boxX, boxY, boxWidth, boxHeight, radius, radius, "F");
-    } else {
-      doc.setFillColor(207, 242, 137);
-      doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
-    }
-  
-    // Totals text
-    let line = 0;
-    const lineH = 5;
-    const rightX = 145; // ~ inside box
-    // const rightX = 196; // ~ inside box
-  
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-  
-    // IVA (only on all-products)
-    if (isActive) {
-      doc.text(
-        `IVA USD: ${ivaAllUSD != null ? fmtUSD(ivaAllUSD) : "—"}`,
-        rightX, extraY + line, { align: "left" }
-      );
-      line += lineH;
-      doc.text(
-        `IVA MXN: ${ivaAllMXN != null ? fmtMXN(ivaAllMXN) : "—"}`,
-        rightX, extraY + line, { align: "left" }
-      );
-      line += lineH;
-    }
-  
-    // Totals with IVA
-    doc.text(
-      `TOTAL USD: ${allUSDWithIVA != null ? fmtUSD(allUSDWithIVA) : "—"}`,
-      rightX, extraY + line, { align: "left" }
-    );
-    line += lineH;
-    doc.text(
-      `TOTAL MXN: ${allMXNWithIVA != null ? fmtMXN(allMXNWithIVA) : "—"}`,
-      rightX, extraY + line, { align: "left" }
-    );
-  
-    // FX note
-    doc.setFontSize(9);
-    doc.setFont("custom", "italic");
-    const fxNoteY = extraY + line + 6;
-    doc.text(
-      dofRate ? `${dofRate.toFixed(2)} MXN/USD (DOF ${dofDate || ""})` : "Tipo de cambio DOF no disponible",
-      rightX, fxNoteY, { align: "left" }
-    );
+
+    // SEP05
+    // ===== Currency-scoped tables (robust partition) =====
+    
+const normCur = (v) => String(v ?? "").trim().toUpperCase();
+const getCur = (it) => {
+  // prefer explicit item.currency, fall back to priceCurrency
+  const c = normCur(it.currency || it.priceCurrency);
+  return c === "MXN" ? "MXN" : "USD"; // default unknowns to USD
+};
+
+// Partition once using normalized currency
+const usdItems = items.filter((it) => getCur(it) === "USD");
+const mxnItems = items.filter((it) => getCur(it) === "MXN");
+
+const sectionTitle = (text, y) => {
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(text, 13, y);
+};
+
+const makeBody = (arr) =>
+  arr.map((it) => {
+    const cur = normalizeCur(it.currency);
+    return [
+      it.product,
+      it.presentation,
+      it.packPresentation || "-",
+      String(it.amount),
+      `$${Number(it.price).toFixed(2)} ${cur}`,
+      `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${cur}`
+    ];
+  });
+
+// const makeBody = (arr) =>
+//   arr.map((it) => {
+//     const cur = getCur(it);
+//     const unit = Number(it.price) || 0;
+//     const qty  = Number(it.amount) || 0;
+//     return [
+//       it.product,
+//       it.presentation,
+//       it.packPresentation || "-",
+//       String(qty),
+//       `$${unit.toFixed(2)} ${cur}`,
+//       `$${(qty * unit).toFixed(2)} ${cur}`,
+//     ];
+//   });
+
+let cursorY = 100;
+
+// --- USD section ---
+if (usdItems.length) {
+  sectionTitle("Artículos en USD", cursorY - 6);
+
+  autoTable(doc, {
+    head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+    body: makeBody(usdItems),
+    startY: cursorY,
+    headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+    styles: { fontSize: 9 },
+    margin: { top: 100, right: 10, bottom: 20, left: 10 },
+    didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+  });
+
+  // Subtotal USD
+  cursorY = doc.lastAutoTable.finalY + 6;
+  const subtotalUSD = usdItems.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 13, cursorY);
+  cursorY += 12;
+}
+
+// --- MXN section ---
+if (mxnItems.length) {
+  sectionTitle("Artículos en MXN", cursorY - 6);
+
+  autoTable(doc, {
+    head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+    body: makeBody(mxnItems),
+    startY: cursorY,
+    headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+    styles: { fontSize: 9 },
+    margin: { top: 100, right: 10, bottom: 20, left: 10 },
+    didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+  });
+
+  // Subtotal MXN
+  cursorY = doc.lastAutoTable.finalY + 6;
+  const subtotalMXN = mxnItems.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(
+    `Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`,
+    13,
+    cursorY
+  );
+  cursorY += 12;
+}
+
+// ===== Resumen General (toggle logic) =====
+const totalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+const totalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+
+const payUSDOnly = mxnItems.length === 0;
+const payMXNOnly = usdItems.length === 0;
+
+doc.setFontSize(12);
+doc.setFont("helvetica", "bold");
+doc.text("Resumen General", 13, cursorY);
+cursorY += 6;
+doc.setFontSize(10);
+doc.setFont("helvetica", "normal");
+
+let pagarEnUSD = "—";
+if (payUSDOnly) {
+  const total = totalUSD;
+  const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
+  pagarEnUSD = `$${(total + iva).toFixed(2)} USD`;
+}
+
+let pagarEnMXN = "—";
+if (dofRate) {
+  const rate = Number(dofRate); // avoid .toFixed in math
+  const total = totalMXN + totalUSD * rate;
+  const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
+  pagarEnMXN = `$${(total + iva).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+}
+
+// Draw summary box (unchanged)
+
+    // // ===== Currency-scoped tables (robust partition) =====
+    // const usdItems = items.filter(it => (it.currency || "USD").toUpperCase() === "USD");
+    // const mxnItems = items.filter(it => (it.currency || "USD").toUpperCase() === "MXN");
+    
+    // const sectionTitle = (text, y) => {
+    //   doc.setFontSize(12);
+    //   doc.setFont("helvetica", "bold");
+    //   doc.text(text, 13, y);
+    // };
+    
+    // const makeBody = (arr) =>
+    //   arr.map(it => ([
+    //     it.product,
+    //     it.presentation,
+    //     it.packPresentation || "-",
+    //     String(it.amount),
+    //     `$${Number(it.price).toFixed(2)} ${(it.currency || "USD").toUpperCase()}`,
+    //     `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${(it.currency || "USD").toUpperCase()}`
+    //   ]));
+    
+    // let cursorY = 100;
+    
+    // // --- USD section ---
+    // if (usdItems.length) {
+    //   sectionTitle("Artículos en USD", cursorY - 6);
+    
+    //   autoTable(doc, {
+    //     head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+    //     body: makeBody(usdItems),
+    //     startY: cursorY,
+    //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+    //     styles: { fontSize: 9 },
+    //     margin: { top: 100, right: 10, bottom: 20, left: 10 },
+    //     didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+    //   });
+    
+    //   // Subtotal USD
+    //   cursorY = doc.lastAutoTable.finalY + 6;
+    //   const subtotalUSD = usdItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
+    //   doc.setFontSize(11);
+    //   doc.setFont("helvetica", "bold");
+    //   doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 13, cursorY);
+    //   cursorY += 12;
+    // }
+    
+    // // --- MXN section ---
+    // if (mxnItems.length) {
+    //   sectionTitle("Artículos en MXN", cursorY - 6);
+    
+    //   autoTable(doc, {
+    //     head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+    //     body: makeBody(mxnItems),
+    //     startY: cursorY,
+    //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+    //     styles: { fontSize: 9 },
+    //     margin: { top: 100, right: 10, bottom: 20, left: 10 },
+    //     didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+    //   });
+    
+    //   // Subtotal MXN
+    //   cursorY = doc.lastAutoTable.finalY + 6;
+    //   const subtotalMXN = mxnItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
+    //   doc.setFontSize(11);
+    //   doc.setFont("helvetica", "bold");
+    //   doc.text(`Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`, 13, cursorY);
+    //   cursorY += 12;
+    // }
+    
+    // // ===== Resumen General (toggle logic) =====
+    // // (Keep your existing DOF/IVA state)
+    // const totalUSD = usdItems.reduce((s, it) => s + Number(it.amount) * Number(it.price), 0);
+    // const totalMXN = mxnItems.reduce((s, it) => s + Number(it.amount) * Number(it.price), 0);
+    
+    // // “Pay in” logic: if only USD items, allow USD/MXN view; if mixed, MXN items must remain MXN.
+    // const payUSDOnly = mxnItems.length === 0;
+    // const payMXNOnly = usdItems.length === 0;
+    
+    // // Overall boxes/text
+    // doc.setFontSize(12);
+    // doc.setFont("helvetica", "bold");
+    // doc.text("Resumen General", 13, cursorY);
+    // cursorY += 6;
+    // doc.setFontSize(10);
+    // doc.setFont("helvetica", "normal");
+    
+    // // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+    // // const fmtMXN = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+    
+    // // Compute “Pagar en USD” (only valid if no MXN items), and “Pagar en MXN” (always valid)
+    // let pagarEnUSD = "—";
+    // if (payUSDOnly) {
+    //   const total = totalUSD; // only USD items present
+    //   const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
+    //   pagarEnUSD = fmtUSD((total + iva));
+    // }
+    
+    // let pagarEnMXN = "—";
+    // if (dofRate) {
+    //   // Always valid: USD converted + MXN native (MXN items stay in MXN)
+    //   const total = totalMXN + totalUSD * Number(dofRate.toFixed(2));
+    //   const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
+    //   pagarEnMXN = fmtMXN((total + iva));
+    // }
+    
+    // // Draw summary box
+    // const boxX = 141;
+    // const boxY = cursorY - 6;
+    // const boxWidth = 55;
+    // const boxHeight = 28;
+    // if (doc.roundedRect) {
+    //   doc.setFillColor(207, 242, 137);
+    //   doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 4, 4, "F");
+    // } else {
+    //   doc.setFillColor(207, 242, 137);
+    //   doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
+    // }
+    
+    // doc.setFont("helvetica", "bold");
+    // doc.text(`Pagar en USD: ${pagarEnUSD}`, 145, cursorY, { align: "left" });
+    // cursorY += 5;
+    // doc.text(`Pagar en MXN: ${pagarEnMXN}`, 145, cursorY, { align: "left" });
+    // cursorY += 6;
+    
+    // doc.setFontSize(9);
+    // doc.setFont("helvetica", "italic");
+    // doc.text(
+    //   "En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.",
+    //   13, cursorY
+    // );
+    // cursorY += 5;
+    // doc.text(
+    //   dofRate ? `${dofRate.toFixed(2)} MXN/USD (DOF ${dofDate || ""})` : "Tipo de cambio DOF no disponible",
+    //   145, cursorY, { align: "left" }
+    // );
+
+    // SEP05
   
     // --- PAGE 2: Payment instructions (keep your design) ---
     doc.addPage();

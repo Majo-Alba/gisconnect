@@ -208,6 +208,170 @@ router.get('/register', (req,res) => {
     })
 })
 
+// SEP06
+router.get('/users/by-email', async (req, res) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Missing email' });
+
+    const user = await newUserModel.findOne({ correo: email }).lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    return res.json(user);
+  } catch (err) {
+    console.error('GET /users/by-email error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /users/shipping-prefs
+router.put('/users/shipping-prefs', async (req, res) => {
+  try {
+    // Accept both shapes:
+    // { email, shippingPreferences: { preferredCarrier, insureShipment } }
+    // or flat: { email, preferredCarrier, insureShipment }
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const nested = req.body?.shippingPreferences || {};
+    const preferredCarrier = String(nested.preferredCarrier ?? req.body?.preferredCarrier ?? '').trim();
+    const insureShipment = !!(nested.insureShipment ?? req.body?.insureShipment);
+
+    // Validate carrier (optional)
+    // if (!preferredCarrier) return res.status(400).json({ error: 'preferredCarrier is required' });
+
+    const updated = await newUserModel.findOneAndUpdate(
+      { correo: email },
+      {
+        $set: {
+          'shippingPreferences.preferredCarrier': preferredCarrier,
+          'shippingPreferences.insureShipment': insureShipment,
+        },
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) return res.status(404).json({ error: 'User not found' });
+    return res.json(updated);
+  } catch (err) {
+    console.error('PUT /users/shipping-prefs error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// ================== USERS: fetch by email ==================
+// GET /users/by-email?email=user@domain.com
+// router.get('/users/by-email', async (req, res) => {
+//   try {
+//     const raw = (req.query.email || '').trim();
+//     if (!raw) return res.status(400).json({ error: 'Missing email query param' });
+
+//     const email = raw.toLowerCase();
+
+//     // Try common field names your app might be using
+//     // Adjust field names if your newUserModel schema differs.
+//     const user = await newUserModel.findOne({
+//       $or: [
+//         { correo: email },            // typical field used across your app
+//         { email },                    // alternative
+//         { 'contact.email': email },   // if you stored it nested
+//       ],
+//     }).lean();
+
+//     if (!user) return res.status(404).json({ error: 'User not found' });
+
+//     res.json(user);
+//   } catch (err) {
+//     console.error('GET /users/by-email error:', err);
+//     res.status(500).json({ error: 'Failed to fetch user' });
+//   }
+// });
+
+
+// // ================== USERS: update shipping preferences ==================
+// // PUT /users/shipping-prefs
+// // Body: { email, preferredCarrier, insureShipment }
+// router.put("/users/shipping-prefs", async (req, res) => {
+//   try {
+//     const { email, preferredCarrier, insureShipment } = req.body;
+
+//     if (!email) {
+//       return res.status(400).json({ error: "Email is required" });
+//     }
+
+//     const updated = await newUserModel.findOneAndUpdate(
+//       { correo: email },
+//       {
+//         $set: {
+//           shippingPreferences: {
+//             preferredCarrier: preferredCarrier?.trim() || "",
+//             insureShipment: !!insureShipment,
+//           },
+//         },
+//       },
+//       { new: true }
+//     );
+
+//     if (!updated) {
+//       return res.status(404).json({ error: "User not found" });
+//     }
+
+//     res.json(updated);
+//   } catch (err) {
+//     console.error("Update shipping prefs error:", err);
+//     res.status(500).json({ error: "Internal server error" });
+//   }
+// });
+
+// -------
+
+// router.put('/users/shipping-prefs', async (req, res) => {
+//   try {
+//     const { email: rawEmail, preferredCarrier, insureShipment } = req.body || {};
+//     if (!rawEmail) return res.status(400).json({ error: 'Missing "email" in body' });
+
+//     const email = String(rawEmail).toLowerCase().trim();
+
+//     // Build update doc (keep both nested + flat for backward compatibility)
+//     const update = {
+//       $set: {
+//         shippingPreferences: {
+//           preferredCarrier: preferredCarrier || '',
+//           insureShipment: !!insureShipment,
+//         },
+//         preferredCarrier: preferredCarrier || '',
+//         insureShipment: !!insureShipment,
+//       },
+//     };
+
+//     // If you want to require existing users, use upsert:false (current)
+//     // If you want to auto-create a user when not found, set upsert:true
+//     const options = { new: true, upsert: false };
+
+//     const updated = await newUserModel.findOneAndUpdate(
+//       {
+//         $or: [
+//           { correo: email },
+//           { email },
+//           { 'contact.email': email },
+//         ],
+//       },
+//       update,
+//       options
+//     ).lean();
+
+//     if (!updated) {
+//       return res.status(404).json({ error: 'User not found for update' });
+//     }
+
+//     res.json({ message: 'Shipping preferences updated', data: updated });
+//   } catch (err) {
+//     console.error('PUT /users/shipping-prefs error:', err);
+//     res.status(500).json({ error: 'Failed to update shipping preferences' });
+//   }
+// });
+
+// SEP06
+
 // ENDPOINT FOR UPLOADING A NEW ORDER INTO MONGO
 router.post('/orderDets', upload.single('pdf'), async (req, res) => {
   try {
