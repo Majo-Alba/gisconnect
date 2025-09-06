@@ -138,7 +138,8 @@ router.post("/forgot-password", async (req, res) => {
       user.resetPasswordExpires = Date.now() + 3600000; // 1 hour
       await user.save();
   
-      const resetLink = `http://localhost:5173/reset-password/${token}`; // adjust if hosted
+      const resetLink = `https://gisconnect-web.onrender.com/reset-password/${token}`;
+      // const resetLink = `http://localhost:5173/reset-password/${token}`; // adjust if hosted
   
       // Send email
       const transporter = nodemailer.createTransport({
