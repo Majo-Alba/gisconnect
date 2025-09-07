@@ -162,6 +162,67 @@ export default function NewOrders() {
   const goToPackageReady = () => navigate("/deliverReady");
   const goHomeLogo = () => navigate("/adminHome");
 
+  // SEP07
+  // Computes final totals in USD/MXN following the same rules used in ExpressQuote/OrderNow
+const computeDisplayTotals = (order) => {
+  if (!order) return { finalUSD: null, finalMXN: null };
+
+  const t = order.totals || {};
+  const dofRate = Number(t.dofRate) || null;          // MXN per USD
+  const requestBill = !!order.requestBill;            // IVA?
+  const discountUSD = Number(t.discountUSD || 0);     // discount tracked in USD
+
+  // Prefer server-saved finals if present (most reliable)
+  if (Number.isFinite(t.finalAllUSD) || Number.isFinite(t.finalAllMXN)) {
+    return {
+      finalUSD: Number.isFinite(t.finalAllUSD) ? Number(t.finalAllUSD) : null,
+      finalMXN: Number.isFinite(t.finalAllMXN) ? Number(t.finalAllMXN) : null,
+    };
+  }
+
+  // Otherwise, recompute from items in the order (currency-aware)
+  const items = Array.isArray(order.items) ? order.items : [];
+  let usdNative = 0;
+  let mxnNative = 0;
+
+  items.forEach((it) => {
+    const qty = Number(it.amount) || 0;
+    const cur = (it.currency || "USD").toUpperCase();
+    if (cur === "MXN") {
+      const unit = Number(it.priceMXN ?? it.price);
+      if (Number.isFinite(unit)) mxnNative += qty * unit;
+    } else {
+      const unit = Number(it.priceUSD ?? it.price);
+      if (Number.isFinite(unit)) usdNative += qty * unit;
+    }
+  });
+
+  // Convert to global totals (all-in-one)
+  const allUSD = dofRate ? usdNative + mxnNative / dofRate : null;
+  const allMXN = dofRate ? mxnNative + usdNative * dofRate : null;
+
+  // Apply discount + IVA exactly like OrderNow
+  const finalUSD = allUSD == null
+    ? null
+    : requestBill
+      ? (allUSD - discountUSD) * 1.16
+      : (allUSD - discountUSD);
+
+  const finalMXN = (allMXN == null || !dofRate)
+    ? null
+    : requestBill
+      ? (allMXN - discountUSD * dofRate) * 1.16
+      : (allMXN - discountUSD * dofRate);
+
+  return {
+    finalUSD: Number.isFinite(finalUSD) ? Number(finalUSD) : null,
+    finalMXN: Number.isFinite(finalMXN) ? Number(finalMXN) : null,
+  };
+};
+
+
+  // SEP07
+
   // Safely get final total in USD (supports object or legacy shapes)
   const getFinalUSD = (order) => {
     const t = order?.totals;
@@ -223,8 +284,11 @@ export default function NewOrders() {
 
         <ul>
           {filteredOrders.map((order) => {
+            // sep07
+            const { finalUSD, finalMXN } = computeDisplayTotals(order);
+            // const finalUSD = getFinalUSD(order);
+            // sep07
             const displayName = displayForEmail(order.userEmail);
-            const finalUSD = getFinalUSD(order);
             return (
               <li
                 key={order._id}
@@ -253,9 +317,19 @@ export default function NewOrders() {
                   <label className="orderQuick-Label">
                     {displayName}
                   </label>
-                  <label className="orderQuick-Label">
-                    ${Number(finalUSD).toFixed(2)}
+                  {/* In expressQuote.jsx we ask the user to select if he wants to pay in USD or in MXN. Is there a way to show, in newOrder.jsx the total payed by the user, taking into consideration all currency convertion rules we set up in expressQuote.jsx. This is where I want to place such data within newOrders.jsx  */}
+                  {/* <label className="orderQuick-Label">
+                    {finalUSD != null ? `$${finalUSD.toFixed(2)} USD` : "—"}
                   </label>
+
+                  {finalMXN != null && (
+                    <label className="orderQuick-Label" style={{ display: "block", opacity: 0.8 }}>
+                      {`$${finalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`}
+                    </label>
+                  )} */}
+                  {/* <label className="orderQuick-Label">
+                    ${Number(finalUSD).toFixed(2)}
+                  </label> */}
                 </div>
               </li>
             );
