@@ -1718,6 +1718,7 @@ input:checked + .quoterSlider:before {
   border: none;
 
   margin-left: 55%;
+  margin-bottom: 10%;
 
   width:fit-content;
   padding-left: 25px;
