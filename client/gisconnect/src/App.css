@@ -1865,6 +1865,24 @@ input:checked + .quoterSlider:before {
   font-style: italic;
 }
 
+.invoiceRequest-Dropdown{
+  display: grid;
+
+  margin-left: 1%;
+  /* margin-right: auto; */
+  margin-top: 2%;
+  margin-bottom: 2%;
+
+  width: 70%;
+  padding: 7px 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+
+  font-style: italic;
+}
+
 .orderSummary-Label{
   margin-left: 7%;
   margin-top: 5%;
