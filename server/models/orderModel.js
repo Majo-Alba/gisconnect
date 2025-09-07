@@ -40,6 +40,7 @@ const orderSchema = new Schema(
         product: String,
         amount: Number,
         price: Number,
+        presentation: String,
         // (optional) add currency if you store it per item:
         // currency: { type: String, enum: ["USD", "MXN"], default: "USD" }
       },

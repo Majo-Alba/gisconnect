@@ -152,7 +152,7 @@ export default function PackDetails() {
 
       <label className="sectionHeader-Label">Detalle de Paquete</label>
 
-      <div className="packingManager-Div">
+      {/* <div className="packingManager-Div">
         <label className="packer-Label">Empacado por:</label>
         <select
           className="packManager-Dropdown"
@@ -164,7 +164,24 @@ export default function PackDetails() {
           <option value="Santiago">Santiago</option>
           <option value="Mauro">Mauro</option>
         </select>
+      </div> */}
+      {/* sep07 */}
+      <div className="packingManager-Div">
+        <label className="packer-Label">Empacado por:</label>
+        <select
+          className="packManager-Dropdown"
+          value={packer}
+          onChange={(e) => setPacker(e.target.value)}
+          disabled={packer && packer !== "Encargado"}   // 🔒 lock once selected
+        >
+          <option value="Encargado">Encargado...</option>
+          <option value="Osvaldo">Osvaldo</option>
+          <option value="Santiago">Santiago</option>
+          <option value="Mauro">Mauro</option>
+        </select>
       </div>
+
+      {/* sep07 */}
 
       <div className="newQuotesScroll-Div">
         {(order.items || []).map((item, index) => (
@@ -172,7 +189,7 @@ export default function PackDetails() {
             <div className="quoteAndFile-Div">
               <label className="productDetail-Label">{item.product}</label>
               <label className="productDetail-Label">
-                <b>SKU:</b> {item.sku || "N/A"}
+                <b>Presentación:</b> {item.presentation || "N/A"}
               </label>
               <label className="productDetail-Label">
                 <b>Cantidad:</b> {item.amount}
