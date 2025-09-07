@@ -401,8 +401,8 @@ export default function OrderTrackDetails() {
         {/* sep06 */}
          {/* ✅ Show tracking number only when delivered and present */}
          {order?.orderStatus === "Pedido Entregado" && (
-          <div>
-            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 37 }}>
+          <div className="orderNumberAndDate-Div">
+            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 1}}>
               <span className="orderDate-Label" style={{ fontWeight: 600 }}>
                 No. de rastreo:
               </span>{" "}
@@ -411,7 +411,7 @@ export default function OrderTrackDetails() {
               </span>
             </div>
 
-            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 37 }}>
+            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 1 }}>
             <span className="orderDate-Label" style={{ fontWeight: 600 }}>
               Fecha Entrega:
             </span>{" "}
