@@ -828,6 +828,63 @@ router.put(
   }
 );
 
+// sep07
+// JSON-only partial updates (no files) — used by mobile/admin forms
+router.patch("/orders/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const {
+      paymentMethod,
+      paymentAccount,
+      orderStatus,
+      packerName,
+      insuredAmount,
+      deliveryDate,
+      trackingNumber,
+    } = req.body || {};
+
+    // Normalize/parse scalars
+    const numericInsured =
+      insuredAmount !== undefined && insuredAmount !== null
+        ? Number(insuredAmount)
+        : undefined;
+
+    const parsedDeliveryDate =
+      deliveryDate ? new Date(deliveryDate) : undefined;
+
+    // Build $set only with provided (defined) values
+    const $set = {
+      ...(typeof paymentMethod === "string" && paymentMethod.trim() && { paymentMethod: paymentMethod.trim() }),
+      ...(typeof paymentAccount === "string" && paymentAccount.trim() && { paymentAccount: paymentAccount.trim() }),
+      ...(typeof orderStatus === "string" && orderStatus.trim() && { orderStatus: orderStatus.trim() }),
+      ...(typeof packerName === "string" && packerName.trim() && { packerName: packerName.trim() }),
+      ...(numericInsured !== undefined && Number.isFinite(numericInsured) && { insuredAmount: numericInsured }),
+      ...(parsedDeliveryDate instanceof Date && !isNaN(parsedDeliveryDate) && { deliveryDate: parsedDeliveryDate }),
+      ...(typeof trackingNumber === "string" && trackingNumber.trim() && { trackingNumber: trackingNumber.trim() }),
+    };
+
+    if (Object.keys($set).length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    const updated = await newOrderModel.findByIdAndUpdate(
+      orderId,
+      { $set },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+
+    res.json({ data: updated, message: "Order updated" });
+  } catch (err) {
+    console.error("PATCH /orders/:orderId error:", err);
+    res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+// sep07
 
 // ENDPOINT TO GET SPECIFIC ORDER FOR TO PACK - ADMIN SIDE
 router.get("/orders/:orderId", async (req, res) => {

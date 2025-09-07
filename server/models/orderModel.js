@@ -107,9 +107,18 @@ const orderSchema = new Schema(
     // Legacy extras (optional; keep if used)
     packerName: String,
     packEvidenceImage: { type: String }, // legacy path-based approach
-    insuredAmount: Number,
-    deliveryDate: Date,
-    trackingNumber: String,
+    insuredAmount: {
+      type: Number,
+      default: 0
+    },
+    deliveryDate: {
+      type: Date,
+      default: null
+    },
+    trackingNumber: {
+      type: String,
+      default: ""
+    },
     evidenceURL: { type: String },       // legacy URL approach
   },
   { timestamps: true }

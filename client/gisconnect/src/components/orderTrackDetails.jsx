@@ -398,6 +398,37 @@ export default function OrderTrackDetails() {
           </label>
         </div>
 
+        {/* sep06 */}
+         {/* ✅ Show tracking number only when delivered and present */}
+         {order?.orderStatus === "Pedido Entregado" && (
+          <div>
+            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 37 }}>
+              <span className="orderDate-Label" style={{ fontWeight: 600 }}>
+                No. de rastreo:
+              </span>{" "}
+              <span className="orderDate-Label">
+                {order?.trackingNumber || "No disponible"}
+              </span>
+            </div>
+
+            <div className="trackingNumber-Div" style={{ marginTop: 6, marginLeft: 37 }}>
+            <span className="orderDate-Label" style={{ fontWeight: 600 }}>
+              Fecha Entrega:
+            </span>{" "}
+            <span className="orderDate-Label">
+              {new Date(order.deliveryDate).toLocaleDateString("es-MX", {
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+              })}
+              {/* {order?.deliveryDate || "No disponible"} */}
+            </span>
+            </div>
+          </div>
+          )}
+        {/* sep06 */}
+        
+
         <div style={{ margin: "20px", padding: "20px" }}>
           <ProgressBar
             percent={(getCurrentPosition(order.orderStatus) / (labels.length - 1)) * 100}
