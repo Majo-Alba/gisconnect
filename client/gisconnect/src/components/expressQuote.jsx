@@ -769,80 +769,82 @@ if (dofRate) {
 
     // SEP05
   
+    // SEP07 - 12:22
     // --- PAGE 2: Payment instructions (keep your design) ---
-    doc.addPage();
-    drawBg();
+    // doc.addPage();
+    // drawBg();
   
-    let y = 35;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(24, 144, 69);
-    doc.text(`Cuentas para realizar pago:`, 13, y + 5);
+    // let y = 35;
+    // doc.setFont("helvetica", "bold");
+    // doc.setFontSize(16);
+    // doc.setTextColor(24, 144, 69);
+    // doc.text(`Cuentas para realizar pago:`, 13, y + 5);
   
-    const payBoxX = 10;
-    const payBoxY = y + 10;
-    const payBoxWidth = 190;
-    const payBoxHeight = 130;
-    const payBoxRadius = 4;
+    // const payBoxX = 10;
+    // const payBoxY = y + 10;
+    // const payBoxWidth = 190;
+    // const payBoxHeight = 130;
+    // const payBoxRadius = 4;
   
-    if (doc.roundedRect) {
-      doc.setFillColor(241, 241, 241);
-      doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
-    } else {
-      doc.setFillColor(241, 241, 241);
-      doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
-    }
+    // if (doc.roundedRect) {
+    //   doc.setFillColor(241, 241, 241);
+    //   doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
+    // } else {
+    //   doc.setFillColor(241, 241, 241);
+    //   doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
+    // }
   
-    doc.setFontSize(13);
-    doc.setFont("custom", "bold");
-    doc.setTextColor(0, 0, 0);
-    doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
+    // doc.setFontSize(13);
+    // doc.setFont("custom", "bold");
+    // doc.setTextColor(0, 0, 0);
+    // doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
   
-    doc.setFontSize(11);
-    doc.setFont("custom", "bold");
-    doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 24);
-    doc.text(`TRANSFERENCIA:`, 15, y + 31);
+    // doc.setFontSize(11);
+    // doc.setFont("custom", "bold");
+    // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 24);
+    // doc.text(`TRANSFERENCIA:`, 15, y + 31);
   
-    doc.setFont("custom", "normal");
-    doc.text(`BANCO: BBVA`, 15, y + 37);
-    doc.text(`NO. DE CUENTA: 010 115 1207`, 15, y + 42);
-    doc.text(`CLABE: 012 320 001 011 512 076`, 15, y + 47);
+    // doc.setFont("custom", "normal");
+    // doc.text(`BANCO: BBVA`, 15, y + 37);
+    // doc.text(`NO. DE CUENTA: 010 115 1207`, 15, y + 42);
+    // doc.text(`CLABE: 012 320 001 011 512 076`, 15, y + 47);
   
-    doc.setFont("custom", "bold");
-    doc.text(`DEPÓSITO BANCARIO:`, 120, y + 31);
+    // doc.setFont("custom", "bold");
+    // doc.text(`DEPÓSITO BANCARIO:`, 120, y + 31);
   
-    doc.setFont("custom", "normal");
-    doc.text(`BANCO: BBVA`, 120, y + 37);
-    doc.text(`NO. DE CUENTA: 010 115 1207`, 120, y + 42);
+    // doc.setFont("custom", "normal");
+    // doc.text(`BANCO: BBVA`, 120, y + 37);
+    // doc.text(`NO. DE CUENTA: 010 115 1207`, 120, y + 42);
   
-    doc.setFont("custom", "bold");
-    doc.setFontSize(13);
-    doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 59);
+    // doc.setFont("custom", "bold");
+    // doc.setFontSize(13);
+    // doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 59);
   
-    doc.setFontSize(11);
-    doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 66);
+    // doc.setFontSize(11);
+    // doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 66);
   
-    doc.setFont("custom", "normal");
-    doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 72);
-    doc.text(`BANCO: BBVA`, 15, y + 77);
-    doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 82);
-    doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 87);
-    doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 92);
+    // doc.setFont("custom", "normal");
+    // doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 72);
+    // doc.text(`BANCO: BBVA`, 15, y + 77);
+    // doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 82);
+    // doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 87);
+    // doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 92);
   
-    doc.setFont("custom", "bold");
-    doc.setFontSize(13);
-    doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, y + 105);
+    // doc.setFont("custom", "bold");
+    // doc.setFontSize(13);
+    // doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, y + 105);
   
-    doc.setFontSize(11);
-    doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 112);
-    doc.text(`TRANSFERENCIA`, 15, y + 119);
+    // doc.setFontSize(11);
+    // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 112);
+    // doc.text(`TRANSFERENCIA`, 15, y + 119);
   
-    doc.setFont("custom", "normal");
-    doc.text(`BANCO: GRUPO FINANCIERO MONEX`, 15, y + 125);
-    doc.text(`CLABE: 112 180 000 028 258 341`, 15, y + 130);
+    // doc.setFont("custom", "normal");
+    // doc.text(`BANCO: GRUPO FINANCIERO MONEX`, 15, y + 125);
+    // doc.text(`CLABE: 112 180 000 028 258 341`, 15, y + 130);
   
-    doc.text(`BANCO: BANCO INVEX, S.A.`, 120, y + 125);
-    doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
+    // doc.text(`BANCO: BANCO INVEX, S.A.`, 120, y + 125);
+    // doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
+    // SEP07 - 12:22
   
     // Save locally
     // doc.save("Cotización_Express.pdf");
