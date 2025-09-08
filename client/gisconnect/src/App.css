@@ -687,7 +687,7 @@ button, .btn, .clickable {
   left: -22%;
   transform: scaleX(-1);
   translate: 0 20px;           /* controls how much peeks above footer */
-  z-index: 800;                 /* behind the footer */
+  z-index: 400;                 /* behind the footer */
   pointer-events: none;         /* won’t block taps */
   opacity: .30;                 /* optional */
 }
