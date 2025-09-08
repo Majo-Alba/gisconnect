@@ -196,15 +196,19 @@ export default function GeneralLogin() {
           ¿Olvidaste tu contraseña?{" "}
           <Link to="/restorePassword" className="login-SubLink">Da click aquí</Link>
         </p>
+        <p className="login-Subnote">
+          ¿Aún no te registras?{" "}
+          <Link to="/newSignup" className="login-SubLink">Crea una cuenta</Link>
+        </p>
 
         <button className="returningUser-GeneralLoginButton" type="submit">
           Ingresar
         </button>
 
-        <p className="login-Subnote">
+        {/* <p className="login-Subnote">
           ¿Aún no te registras?{" "}
           <Link to="/newSignup" className="login-SubLink">Crea una cuenta</Link>
-        </p>
+        </p> */}
 
         <label className="login-Slogan">Bienvenido<br/> a casa</label>
 
@@ -214,6 +218,12 @@ export default function GeneralLogin() {
 
         <img className="og-signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250" />
       </form>
+              {/* FOOTER MENU */}
+              <div className="app-footer footerMenuDiv">
+                <div className="footerHolder">
+                </div>
+            </div>
+            {/* FOOTER MENU END */}
     </body>
   );
 }
