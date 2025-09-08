@@ -82,13 +82,13 @@ export default function NewSignupData() {
             {/* LOGOS DIV */}
             <div className="app-header loginLogo-ParentDiv">
                 <img className="signup-GISLogo" src={Logo} alt="Home Icon" width="230" height="70"/>
-                <img className="signup-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
+                {/* <img className="newData-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/> */}
             </div>
             {/* LOGOS END*/}
 
             <div className="app-main">
             {/* INPUTS DIV */}
-            <div className="newUser-LabelsAndInputs-Div">
+            <div className="newData-LabelsAndInputs-Div">
                 <div>
                     <label className="newUserData-Label">Nombre</label>
                     <input className="newUserData-Input" type="text"required onChange={handleInput} placeholder="Dinos tu nombre" name="nombre" value={userDetails.nombre}></input>
@@ -113,10 +113,21 @@ export default function NewSignupData() {
                         <FontAwesomeIcon className="newUser-EyeIcon" onClick={toggleEye} icon={faEye}/>
                     </div>
                 </div>    
+                <img className="newData-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/>
+
             </div>
 
-            <button className="newUser-SendButton" type="submit" onClick={handleSubmit}>Agregar</button>
+            <div>
+                <button className="newUser-SendButton" type="submit" onClick={handleSubmit}>Agregar</button>
             </div>
+            
+            </div>
+            {/* FOOTER MENU */}
+            <div className="app-footer footerMenuDiv">
+                <div className="footerHolder">
+                </div>
+            </div>
+            {/* FOOTER MENU END */}
             
         </body>
     )

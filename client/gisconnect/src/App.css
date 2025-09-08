@@ -148,11 +148,31 @@ button, .btn, .clickable {
 .container { padding: 0 10px; }
 
 /* GIS: newData.jsx */
+.newData-LabelsAndInputs-Div{ 
+  position: absolute;
+  z-index: 1;
+
+  margin-top: 5%;
+}
+
+.newData-VeggieBasket {
+  position: fixed;              
+  bottom: 0;
+  left: -22%;
+  transform: scaleX(-1);
+  translate: 0 -20px;           /* controls how much peeks above footer */
+  z-index: -4;                 /* behind the footer */
+  pointer-events: none;         /* won’t block taps */
+  opacity: .30;                 /* optional */
+}
+
 .newUser-SendButton{
   border: none;
   /* position: absolute;
   bottom:32%;
   left: 60%; */
+  position: relative;
+  z-index: 5;
 
   width:fit-content;
   padding-left: 30px;
@@ -161,9 +181,8 @@ button, .btn, .clickable {
   padding-bottom: 10px;
 
   /* margin-top: 15px; */
-  margin-top: 110%;
+  margin-top: 105%;
   margin-left: 52%;
-
 
   color: white;
   font-weight: bold;
@@ -175,9 +194,12 @@ button, .btn, .clickable {
 
 .newUser-SendButton:hover{
   border: none;
-  position: absolute;
+  /* position: absolute;
   bottom: 32%;
-  left: 60%;
+  left: 60%; */
+  position: relative;
+  z-index: 5;
+
 
   width:fit-content;
   padding-left: 30px;
@@ -185,7 +207,9 @@ button, .btn, .clickable {
   padding-top: 10px;
   padding-bottom: 10px;
 
-  margin-top: 15px;
+  /* margin-top: 15px; */
+  margin-top: 105%;
+  margin-left: 52%;
 
   color: white;
   font-weight: bold;
