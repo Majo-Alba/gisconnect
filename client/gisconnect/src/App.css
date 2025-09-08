@@ -150,9 +150,9 @@ button, .btn, .clickable {
 /* GIS: newData.jsx */
 .newUser-SendButton{
   border: none;
-  position: absolute;
+  /* position: absolute;
   bottom:32%;
-  left: 60%;
+  left: 60%; */
 
   width:fit-content;
   padding-left: 30px;
@@ -160,7 +160,10 @@ button, .btn, .clickable {
   padding-top: 10px;
   padding-bottom: 10px;
 
-  margin-top: 15px;
+  /* margin-top: 15px; */
+  margin-top: 110%;
+  margin-left: 52%;
+
 
   color: white;
   font-weight: bold;
