@@ -1888,6 +1888,8 @@ input:checked + .quoterSlider:before {
   margin-top: 7%;
   margin-left: 50%;
   margin-bottom: 10%;
+
+  padding-bottom: 45%;
 }
 
 .orderNow-Label{
