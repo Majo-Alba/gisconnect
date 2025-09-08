@@ -746,7 +746,7 @@ button, .btn, .clickable {
   border-radius: 10px;
 
   background: rgb(255,255,255);
-  background: linear-gradient(156deg, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 37%, rgba(212,218,226,1) 100%);
+  background: linear-gradient(156deg, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 80%, rgba(212,218,226,1) 100%);
 
   box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
@@ -789,9 +789,9 @@ button, .btn, .clickable {
 .userHomeQuestions-Btn{
   border: none;
 
-  /* position: absolute;
-  bottom:20%;
-  left: 75%; */
+  position: absolute;
+  bottom:14%;
+  left: 75%;
 
   width:fit-content;
   padding-left: 11px;
@@ -812,7 +812,7 @@ button, .btn, .clickable {
 
 .userHomeQuestions-Btn:hover{
   position: absolute;
-  bottom: 20%;
+  bottom: 14%;
   left: 75%;
 
   width:fit-content;
@@ -831,12 +831,12 @@ button, .btn, .clickable {
 
 /* GIS: modal.jsx */
 
-.modalDiv{
+/* .modalDiv{
   width: 80%;
   height: 70%;
 
   background-color: #0B9444;
-}
+} */
 
 .modalDiv{
   margin-top: 65%;
@@ -846,6 +846,10 @@ button, .btn, .clickable {
 
   width:85%;
   height: 33%;
+  height: 40%;
+
+  /* width: 80%;
+  height: 70%; */
 
   position: fixed;
   inset: 0;
@@ -857,7 +861,7 @@ button, .btn, .clickable {
   border: 3px solid #086e32;
   border-radius: 7px;
 
-  z-index: 3;
+  z-index: 1000;
 }
 
 .closeModal-Btn{

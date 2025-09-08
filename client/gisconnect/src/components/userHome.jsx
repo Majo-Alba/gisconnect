@@ -115,7 +115,7 @@ export default function UserHome() {
             </div>
             {/* BODY END */}
 
-            <div className="userHome-ModalDiv" onClick={() => setShowModal(true)}>
+            <div className="footerIcon-NameDiv" onClick={() => setShowModal(true)}>
                 <button className="userHomeQuestions-Btn"><FontAwesomeIcon icon={faCircleQuestion}/></button>
             </div>
             {/* new jun03 */}
