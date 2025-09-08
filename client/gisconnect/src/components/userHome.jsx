@@ -82,7 +82,7 @@ export default function UserHome() {
             {/* here aug27 */}
             <div className="app-main has-fixed-footer">
             {/* NEW JUN05 */}
-            <label className="userHomeHeader-Label">Bienvenido de vuelta!</label>
+            <label className="userHomeHeader-Label">¡Bienvenido de vuelta!</label>
             {/* END JUN05 */}
 
             {/* BODY */}
