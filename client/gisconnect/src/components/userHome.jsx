@@ -115,7 +115,7 @@ export default function UserHome() {
             </div>
             {/* BODY END */}
 
-            <div className="footerIcon-NameDiv" onClick={() => setShowModal(true)}>
+            <div className="userHome-ModalDiv" onClick={() => setShowModal(true)}>
                 <button className="userHomeQuestions-Btn"><FontAwesomeIcon icon={faCircleQuestion}/></button>
             </div>
             {/* new jun03 */}
@@ -125,7 +125,8 @@ export default function UserHome() {
 
             {/* FOOTER MENU */}
             {/* Basket image (behind) */}
-            <img className="signup-VeggieBasket" src={Basket} alt="Basket" width="420" height="260" />
+            {/* <img className="newData-VeggieBasket" src={Basket} alt="Home Icon" width="400" height="250"/> */}
+            <img className="userHome-VeggieBasket" src={Basket} alt="Basket" width="420" height="260" />
 
             {/* Footer bar (front) */}
             <div className="app-footer footerMenuDiv">

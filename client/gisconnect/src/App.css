@@ -671,6 +671,26 @@ button, .btn, .clickable {
 }
 
 /* GIS: userHome.jsx */
+
+.userHome-ModalDiv{
+  display: grid;
+  width:fit-content;
+
+  /* margin-top: 5% */
+  margin-top: 0%;
+  margin-left: 75%;
+
+}
+.userHome-VeggieBasket {
+  position: fixed;              /* pin to viewport too */
+  bottom: 0;
+  left: -22%;
+  transform: scaleX(-1);
+  translate: 0 -20px;           /* controls how much peeks above footer */
+  z-index: 900;                 /* behind the footer */
+  pointer-events: none;         /* won’t block taps */
+  opacity: .30;                 /* optional */
+}
 .userHome-GISLogo{
   display: block;
 
@@ -703,6 +723,8 @@ button, .btn, .clickable {
 }
 
 .userHome-BodyDiv{
+  position: relative;
+  z-index: 901;
   width: 85%;
   justify-self: center;
 
@@ -767,9 +789,9 @@ button, .btn, .clickable {
 .userHomeQuestions-Btn{
   border: none;
 
-  position: absolute;
+  /* position: absolute;
   bottom:20%;
-  left: 75%;
+  left: 75%; */
 
   width:fit-content;
   padding-left: 11px;
