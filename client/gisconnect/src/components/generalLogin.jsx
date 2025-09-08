@@ -22,11 +22,14 @@ export default function GeneralLogin() {
     "majo_test@gmail.com",
     "ventas@greenimportsol.com",
     "info@greenimportsol.com",
+    "administracion@greenimportsol.com",
+    "administracion2@greenimportsol.com",
   ]);
 
   const ADMIN_FACTURAS_Y_LOGISTICA = new Set([
-    "administracion@greenimportsol.com",
-    "administracion2@greenimportsol.com",
+    "majo_test@gmail.com",
+    // "administracion@greenimportsol.com",
+    // "administracion2@greenimportsol.com",
   ]);
 
   const LOGISTICA_Y_ALMACEN = new Set([
