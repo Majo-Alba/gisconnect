@@ -268,7 +268,7 @@ button, .btn, .clickable {
   bottom: 0;
   left: -22%;
   transform: scaleX(-1);
-  translate: 0 20px;           /* controls how much peeks above footer */
+  translate: 0 25px;           /* controls how much peeks above footer */
   z-index: 900;                 /* behind the footer */
   pointer-events: none;         /* won’t block taps */
   opacity: .95;                 /* optional */
