@@ -192,6 +192,7 @@ export default function GeneralLogin() {
           </div>
         </div>
 
+
         <p className="forgotPassword-Subnote">
           ¿Olvidaste tu contraseña?{" "}
           <Link to="/restorePassword" className="login-SubLink">Da click aquí</Link>
