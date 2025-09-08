@@ -1172,12 +1172,16 @@ input:checked + .quoterSlider:before {
   margin-top: 10%;
   margin-left: 8%;
   margin-bottom: 10%;
+
+  padding-bottom: 45%;
 }
 
 .newOrderActionButtons-Div{
   margin-top: 10%;
   margin-left: 48%;
   margin-bottom: 10%;
+
+  padding-bottom: 45%;
 }
 
 .generatePDF-Btn{
