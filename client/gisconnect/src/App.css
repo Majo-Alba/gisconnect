@@ -67,8 +67,10 @@ input, select, textarea, button { font-size: 16px; }
 /* ---------- Mobile-safe layout helpers ---------- */
 .app-shell {
   /* prefer dynamic viewport heights on mobile */
-  min-height: 100svh;
-  min-height: 100dvh;
+  /* min-height: 100svh;
+  min-height: 100dvh; */
+  min-height: 80svh;
+  min-height: 80dvh;
   min-height: -webkit-fill-available; /* iOS fallback */
   display: flex;
   flex-direction: column;
