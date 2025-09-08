@@ -1,3 +1,4 @@
+// following on polishing our PDF, as part of file expressQuote.jsx we allow the user to select currency in which he wants to pay - either USD or MXN. However we have a limitation: If a product is listed in USD, the user can decide to pay either in USD or translate currency to MXN. If a product is listed in MXN it can ONLY be payed in MXN. In mixed orderes, where the user has products in USD and MXN, if user selects paying in USD, he'll have "split total" showing amount to pay in USD for USD-listed products and amount to pay in MXN for MXN-listed products. On the other hand, if the user has mixed order and selects MXN as desired currency, then USD-listed items are converted using DOF Rate and the user is predented with a global total expressed in MXN. As an extra, if a user has a mixed order, please add legend "IMPORTANTE:En órdenes mixtas, donde se tengan articulos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN". Following this logic and with all that is already setup, can you help me add the "financial summaries" for the PDF. Here is current expressQuote.jsx, can you help me do a direct edit to code 
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -27,7 +28,8 @@ export default function ExpressQuote() {
   const [items, setItems] = useState([]);
 
   const [price, setPrice] = useState("");                 // numeric string
-  const [priceCurrency, setPriceCurrency] = useState("USD"); // "USD" | "MXN"
+  const [priceCurrency, setPriceCurrency] = useState(""); // "USD" | "MXN"
+  // const [priceCurrency, setPriceCurrency] = useState("USD"); // "USD" | "MXN"
   const [weight, setWeight] = useState("");
   const [stock, setStock] = useState("");
   const [specialApplied, setSpecialApplied] = useState(false);
@@ -173,7 +175,8 @@ export default function ExpressQuote() {
       setPrice("");
       setPackPresentation("");
       setSpecialApplied(false);
-      setPriceCurrency("USD");
+      // setPriceCurrency("USD");
+      setPriceCurrency("");
       return;
     }
 
@@ -305,41 +308,6 @@ console.log("Added item:", {
   finalCurrency: (priceCurrency || "").toUpperCase()
 });
 
-
-  // const handleAddItem = () => {
-  //   const baseRow = csvData.find(
-  //     (r) =>
-  //       r.NOMBRE_PRODUCTO === selectedProduct &&
-  //       (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
-  //   );
-  //   if (!baseRow) return;
-
-  //   if (amount && parseInt(amount) <= parseInt(stock || "0") && price) {
-  //     setItems((prev) => [
-  //       ...prev,
-  //       {
-  //         product: selectedProduct,
-  //         presentation,
-  //         packPresentation,
-  //         amount: Number(amount),
-  //         price: Number(price),          // do not convert; keep numeric
-  //         currency: priceCurrency,       // "USD" or "MXN"
-  //         weight: Number(baseRow.PESO_PRODUCTO || 0),
-  //       },
-  //     ]);
-  //     setSelectedProduct("");
-  //     setPresentation("");
-  //     setPackPresentation("");
-  //     setAmount("");
-  //     setPrice("");
-  //     setPriceCurrency("USD");
-  //     setWeight("");
-  //     setStock("");
-  //     setSpecialApplied(false);
-  //   }
-  // };
-
-// sep05
   const removeItem = (idx) => {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
@@ -353,15 +321,10 @@ console.log("Added item:", {
   const usdItems = items.filter((it) => normalizeCur(it.currency) === "USD");
   const mxnItems = items.filter((it) => normalizeCur(it.currency) === "MXN");
 
-  // const usdItems = items.filter((it) => (it.currency || "USD") === "USD");
-  // const mxnItems = items.filter((it) => (it.currency || "USD") === "MXN");
-
   const totalUSD = usdItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native USD subtotal
   const totalMXN = mxnItems.reduce((sum, it) => sum + it.amount * it.price, 0); // native MXN subtotal
 
   // Cross-currency totals using DOF rate
-  // const allUSD = dofRate ? totalUSD + totalMXN / dofRate : null; // MXN → USD
-  // const allMXN = dofRate ? totalMXN + totalUSD * dofRate : null; // USD → MXN
   const allUSD = dofRate ? totalUSD + totalMXN / (dofRate.toFixed(2)) : null; // MXN → USD
   const allMXN = dofRate ? totalMXN + totalUSD * (dofRate.toFixed(2)) : null; // USD → MXN
 
@@ -381,9 +344,6 @@ console.log("Added item:", {
     const doc = new jsPDF();
   
     // Helpers (use same DOF/IVA values already in component state)
-    // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
-    // const fmtMXN = (v) => `$${(v ?? 0).toFixed(2)} MXN`;
-  
     const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
     const fmtMXN = (v) =>
   `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
@@ -480,79 +440,59 @@ console.log("Added item:", {
       `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${it.currency || "USD"}`, // line total + currency
     ]);
   
-    autoTable(doc, {
-      head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
-      body: tableData,
-      startY: 100,
-      headStyles: {
-        fillColor: [149, 194, 61],
-        textColor: [0, 0, 0],
-        fontStyle: "bold",
-      },
-      styles: { fontSize: 9 },
-      // Add background to every new page
-      didDrawPage: (data) => {
-        if (data.pageNumber > 1) {
-          drawBg();
-        }
-      },
-      margin: { top: 100, right: 10, bottom: 20, left: 10 },
-    });
-  
     // ===== Totals (split + all-products w/ DOF) =====
 
     // SEP05
     // ===== Currency-scoped tables (robust partition) =====
     
-const normCur = (v) => String(v ?? "").trim().toUpperCase();
-const getCur = (it) => {
-  // prefer explicit item.currency, fall back to priceCurrency
-  const c = normCur(it.currency || it.priceCurrency);
-  return c === "MXN" ? "MXN" : "USD"; // default unknowns to USD
-};
+    // sep08
+    const toCur = (v) => String(v ?? "").trim().toUpperCase();
+    const itemCur = (it) => toCur(it.currency ?? it.priceCurrency); // prefer item.currency
+    const isMXN = (it) => itemCur(it) === "MXN";
+    const isUSD = (it) => itemCur(it) === "USD";
+    // sep08
+    const normCur = (v) => String(v ?? "").trim().toUpperCase();
+    const getCur = (it) => {
+      // prefer explicit item.currency, fall back to priceCurrency
+      const c = normCur(it.currency || it.priceCurrency);
+      return c === "MXN" ? "MXN" : "USD"; // default unknowns to USD
+    };
 
-// Partition once using normalized currency
-const usdItems = items.filter((it) => getCur(it) === "USD");
-const mxnItems = items.filter((it) => getCur(it) === "MXN");
+    // Partition once using normalized currency
+    const usdItems = items.filter(isUSD);
+    const mxnItems = items.filter(isMXN);
 
-const sectionTitle = (text, y) => {
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text(text, 13, y);
-};
+    // (optional, for debugging)
+    const unknownItems = items.filter((it) => !isUSD(it) && !isMXN(it));
+    // sep08
 
-const makeBody = (arr) =>
-  arr.map((it) => {
-    const cur = normalizeCur(it.currency);
-    return [
-      it.product,
-      it.presentation,
-      it.packPresentation || "-",
-      String(it.amount),
-      `$${Number(it.price).toFixed(2)} ${cur}`,
-      `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${cur}`
-    ];
-  });
+    const sectionTitle = (text, y) => {
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(text, 13, y);
+    };
 
-// const makeBody = (arr) =>
-//   arr.map((it) => {
-//     const cur = getCur(it);
-//     const unit = Number(it.price) || 0;
-//     const qty  = Number(it.amount) || 0;
-//     return [
-//       it.product,
-//       it.presentation,
-//       it.packPresentation || "-",
-//       String(qty),
-//       `$${unit.toFixed(2)} ${cur}`,
-//       `$${(qty * unit).toFixed(2)} ${cur}`,
-//     ];
-//   });
+    const makeBody = (arr) =>
+      arr.map((it) => {
+        const cur  = itemCur(it) || "—";           // don't silently call it USD
+        const unit = Number(it.price) || 0;
+        const qty  = Number(it.amount) || 0;
+        return [
+          it.product,
+          it.presentation,
+          it.packPresentation || "-",
+          String(qty),
+          `$${unit.toFixed(2)} ${cur}`,
+          `$${(qty * unit).toFixed(2)} ${cur}`,
+        ];
+      });
 
-let cursorY = 100;
+
+let cursorY = 105;
 
 // --- USD section ---
 if (usdItems.length) {
+  doc.setTextColor(24, 144, 69);
   sectionTitle("Artículos en USD", cursorY - 6);
 
   autoTable(doc, {
@@ -569,13 +509,15 @@ if (usdItems.length) {
   cursorY = doc.lastAutoTable.finalY + 6;
   const subtotalUSD = usdItems.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
   doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
-  doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 13, cursorY);
+  doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 140, cursorY);
   cursorY += 12;
 }
 
 // --- MXN section ---
 if (mxnItems.length) {
+  doc.setTextColor(24, 144, 69);
   sectionTitle("Artículos en MXN", cursorY - 6);
 
   autoTable(doc, {
@@ -592,262 +534,441 @@ if (mxnItems.length) {
   cursorY = doc.lastAutoTable.finalY + 6;
   const subtotalMXN = mxnItems.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
   doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "bold");
   doc.text(
     `Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`,
-    13,
+    140,
     cursorY
   );
   cursorY += 12;
 }
 
-// ===== Resumen General (toggle logic) =====
-const totalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
-const totalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+// --->
 
-const payUSDOnly = mxnItems.length === 0;
-const payMXNOnly = usdItems.length === 0;
+{
+  // Subtotales nativos
+  const subtotalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  const subtotalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
 
-doc.setFontSize(12);
-doc.setFont("helvetica", "bold");
-doc.text("Resumen General", 13, cursorY);
-cursorY += 6;
-doc.setFontSize(10);
-doc.setFont("helvetica", "normal");
+  // Utilidades
+  const rate = Number(dofRate) || 0;                  // MXN por USD
+  const iva16 = (v) => (isActive ? +(v * 0.16).toFixed(2) : 0);
+  const hasUSD = usdItems.length > 0;
+  const hasMXN = mxnItems.length > 0;
+  const isMixed = hasUSD && hasMXN;
+  const wantsMXN = (preferredCurrency || "USD").toUpperCase() === "MXN";
 
-let pagarEnUSD = "—";
-if (payUSDOnly) {
-  const total = totalUSD;
-  const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
-  pagarEnUSD = `$${(total + iva).toFixed(2)} USD`;
+  // Título (fuera de la caja)
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Resumen Financiero", 13, cursorY);
+  cursorY += 6;
+
+  // ---- Caja: parámetros ----
+  const boxX = 12;
+  const boxW = 186;
+  const boxPad = 4;
+  const textMaxW = boxW - boxPad * 2;
+  const lineH = 6;
+
+  // Pre-cálculos de líneas para MXN-seleccionado
+  const usdEnMXN = rate ? subtotalUSD * rate : 0;
+  const baseMXN_Mixed = subtotalMXN + usdEnMXN;
+  const totalMXN_Mixed = baseMXN_Mixed + iva16(baseMXN_Mixed);
+  const totalUSD_only = subtotalUSD + iva16(subtotalUSD);
+  const totalMXN_only = subtotalMXN + iva16(subtotalMXN);
+
+  // Medición previa para definir alto de la caja (con el orden nuevo)
+  const measureSummary = () => {
+    let y = cursorY + boxPad;
+
+    // (1) Moneda de pago (bold) — 1 línea
+    y += lineH;
+
+    if (wantsMXN) {
+      // --- Orden para MXN seleccionado ---
+      // (2) Total a Pagar en MXN
+      y += lineH;
+
+      // (3) Detalle: USD… (solo si hay USD o mixta con TC)
+      if (isMixed || hasUSD) {
+        const det = rate
+          ? (isMixed
+              ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
+              : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}.`)
+          : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+        const detLines = doc.splitTextToSize(det, textMaxW);
+        y += detLines.length * 5 + 3;
+      }
+
+      // (4) Tipo de cambio (si hay rate o si es útil mostrarlo)
+      if ((isMixed || hasUSD) && rate) {
+        y += 5;
+      }
+
+      // (5) IMPORTANTE (solo mixtas)
+      if (isMixed) {
+        const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+        const legendLines = doc.splitTextToSize(legend, textMaxW);
+        y += legendLines.length * 5 + 5;
+      }
+    } else {
+      // --- Orden para USD seleccionado ---
+      // (2) A Pagar en USD (si hay USD)
+      if (hasUSD) y += lineH;
+
+      // (3) A Pagar en MXN (si hay MXN o mixta)
+      if (hasMXN) y += lineH;
+
+      // (4) Tipo de cambio (lo mostramos si es mixto y hay rate como referencia)
+      if (isMixed && rate) {
+        y += 5;
+      }
+
+      // (5) IMPORTANTE (solo mixtas)
+      if (isMixed) {
+        const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+        const legendLines = doc.splitTextToSize(legend, textMaxW);
+        y += legendLines.length * 5 + 5;
+      }
+
+      // Caso especial: preferencia USD pero solo MXN-items
+      if (!hasUSD && hasMXN) {
+        // Total MXN + nota
+        y += lineH; // total MXN
+        const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+        const noteLines = doc.splitTextToSize(note, textMaxW);
+        y += noteLines.length * 5 + 3;
+      }
+    }
+
+    return y + boxPad;
+  };
+
+  const boxBottom = measureSummary();
+  const boxHeight = Math.max(12, boxBottom - cursorY);
+
+  // Dibuja caja gris con bordes redondeados
+  doc.setFillColor(241, 241, 241);
+  doc.setDrawColor(200, 200, 200);
+  const r = 2.5; // radio de esquina
+  if (typeof doc.roundedRect === "function") {
+    doc.roundedRect(boxX, cursorY, boxW, boxHeight, r, r, "FD");
+  } else {
+    // fallback si la versión de jsPDF no tiene roundedRect
+    doc.rect(boxX, cursorY, boxW, boxHeight, "FD");
+  }
+
+  // ---- Render real con el nuevo orden ----
+  let y = cursorY + boxPad;
+
+  // (1) Moneda de pago (bold)
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Moneda de pago seleccionada: ${preferredCurrency || "USD"}`, boxX + boxPad, y + 3);
+  y += lineH;
+  doc.setFont("helvetica", "normal");
+
+  if (wantsMXN) {
+    // === Usuario seleccionó MXN ===
+
+    // (2) Total a Pagar en MXN
+    if (isMixed) {
+      if (!rate) {
+        // No rate → no es posible total global MXN
+        doc.setTextColor(180, 0, 0);
+        const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+        const errLines = doc.splitTextToSize(err, textMaxW);
+        doc.text(errLines, boxX + boxPad, y);
+        doc.setTextColor(0, 0, 0);
+        y += errLines.length * 5 + 3;
+      } else {
+        doc.text(
+          `Total a pagar en MXN: ${fmtMXN(totalMXN_Mixed)}` + (isActive ? " (incluye IVA 16%)" : ""),
+          boxX + boxPad,
+          y + 3
+        );
+        y += lineH;
+
+        // (3) Detalle
+        doc.setFontSize(9);
+        doc.setTextColor(120,120,120);
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
+        const detLines = doc.splitTextToSize(det, textMaxW);
+        doc.text(detLines, boxX + boxPad, y + 3);
+        y += detLines.length * 5 + 3;
+
+        // (4) Tipo de cambio
+        doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
+        doc.setTextColor(0,0,0);
+        doc.setFontSize(10);
+        y += 5;
+      }
+    } else if (hasUSD) {
+      // Solo USD → convertir todo
+      if (!rate) {
+        doc.setTextColor(180, 0, 0);
+        const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total en MXN.";
+        const errLines = doc.splitTextToSize(err, textMaxW);
+        doc.text(errLines, boxX + boxPad, y);
+        doc.setTextColor(0, 0, 0);
+        y += errLines.length * 5 + 3;
+      } else {
+        const base = subtotalUSD * rate;
+        const total = base + iva16(base);
+        doc.text(`Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+        y += lineH;
+
+        // (3) Detalle
+        doc.setFontSize(9);
+        doc.setTextColor(120,120,120);
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(base)}.`;
+        const detLines = doc.splitTextToSize(det, textMaxW);
+        doc.text(detLines, boxX + boxPad, y);
+        y += detLines.length * 5 + 3;
+
+        // (4) Tipo de cambio
+        doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
+        doc.setTextColor(0,0,0);
+        doc.setFontSize(10);
+        y += 5;
+      }
+    } else {
+      // Solo MXN
+      doc.text(`Total a pagar en MXN: ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+      y += lineH;
+    }
+
+    // (5) IMPORTANTE (solo mixtas)
+    if (isMixed) {
+      doc.setTextColor(180, 0, 0);
+      doc.setFont("helvetica", "bold");
+      const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+      const legendLines = doc.splitTextToSize(legend, textMaxW);
+      doc.text(legendLines, boxX + boxPad, y + 3);
+      y += legendLines.length * 5 + 5;
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+    }
+  } else {
+    // === Usuario seleccionó USD ===
+
+    // (2) A Pagar en USD
+    if (hasUSD) {
+      doc.text(
+        `A pagar en USD (artículos en USD): ${fmtUSD(totalUSD_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+        boxX + boxPad,
+        y + 3
+      );
+      y += lineH;
+    }
+
+    // (3) A Pagar en MXN
+    if (hasMXN) {
+      doc.text(
+        `A pagar en MXN (artículos en MXN): ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+        boxX + boxPad,
+        y + 3
+      );
+      y += lineH;
+    }
+
+    // (4) Tipo de cambio (referencia en mixtas)
+    if (isMixed && rate) {
+      doc.setFontSize(9);
+      doc.setTextColor(120,120,120);
+      doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
+      doc.setTextColor(0,0,0);
+      doc.setFontSize(10);
+      y += 5;
+    }
+
+    // (5) IMPORTANTE (solo mixtas)
+    if (isMixed) {
+      doc.setTextColor(180, 0, 0);
+      doc.setFont("helvetica", "bold");
+      const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+      const legendLines = doc.splitTextToSize(legend, textMaxW);
+      doc.text(legendLines, boxX + boxPad, y + 5);
+      y += legendLines.length * 5 + 5;
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+    }
+
+    // Caso especial: preferencia USD pero solo MXN
+    if (!hasUSD && hasMXN) {
+      doc.setFontSize(9);
+      doc.setTextColor(120,120,120);
+      const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+      const noteLines = doc.splitTextToSize(note, textMaxW);
+      doc.text(noteLines, boxX + boxPad, y);
+      doc.setTextColor(0,0,0);
+      doc.setFontSize(10);
+      y += noteLines.length * 5 + 3;
+    }
+  }
+
+  // Avanza cursor debajo de la caja
+  cursorY = cursorY + boxHeight + 4;
 }
 
-let pagarEnMXN = "—";
-if (dofRate) {
-  const rate = Number(dofRate); // avoid .toFixed in math
-  const total = totalMXN + totalUSD * rate;
-  const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
-  pagarEnMXN = `$${(total + iva).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-}
+// {
+//   // Subtotales nativos
+//   const subtotalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+//   const subtotalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
 
-// Draw summary box (unchanged)
+//   // Utilidades
+//   const rate = Number(dofRate) || 0;                  // MXN por USD
+//   const iva16 = (v) => (isActive ? +(v * 0.16).toFixed(2) : 0);
+//   const hasUSD = usdItems.length > 0;
+//   const hasMXN = mxnItems.length > 0;
+//   const isMixed = hasUSD && hasMXN;
 
-    // // ===== Currency-scoped tables (robust partition) =====
-    // const usdItems = items.filter(it => (it.currency || "USD").toUpperCase() === "USD");
-    // const mxnItems = items.filter(it => (it.currency || "USD").toUpperCase() === "MXN");
-    
-    // const sectionTitle = (text, y) => {
-    //   doc.setFontSize(12);
-    //   doc.setFont("helvetica", "bold");
-    //   doc.text(text, 13, y);
-    // };
-    
-    // const makeBody = (arr) =>
-    //   arr.map(it => ([
-    //     it.product,
-    //     it.presentation,
-    //     it.packPresentation || "-",
-    //     String(it.amount),
-    //     `$${Number(it.price).toFixed(2)} ${(it.currency || "USD").toUpperCase()}`,
-    //     `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${(it.currency || "USD").toUpperCase()}`
-    //   ]));
-    
-    // let cursorY = 100;
-    
-    // // --- USD section ---
-    // if (usdItems.length) {
-    //   sectionTitle("Artículos en USD", cursorY - 6);
-    
-    //   autoTable(doc, {
-    //     head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
-    //     body: makeBody(usdItems),
-    //     startY: cursorY,
-    //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
-    //     styles: { fontSize: 9 },
-    //     margin: { top: 100, right: 10, bottom: 20, left: 10 },
-    //     didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
-    //   });
-    
-    //   // Subtotal USD
-    //   cursorY = doc.lastAutoTable.finalY + 6;
-    //   const subtotalUSD = usdItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
-    //   doc.setFontSize(11);
-    //   doc.setFont("helvetica", "bold");
-    //   doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 13, cursorY);
-    //   cursorY += 12;
-    // }
-    
-    // // --- MXN section ---
-    // if (mxnItems.length) {
-    //   sectionTitle("Artículos en MXN", cursorY - 6);
-    
-    //   autoTable(doc, {
-    //     head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
-    //     body: makeBody(mxnItems),
-    //     startY: cursorY,
-    //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
-    //     styles: { fontSize: 9 },
-    //     margin: { top: 100, right: 10, bottom: 20, left: 10 },
-    //     didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
-    //   });
-    
-    //   // Subtotal MXN
-    //   cursorY = doc.lastAutoTable.finalY + 6;
-    //   const subtotalMXN = mxnItems.reduce((sum, it) => sum + Number(it.amount) * Number(it.price), 0);
-    //   doc.setFontSize(11);
-    //   doc.setFont("helvetica", "bold");
-    //   doc.text(`Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`, 13, cursorY);
-    //   cursorY += 12;
-    // }
-    
-    // // ===== Resumen General (toggle logic) =====
-    // // (Keep your existing DOF/IVA state)
-    // const totalUSD = usdItems.reduce((s, it) => s + Number(it.amount) * Number(it.price), 0);
-    // const totalMXN = mxnItems.reduce((s, it) => s + Number(it.amount) * Number(it.price), 0);
-    
-    // // “Pay in” logic: if only USD items, allow USD/MXN view; if mixed, MXN items must remain MXN.
-    // const payUSDOnly = mxnItems.length === 0;
-    // const payMXNOnly = usdItems.length === 0;
-    
-    // // Overall boxes/text
-    // doc.setFontSize(12);
-    // doc.setFont("helvetica", "bold");
-    // doc.text("Resumen General", 13, cursorY);
-    // cursorY += 6;
-    // doc.setFontSize(10);
-    // doc.setFont("helvetica", "normal");
-    
-    // // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
-    // // const fmtMXN = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-    
-    // // Compute “Pagar en USD” (only valid if no MXN items), and “Pagar en MXN” (always valid)
-    // let pagarEnUSD = "—";
-    // if (payUSDOnly) {
-    //   const total = totalUSD; // only USD items present
-    //   const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
-    //   pagarEnUSD = fmtUSD((total + iva));
-    // }
-    
-    // let pagarEnMXN = "—";
-    // if (dofRate) {
-    //   // Always valid: USD converted + MXN native (MXN items stay in MXN)
-    //   const total = totalMXN + totalUSD * Number(dofRate.toFixed(2));
-    //   const iva = (typeof isActive === "boolean" && isActive) ? +(total * 0.16).toFixed(2) : 0;
-    //   pagarEnMXN = fmtMXN((total + iva));
-    // }
-    
-    // // Draw summary box
-    // const boxX = 141;
-    // const boxY = cursorY - 6;
-    // const boxWidth = 55;
-    // const boxHeight = 28;
-    // if (doc.roundedRect) {
-    //   doc.setFillColor(207, 242, 137);
-    //   doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 4, 4, "F");
-    // } else {
-    //   doc.setFillColor(207, 242, 137);
-    //   doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
-    // }
-    
-    // doc.setFont("helvetica", "bold");
-    // doc.text(`Pagar en USD: ${pagarEnUSD}`, 145, cursorY, { align: "left" });
-    // cursorY += 5;
-    // doc.text(`Pagar en MXN: ${pagarEnMXN}`, 145, cursorY, { align: "left" });
-    // cursorY += 6;
-    
-    // doc.setFontSize(9);
-    // doc.setFont("helvetica", "italic");
-    // doc.text(
-    //   "En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.",
-    //   13, cursorY
-    // );
-    // cursorY += 5;
-    // doc.text(
-    //   dofRate ? `${dofRate.toFixed(2)} MXN/USD (DOF ${dofDate || ""})` : "Tipo de cambio DOF no disponible",
-    //   145, cursorY, { align: "left" }
-    // );
+//   // Título
+//   doc.setFontSize(12);
+//   doc.setFont("helvetica", "bold");
+//   doc.text("Resumen Financiero", 13, cursorY);
+//   cursorY += 6;
 
-    // SEP05
-  
-    // SEP07 - 12:22
-    // --- PAGE 2: Payment instructions (keep your design) ---
-    // doc.addPage();
-    // drawBg();
-  
-    // let y = 35;
-    // doc.setFont("helvetica", "bold");
-    // doc.setFontSize(16);
-    // doc.setTextColor(24, 144, 69);
-    // doc.text(`Cuentas para realizar pago:`, 13, y + 5);
-  
-    // const payBoxX = 10;
-    // const payBoxY = y + 10;
-    // const payBoxWidth = 190;
-    // const payBoxHeight = 130;
-    // const payBoxRadius = 4;
-  
-    // if (doc.roundedRect) {
-    //   doc.setFillColor(241, 241, 241);
-    //   doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
-    // } else {
-    //   doc.setFillColor(241, 241, 241);
-    //   doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
-    // }
-  
-    // doc.setFontSize(13);
-    // doc.setFont("custom", "bold");
-    // doc.setTextColor(0, 0, 0);
-    // doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
-  
-    // doc.setFontSize(11);
-    // doc.setFont("custom", "bold");
-    // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 24);
-    // doc.text(`TRANSFERENCIA:`, 15, y + 31);
-  
-    // doc.setFont("custom", "normal");
-    // doc.text(`BANCO: BBVA`, 15, y + 37);
-    // doc.text(`NO. DE CUENTA: 010 115 1207`, 15, y + 42);
-    // doc.text(`CLABE: 012 320 001 011 512 076`, 15, y + 47);
-  
-    // doc.setFont("custom", "bold");
-    // doc.text(`DEPÓSITO BANCARIO:`, 120, y + 31);
-  
-    // doc.setFont("custom", "normal");
-    // doc.text(`BANCO: BBVA`, 120, y + 37);
-    // doc.text(`NO. DE CUENTA: 010 115 1207`, 120, y + 42);
-  
-    // doc.setFont("custom", "bold");
-    // doc.setFontSize(13);
-    // doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 59);
-  
-    // doc.setFontSize(11);
-    // doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 66);
-  
-    // doc.setFont("custom", "normal");
-    // doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 72);
-    // doc.text(`BANCO: BBVA`, 15, y + 77);
-    // doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 82);
-    // doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 87);
-    // doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 92);
-  
-    // doc.setFont("custom", "bold");
-    // doc.setFontSize(13);
-    // doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, y + 105);
-  
-    // doc.setFontSize(11);
-    // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 112);
-    // doc.text(`TRANSFERENCIA`, 15, y + 119);
-  
-    // doc.setFont("custom", "normal");
-    // doc.text(`BANCO: GRUPO FINANCIERO MONEX`, 15, y + 125);
-    // doc.text(`CLABE: 112 180 000 028 258 341`, 15, y + 130);
-  
-    // doc.text(`BANCO: BANCO INVEX, S.A.`, 120, y + 125);
-    // doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 130);
-    // SEP07 - 12:22
-  
-    // Save locally
-    // doc.save("Cotización_Express.pdf");
+//   // Moneda preferida (mostramos al usuario lo que eligió)
+//   doc.setFontSize(10);
+//   doc.setFont("helvetica", "normal");
+//   doc.text(`Moneda de pago seleccionada: ${preferredCurrency || "USD"}`, 13, cursorY);
+//   cursorY += 6;
+
+//   // Leyenda obligatoria en órdenes mixtas
+//   if (isMixed) {
+//     doc.setTextColor(180, 0, 0);
+//     doc.setFont("helvetica", "bold");
+//     doc.text(
+//       "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.",
+//       13,
+//       cursorY,
+//       { maxWidth: 184 }
+//     );
+//     doc.setTextColor(0, 0, 0);
+//     doc.setFont("helvetica", "normal");
+//     cursorY += 10;
+//   }
+
+//   // Ramas segun preferencia
+//   if ((preferredCurrency || "USD").toUpperCase() === "USD") {
+//     // --- Usuario quiere pagar en USD ---
+//     if (isMixed) {
+//       // Split total: USD por USD-items, MXN por MXN-items (sin convertir)
+//       const totalUSD = subtotalUSD + iva16(subtotalUSD);
+//       const totalMXN = subtotalMXN + iva16(subtotalMXN);
+
+//       doc.text(`A pagar en USD (artículos en USD): ${fmtUSD(totalUSD)}` + (isActive ? " (incluye IVA 16%)" : ""), 13, cursorY);
+//       cursorY += 6;
+//       doc.text(
+//         `A pagar en MXN (artículos en MXN): ${fmtMXN(totalMXN)}` + (isActive ? " (incluye IVA 16%)" : ""),
+//         13,
+//         cursorY
+//       );
+//       cursorY += 8;
+
+//       if (rate) {
+//         doc.setFontSize(9);
+//         doc.setTextColor(120,120,120);
+//         doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), 13, cursorY);
+//         doc.setTextColor(0,0,0);
+//         cursorY += 6;
+//       }
+//     } else if (hasUSD) {
+//       // Solo USD-items → total en USD
+//       const total = subtotalUSD + iva16(subtotalUSD);
+//       doc.text(`Total a pagar: ${fmtUSD(total)}` + (isActive ? " (incluye IVA 16%)" : ""), 13, cursorY);
+//       cursorY += 8;
+//     } else {
+//       // Solo MXN-items → por regla, deben pagarse en MXN, aunque la preferencia sea USD
+//       const total = subtotalMXN + iva16(subtotalMXN);
+//       doc.text(
+//         `Total a pagar: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""),
+//         13,
+//         cursorY
+//       );
+//       cursorY += 6;
+//       doc.setFontSize(9);
+//       doc.setTextColor(120,120,120);
+//       doc.text("Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.", 13, cursorY);
+//       doc.setTextColor(0,0,0);
+//       cursorY += 6;
+//     }
+//   } else {
+//     // --- Usuario quiere pagar en MXN ---
+//     if (isMixed) {
+//       // Convertir USD→MXN y sumar con MXN nativo
+//       if (!rate) {
+//         doc.setTextColor(180, 0, 0);
+//         doc.text("No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.", 13, cursorY, { maxWidth: 184 });
+//         doc.setTextColor(0, 0, 0);
+//         cursorY += 8;
+//       } else {
+//         const usdEnMXN = subtotalUSD * rate;
+//         const base = subtotalMXN + usdEnMXN;
+//         const total = base + iva16(base);
+
+//         doc.text(
+//           `Total global a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""),
+//           13,
+//           cursorY
+//         );
+//         cursorY += 6;
+
+//         doc.setFontSize(9);
+//         doc.setTextColor(120,120,120);
+//         doc.text(
+//           `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`,
+//           13,
+//           cursorY,
+//           { maxWidth: 184 }
+//         );
+//         cursorY += 6;
+//         doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), 13, cursorY);
+//         doc.setTextColor(0,0,0);
+//         doc.setFontSize(10);
+//         cursorY += 6;
+//       }
+//     } else if (hasUSD) {
+//       // Solo USD-items → convertir todo a MXN
+//       if (!rate) {
+//         doc.setTextColor(180, 0, 0);
+//         doc.text("No se pudo obtener el tipo de cambio DOF; no es posible calcular el total en MXN.", 13, cursorY, { maxWidth: 184 });
+//         doc.setTextColor(0, 0, 0);
+//         cursorY += 8;
+//       } else {
+//         const base = subtotalUSD * rate;
+//         const total = base + iva16(base);
+//         doc.text(
+//           `Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""),
+//           13,
+//           cursorY
+//         );
+//         cursorY += 6;
+
+//         doc.setFontSize(9);
+//         doc.setTextColor(120,120,120);
+//         doc.text(
+//           `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(base)}.`,
+//           13,
+//           cursorY
+//         );
+//         doc.setTextColor(0,0,0);
+//         doc.setFontSize(10);
+//         cursorY += 6;
+//       }
+//     } else {
+//       // Solo MXN-items → pagar en MXN (sin conversion)
+//       const total = subtotalMXN + iva16(subtotalMXN);
+//       doc.text(`Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""), 13, cursorY);
+//       cursorY += 8;
+//     }
+//   }
+// }
+
+// ----> 
 
     // --- Build the PDF once ---
     const pdfBlob = doc.output("blob");
