@@ -27,8 +27,12 @@ export default function NewOrderDetails() {
   const [evidenceUrl, setEvidenceUrl] = useState(null);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
-  // ======== NEW: Google Sheets client DB ========
+  // ======== Google Sheets client DB (fallbacks) ========
   const [csvData, setCsvData] = useState([]);
+
+  // ======== MongoDB user fields ========
+  const [clientFullName, setClientFullName] = useState(""); // nombre + apellido
+  const [companyFromMongo, setCompanyFromMongo] = useState(""); // empresa
 
   useEffect(() => {
     fetchCSVData(); // run once on mount
@@ -66,7 +70,7 @@ export default function NewOrderDetails() {
     return data;
   }
 
-  // Lookup: match order.userEmail → CORREO_EMPRESA
+  // Lookup: match order.userEmail → CORREO_EMPRESA (CSV fallbacks)
   const clientInfo = useMemo(() => {
     if (!order?.userEmail || csvData.length === 0) return null;
     const norm = (s) => String(s || "").trim().toLowerCase();
@@ -77,9 +81,36 @@ export default function NewOrderDetails() {
     );
   }, [csvData, order?.userEmail]);
 
-  const displayName = clientInfo?.NOMBRE_APELLIDO || "";
-  const companyName = clientInfo?.NOMBRE_EMPRESA || "";
-  // ==============================================
+  const csvDisplayName = clientInfo?.NOMBRE_APELLIDO || "";
+  const csvCompanyName = clientInfo?.NOMBRE_EMPRESA || "";
+
+  // ======== Fetch nombre, apellido, empresa from Mongo after order loads ========
+  useEffect(() => {
+    const email = String(order?.userEmail || "").trim().toLowerCase();
+    if (!email) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/users/by-email`, { params: { email } });
+        const u = res?.data || {};
+        const nombre = (u.nombre || "").toString().trim();
+        const apellido = (u.apellido || "").toString().trim();
+        const empresa = (u.empresa || "").toString().trim();
+        const full = [nombre, apellido].filter(Boolean).join(" ");
+
+        if (!cancelled) {
+          setClientFullName(full);
+          setCompanyFromMongo(empresa);
+        }
+      } catch (_err) {
+        // ignore; fallbacks will be used
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [order?.userEmail]);
+  // ============================================================================
 
   const bufferToObjectUrl = (fileObj) => {
     try {
@@ -223,6 +254,10 @@ export default function NewOrderDetails() {
     order?.paymentEvidence?.filename ||
     `evidencia_${String(order._id).slice(-5)}.jpg`;
 
+  // Prefer Mongo (nombre+apellido, empresa) → CSV → email/empty
+  const displayName = clientFullName || csvDisplayName || order.userEmail || "";
+  const displayCompany = companyFromMongo || csvCompanyName || "";
+
   return (
     <body className="body-BG-Gradient">
       {/* LOGO */}
@@ -242,10 +277,10 @@ export default function NewOrderDetails() {
         <img src={CotizaIcon} alt="Home Icon" width="35" height="35" />
       </div>
 
-      {/* Top summary now uses client DB name + company */}
+      {/* Top summary now prefers Mongo for name + company */}
       <div className="newQuotesDetail-Div">
-        <label>{displayName || order.userEmail}</label>
-        <label>{companyName || ""}</label>
+        <label>{displayName}</label>
+        <label>{displayCompany}</label>
       </div>
 
       <div className="newQuotesDetail-Div">
@@ -353,30 +388,9 @@ export default function NewOrderDetails() {
           <div className="paymentEvidence-Div" style={{ gap: 12, alignItems: "center" }}>
             <img
               src={evidenceUrl}
-              // src={evidenceUrl || TicketFallback}
-              // alt="Evidencia de pago"
-              // width="85"
-              // height="85"
               style={{ cursor: evidenceUrl ? "zoom-in" : "default", objectFit: "cover" }}
               onClick={evidenceUrl ? () => setIsLightboxOpen(true) : undefined}
-              // onError={(e) => {
-              //   e.currentTarget.src = TicketFallback;
-              // }}
             />
-
-            {/* <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <a
-                href={evidenceUrl || "#"}
-                download={
-                  order?.evidenceFile?.filename ||
-                  order?.paymentEvidence?.filename ||
-                  `evidencia_${String(order._id).slice(-5)}.jpg`
-                }
-                style={{ pointerEvents: evidenceUrl ? "auto" : "none", color: evidenceUrl ? "#1976d2" : "#999" }}
-              >
-                Descargar evidencia
-              </a>
-            </div> */}
           </div>
         </div>
 

@@ -13,12 +13,13 @@ export default function DeliverReady() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
 
-  // ===== Google Sheets client DB (email → name/company) =====
-  const [csvData, setCsvData] = useState([]);
+  // ===== NEW: Mongo cache (email -> user) =====
+  // user shape (from /users/by-email): { nombre, apellido, empresa?, shippingPreferences?: { preferredCarrier, insureShipment }, ... }
+  const [mongoByEmail, setMongoByEmail] = useState({}); // { [email]: user | null }
+  const [mongoLoading, setMongoLoading] = useState(false);
 
   useEffect(() => {
     fetchOrders();
-    fetchClientCSV();
   }, []);
 
   const fetchOrders = async () => {
@@ -33,50 +34,58 @@ export default function DeliverReady() {
     }
   };
 
-  // Pull from your Google Sheets DB (same sheet you’ve been using elsewhere)
-  const fetchClientCSV = () => {
-    const csvUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
-    axios
-      .get(csvUrl)
-      .then((response) => {
-        const parsed = parseCSV(response.data);
-        setCsvData(parsed);
-      })
-      .catch((error) => {
-        console.error("Error fetching CSV data:", error);
-      });
-  };
+  // Pull needed Mongo users for the list (dedup by email)
+  useEffect(() => {
+    const norm = (s) => String(s || "").trim().toLowerCase();
+    const emails = Array.from(
+      new Set(
+        (orders || [])
+          .map((o) => norm(o.userEmail))
+          .filter((e) => !!e)
+      )
+    );
 
-  function parseCSV(csvText) {
-    const rows = csvText.split(/\r?\n/);
-    const headers = rows[0]?.split(",") || [];
-    const data = [];
-    for (let i = 1; i < rows.length; i++) {
-      if (!rows[i]) continue;
-      const rowData = rows[i].split(",");
-      const rowObject = {};
-      for (let j = 0; j < headers.length; j++) {
-        rowObject[headers[j]] = rowData[j];
+    // figure out which emails we still need
+    const missing = emails.filter((e) => !(e in mongoByEmail));
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    setMongoLoading(true);
+
+    (async () => {
+      try {
+        const results = await Promise.allSettled(
+          missing.map((email) =>
+            axios
+              .get(`${API}/users/by-email`, { params: { email } })
+              .then((res) => ({ email, user: res.data || null }))
+              .catch(() => ({ email, user: null }))
+          )
+        );
+
+        if (cancelled) return;
+
+        setMongoByEmail((prev) => {
+          const next = { ...prev };
+          results.forEach((r) => {
+            if (r.status === "fulfilled") {
+              const { email, user } = r.value;
+              next[email] = user;
+            } else {
+              // Promise rejected (shouldn't happen due to catch above), keep null
+            }
+          });
+          return next;
+        });
+      } finally {
+        if (!cancelled) setMongoLoading(false);
       }
-      data.push(rowObject);
-    }
-    return data;
-  }
+    })();
 
-  // Build a quick lookup: email → { name, company }
-  const clientLookup = useMemo(() => {
-    const map = new Map();
-    csvData.forEach((r) => {
-      const email = (r.CORREO_EMPRESA || "").trim().toLowerCase();
-      if (!email) return;
-      map.set(email, {
-        name: (r.NOMBRE_APELLIDO || "").trim(),
-        company: (r.NOMBRE_EMPRESA || "").trim(),
-      });
-    });
-    return map;
-  }, [csvData]);
+    return () => {
+      cancelled = true;
+    };
+  }, [orders, mongoByEmail]);
 
   const handleOrderClick = (orderId) => {
     navigate(`/deliveryDetails/${orderId}`);
@@ -96,6 +105,35 @@ export default function DeliverReady() {
 
   const goHomeLogo = () => {
     navigate("/adminHome");
+  };
+
+  const normalize = (s) => String(s || "").trim().toLowerCase();
+
+  const displayNameFor = (email) => {
+    const user = mongoByEmail[normalize(email)];
+    const nombre = (user?.nombre || "").trim();
+    const apellido = (user?.apellido || "").trim();
+    const full = [nombre, apellido].filter(Boolean).join(" ");
+    return full || email || "Cliente";
+  };
+
+  const preferredCarrierFor = (email) => {
+    const user = mongoByEmail[normalize(email)];
+    return (
+      (user?.shippingPreferences?.preferredCarrier ||
+        user?.preferredCarrier ||
+        "")?.toString()
+        .trim() || ""
+    );
+  };
+
+  const insureShipmentLabelFor = (email) => {
+    const user = mongoByEmail[normalize(email)];
+    const val =
+      user?.shippingPreferences?.insureShipment ??
+      user?.insureShipment;
+    if (typeof val === "boolean") return val ? "Sí" : "No";
+    return ""; // not specified
   };
 
   return (
@@ -129,11 +167,9 @@ export default function DeliverReady() {
 
       <div className="newQuotesScroll-Div">
         {orders.map((order) => {
-          const email = (order.userEmail || "").trim().toLowerCase();
-          const meta = clientLookup.get(email);
-          const displayName = meta?.name || order.userEmail || "Cliente";
-          const company = meta?.company || "";
-          const orderDate = (order.orderDate || "")
+          const name = displayNameFor(order.userEmail);
+          const carrier = preferredCarrierFor(order.userEmail);
+          const insured = insureShipmentLabelFor(order.userEmail);
 
           return (
             <div className="existingQuote-Div" key={order._id}>
@@ -141,32 +177,31 @@ export default function DeliverReady() {
                 className="quoteAndFile-Div"
                 onClick={() => handleOrderClick(order._id)}
               >
-                <label className="orderQuick-Label">{displayName}</label>
-                {/* aug18 */}
+                <label className="orderQuick-Label">{name}</label>
                 <label className="orderQuick-Label">
-                    {order.orderDate
-                      ? (() => {
-                          const date = new Date(order.orderDate);
-                          const day = date
-                            .getDate()
-                            .toString()
-                            .padStart(2, "0");
-                          const month = date.toLocaleString("en-MX", {
-                            month: "short",
-                          });
-                          const year = date.getFullYear();
-                          return `${day}/${month}/${year}`;
-                        })()
-                      : "Sin fecha"}
-                  </label>
+                  {order.orderDate
+                    ? (() => {
+                        const date = new Date(order.orderDate);
+                        const day = date.getDate().toString().padStart(2, "0");
+                        const month = date.toLocaleString("en-MX", { month: "short" });
+                        const year = date.getFullYear();
+                        return `${day}/${month}/${year}`;
+                      })()
+                    : "Sin fecha"}
+                </label>
                 <label className="orderQuick-Label">
-                  No.
-                  {String(order._id).slice(-5)}
+                  No. {String(order._id).slice(-5)}
+                </label>
+
+                {/* NEW: shipping preferences from Mongo */}
+                <label className="orderQuick-Label">
+                  <b>Paquetería:</b> {carrier || "No especificado"}
                 </label>
               </div>
             </div>
           );
         })}
+
         {orders.length === 0 && (
           <p style={{ textAlign: "center", marginTop: "2rem" }}>
             No hay pedidos por entregar.

@@ -20,6 +20,9 @@ export default function NewOrders() {
   // ===== Client DB (Google Sheets CSV) =====
   const [csvData, setCsvData] = useState([]);
 
+  // NEW: cache for mongo lookups: email -> "Nombre Apellido"
+  const [namesByEmail, setNamesByEmail] = useState({});
+
   useEffect(() => {
     fetchOrders();
     fetchCSVData();
@@ -28,7 +31,49 @@ export default function NewOrders() {
   useEffect(() => {
     applyFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, filter, searchName, csvData]);
+  }, [orders, filter, searchName, csvData, namesByEmail]);
+
+  // After orders load/update, fetch missing names from Mongo once per unique email
+  useEffect(() => {
+    if (!orders || orders.length === 0) return;
+
+    const uniqueEmails = Array.from(
+      new Set(
+        orders
+          .map((o) => String(o.userEmail || "").trim().toLowerCase())
+          .filter((e) => e)
+      )
+    );
+
+    const toFetch = uniqueEmails.filter((e) => !(e in namesByEmail));
+    if (toFetch.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const updates = {};
+      await Promise.all(
+        toFetch.map(async (email) => {
+          try {
+            const res = await axios.get(`${API}/users/by-email`, { params: { email } });
+            const u = res?.data || {};
+            const nombre = (u.nombre || "").toString().trim();
+            const apellido = (u.apellido || "").toString().trim();
+            const full = [nombre, apellido].filter(Boolean).join(" ");
+            if (full) updates[email] = full;
+          } catch (_err) {
+            // ignore (404 or other), we'll fall back to CSV/email
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setNamesByEmail((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [orders, namesByEmail]);
 
   const fetchOrders = async () => {
     try {
@@ -69,7 +114,7 @@ export default function NewOrders() {
     return out;
   }
 
-  // Build a lookup: email -> { name, company }
+  // Build a lookup from CSV: email -> { name, company }
   const emailToClient = useMemo(() => {
     const map = {};
     const norm = (s) => String(s || "").trim().toLowerCase();
@@ -84,16 +129,15 @@ export default function NewOrders() {
     return map;
   }, [csvData]);
 
+  // Prefer Mongo full name; fallback to CSV name; fallback to raw email
   const displayForEmail = (email) => {
-    const norm = String(email || "").trim().toLowerCase();
-    const hit = emailToClient[norm];
-    return hit?.name || email || "";
+    const key = String(email || "").trim().toLowerCase();
+    return namesByEmail[key] || emailToClient[key]?.name || email || "";
   };
 
   const companyForEmail = (email) => {
-    const norm = String(email || "").trim().toLowerCase();
-    const hit = emailToClient[norm];
-    return hit?.company || "";
+    const key = String(email || "").trim().toLowerCase();
+    return emailToClient[key]?.company || "";
   };
 
   const applyFilters = () => {
@@ -162,84 +206,57 @@ export default function NewOrders() {
   const goToPackageReady = () => navigate("/deliverReady");
   const goHomeLogo = () => navigate("/adminHome");
 
-  // SEP07
-  // Computes final totals in USD/MXN following the same rules used in ExpressQuote/OrderNow
-const computeDisplayTotals = (order) => {
-  if (!order) return { finalUSD: null, finalMXN: null };
+  // (kept) Computes final totals in USD/MXN
+  const computeDisplayTotals = (order) => {
+    if (!order) return { finalUSD: null, finalMXN: null };
 
-  const t = order.totals || {};
-  const dofRate = Number(t.dofRate) || null;          // MXN per USD
-  const requestBill = !!order.requestBill;            // IVA?
-  const discountUSD = Number(t.discountUSD || 0);     // discount tracked in USD
+    const t = order.totals || {};
+    const dofRate = Number(t.dofRate) || null;          // MXN per USD
+    const requestBill = !!order.requestBill;            // IVA?
+    const discountUSD = Number(t.discountUSD || 0);     // discount tracked in USD
 
-  // Prefer server-saved finals if present (most reliable)
-  if (Number.isFinite(t.finalAllUSD) || Number.isFinite(t.finalAllMXN)) {
+    if (Number.isFinite(t.finalAllUSD) || Number.isFinite(t.finalAllMXN)) {
+      return {
+        finalUSD: Number.isFinite(t.finalAllUSD) ? Number(t.finalAllUSD) : null,
+        finalMXN: Number.isFinite(t.finalAllMXN) ? Number(t.finalAllMXN) : null,
+      };
+    }
+
+    const items = Array.isArray(order.items) ? order.items : [];
+    let usdNative = 0;
+    let mxnNative = 0;
+
+    items.forEach((it) => {
+      const qty = Number(it.amount) || 0;
+      const cur = (it.currency || "USD").toUpperCase();
+      if (cur === "MXN") {
+        const unit = Number(it.priceMXN ?? it.price);
+        if (Number.isFinite(unit)) mxnNative += qty * unit;
+      } else {
+        const unit = Number(it.priceUSD ?? it.price);
+        if (Number.isFinite(unit)) usdNative += qty * unit;
+      }
+    });
+
+    const allUSD = dofRate ? usdNative + mxnNative / dofRate : null;
+    const allMXN = dofRate ? mxnNative + usdNative * dofRate : null;
+
+    const finalUSD = allUSD == null
+      ? null
+      : requestBill
+        ? (allUSD - discountUSD) * 1.16
+        : (allUSD - discountUSD);
+
+    const finalMXN = (allMXN == null || !dofRate)
+      ? null
+      : requestBill
+        ? (allMXN - discountUSD * dofRate) * 1.16
+        : (allMXN - discountUSD * dofRate);
+
     return {
-      finalUSD: Number.isFinite(t.finalAllUSD) ? Number(t.finalAllUSD) : null,
-      finalMXN: Number.isFinite(t.finalAllMXN) ? Number(t.finalAllMXN) : null,
+      finalUSD: Number.isFinite(finalUSD) ? Number(finalUSD) : null,
+      finalMXN: Number.isFinite(finalMXN) ? Number(finalMXN) : null,
     };
-  }
-
-  // Otherwise, recompute from items in the order (currency-aware)
-  const items = Array.isArray(order.items) ? order.items : [];
-  let usdNative = 0;
-  let mxnNative = 0;
-
-  items.forEach((it) => {
-    const qty = Number(it.amount) || 0;
-    const cur = (it.currency || "USD").toUpperCase();
-    if (cur === "MXN") {
-      const unit = Number(it.priceMXN ?? it.price);
-      if (Number.isFinite(unit)) mxnNative += qty * unit;
-    } else {
-      const unit = Number(it.priceUSD ?? it.price);
-      if (Number.isFinite(unit)) usdNative += qty * unit;
-    }
-  });
-
-  // Convert to global totals (all-in-one)
-  const allUSD = dofRate ? usdNative + mxnNative / dofRate : null;
-  const allMXN = dofRate ? mxnNative + usdNative * dofRate : null;
-
-  // Apply discount + IVA exactly like OrderNow
-  const finalUSD = allUSD == null
-    ? null
-    : requestBill
-      ? (allUSD - discountUSD) * 1.16
-      : (allUSD - discountUSD);
-
-  const finalMXN = (allMXN == null || !dofRate)
-    ? null
-    : requestBill
-      ? (allMXN - discountUSD * dofRate) * 1.16
-      : (allMXN - discountUSD * dofRate);
-
-  return {
-    finalUSD: Number.isFinite(finalUSD) ? Number(finalUSD) : null,
-    finalMXN: Number.isFinite(finalMXN) ? Number(finalMXN) : null,
-  };
-};
-
-
-  // SEP07
-
-  // Safely get final total in USD (supports object or legacy shapes)
-  const getFinalUSD = (order) => {
-    const t = order?.totals;
-    // if stored as object (our current approach)
-    if (t && typeof t === "object" && !Array.isArray(t)) {
-      if (typeof t.finalAllUSD === "number") return t.finalAllUSD;
-      if (typeof t.totalAllUSD === "number") return t.totalAllUSD;
-    }
-    // legacy: sometimes an array (just in case)
-    if (Array.isArray(t) && t[0]) {
-      if (typeof t[0].finalAllUSD === "number") return t[0].finalAllUSD;
-      if (typeof t[0].totalAllUSD === "number") return t[0].totalAllUSD;
-    }
-    // last resort
-    if (typeof order?.finalAllUSD === "number") return order.finalAllUSD;
-    if (typeof order?.totalCost === "number") return order.totalCost;
-    return 0;
   };
 
   return (
@@ -284,10 +301,7 @@ const computeDisplayTotals = (order) => {
 
         <ul>
           {filteredOrders.map((order) => {
-            // sep07
             const { finalUSD, finalMXN } = computeDisplayTotals(order);
-            // const finalUSD = getFinalUSD(order);
-            // sep07
             const displayName = displayForEmail(order.userEmail);
             return (
               <li
@@ -302,13 +316,8 @@ const computeDisplayTotals = (order) => {
                     {order.orderDate
                       ? (() => {
                           const date = new Date(order.orderDate);
-                          const day = date
-                            .getDate()
-                            .toString()
-                            .padStart(2, "0");
-                          const month = date.toLocaleString("en-MX", {
-                            month: "short",
-                          });
+                          const day = date.getDate().toString().padStart(2, "0");
+                          const month = date.toLocaleString("en-MX", { month: "short" });
                           const year = date.getFullYear();
                           return `${day}/${month}/${year}`;
                         })()
@@ -317,19 +326,16 @@ const computeDisplayTotals = (order) => {
                   <label className="orderQuick-Label">
                     {displayName}
                   </label>
-                  {/* In expressQuote.jsx we ask the user to select if he wants to pay in USD or in MXN. Is there a way to show, in newOrder.jsx the total payed by the user, taking into consideration all currency convertion rules we set up in expressQuote.jsx. This is where I want to place such data within newOrders.jsx  */}
-                  {/* <label className="orderQuick-Label">
+
+                  {/* If you want to show totals, uncomment:
+                  <label className="orderQuick-Label">
                     {finalUSD != null ? `$${finalUSD.toFixed(2)} USD` : "—"}
                   </label>
-
                   {finalMXN != null && (
                     <label className="orderQuick-Label" style={{ display: "block", opacity: 0.8 }}>
                       {`$${finalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`}
                     </label>
                   )} */}
-                  {/* <label className="orderQuick-Label">
-                    ${Number(finalUSD).toFixed(2)}
-                  </label> */}
                 </div>
               </li>
             );

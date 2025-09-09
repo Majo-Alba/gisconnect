@@ -1,4 +1,3 @@
-// --- DeliveredOrders.jsx ---
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -13,8 +12,11 @@ export default function DeliveredOrders() {
   const navigate = useNavigate();
 
   const [deliveredOrders, setDeliveredOrders] = useState([]);
-  const [csvData, setCsvData] = useState([]); // Google Sheets client DB
   const [loading, setLoading] = useState(false);
+
+  // === NEW: Mongo users cache (email -> user)
+  const [usersByEmail, setUsersByEmail] = useState({});
+  const [usersLoading, setUsersLoading] = useState(false);
 
   // ---- fetch delivered orders
   useEffect(() => {
@@ -35,35 +37,63 @@ export default function DeliveredOrders() {
     fetchDeliveredOrders();
   }, []);
 
-  // ---- fetch Google Sheets CSV (clients master)
+  // ---- fetch users from Mongo by distinct emails found in deliveredOrders
   useEffect(() => {
-    const csvUrl =
-      "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
-    axios
-      .get(csvUrl)
-      .then((res) => {
-        setCsvData(parseCSV(res.data));
-      })
-      .catch((err) => console.error("Error fetching CSV data:", err));
-  }, []);
+    const emails = Array.from(
+      new Set(
+        deliveredOrders
+          .map((o) => (o.userEmail || "").trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    if (emails.length === 0) return;
 
-  // ---- build fast lookup by email: { emailLower: { nombre, empresa } }
-  const emailToClient = useMemo(() => {
-    const map = {};
-    for (const row of csvData) {
-      const email = (row.CORREO_EMPRESA || "").trim().toLowerCase();
-      if (!email) continue;
-      map[email] = {
-        nombre: (row.NOMBRE_APELLIDO || "").trim(),
-        empresa: (row.NOMBRE_EMPRESA || "").trim(),
-      };
-    }
-    return map;
-  }, [csvData]);
+    let cancelled = false;
+    setUsersLoading(true);
 
+    (async () => {
+      try {
+        const results = await Promise.allSettled(
+          emails.map((email) =>
+            axios
+              .get(`${API}/users/by-email`, { params: { email } })
+              .then((res) => ({ email, user: res.data }))
+          )
+        );
+
+        if (cancelled) return;
+
+        const map = {};
+        results.forEach((r) => {
+          if (r.status === "fulfilled" && r.value?.email) {
+            map[r.value.email] = r.value.user || null;
+          }
+        });
+        setUsersByEmail(map);
+      } catch (err) {
+        console.error("Error fetching users by email:", err);
+        setUsersByEmail({});
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deliveredOrders]);
+
+  // ---- helpers
   const displayNameFor = (email) => {
     const key = (email || "").trim().toLowerCase();
-    return emailToClient[key]?.nombre || email || "";
+    const u = usersByEmail[key];
+    if (u) {
+      const nombre = (u.nombre || "").trim();
+      const apellido = (u.apellido || "").trim();
+      const full = [nombre, apellido].filter(Boolean).join(" ");
+      if (full) return full;
+    }
+    return email || "";
   };
 
   // ---- navigation
@@ -99,8 +129,8 @@ export default function DeliveredOrders() {
         </select>
       </div>
 
-      <div className="newQuotesScroll-Div">
-        {loading && (
+      <div className="deliveredOrders-OrderDiv">
+        {(loading || usersLoading) && (
           <p style={{ textAlign: "center", marginTop: "1.5rem" }}>Cargando órdenes...</p>
         )}
 
@@ -108,14 +138,15 @@ export default function DeliveredOrders() {
           deliveredOrders.map((order) => (
             <div className="existingQuote-Div" key={order._id}>
               <div className="quoteAndFile-Div" onClick={() => goToOrderSummary(order._id)}>
-                {/* Show actual name from Sheets (fallback to email if not found) */}
+                {/* Show actual name from Mongo (fallback to email if not found) */}
                 <label className="productDetail-Label">{displayNameFor(order.userEmail)}</label>
 
                 <label className="productDetail-Label">
                   Pedido: {(order._id || "").slice(-5)}
                 </label>
                 <br />
-                <label className="productDetail-Label"> Enviado: 
+                <label className="productDetail-Label">
+                  Enviado:{" "}
                   {order.deliveryDate
                     ? new Date(order.deliveryDate).toLocaleDateString("es-MX")
                     : "Sin fecha"}
@@ -149,21 +180,4 @@ export default function DeliveredOrders() {
       </div>
     </body>
   );
-}
-
-/* ---- helpers ---- */
-function parseCSV(csvText) {
-  const rows = csvText.split(/\r?\n/);
-  const headers = rows[0]?.split(",") || [];
-  const data = [];
-  for (let i = 1; i < rows.length; i++) {
-    if (!rows[i]) continue;
-    const rowData = rows[i].split(",");
-    const rowObject = {};
-    for (let j = 0; j < headers.length; j++) {
-      rowObject[headers[j]] = rowData[j];
-    }
-    data.push(rowObject);
-  }
-  return data;
 }

@@ -24,7 +24,7 @@ export default function ManageDelivery() {
 
   const [orders, setOrders] = useState([]);
 
-  // ===== Google Sheets (Client DB) =====
+  // ===== Google Sheets (Client DB) — fallback only =====
   const [csvRows, setCsvRows] = useState([]);
   useEffect(() => {
     const fetchCSV = async () => {
@@ -43,8 +43,9 @@ export default function ManageDelivery() {
 
   const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
 
-  // Build quick lookup: email -> { name, company }
-  const clientLookup = useMemo(() => {
+  // Build quick lookup from CSV (fallback):
+  // email -> { name, company, carrier?, insurance? }
+  const clientLookupCSV = useMemo(() => {
     const map = {};
     csvRows.forEach((r) => {
       const email = normalize(r.CORREO_EMPRESA);
@@ -52,16 +53,14 @@ export default function ManageDelivery() {
       map[email] = {
         name: (r.NOMBRE_APELLIDO || "").trim(),
         company: (r.NOMBRE_EMPRESA || "").trim(),
-        // aug18
         carrier: (r.PAQUETERIA_ENVIO || "").trim(),
         insurance: (r.SEGURO_ENVIO || "").trim(),
-        // aug18
       };
     });
     return map;
   }, [csvRows]);
 
-  // ===== Orders (only "Pedido Listo") =====
+  // ===== Orders (only "Preparando Pedido") =====
   useEffect(() => {
     fetchOrders();
   }, []);
@@ -69,12 +68,78 @@ export default function ManageDelivery() {
   const fetchOrders = async () => {
     try {
       const response = await axios.get(`${API}/orders`);
-      const readyOrders = response.data.filter((order) => order.orderStatus === "Preparando Pedido");
+      const readyOrders = (response.data || []).filter(
+        (order) => order.orderStatus === "Preparando Pedido"
+      );
       setOrders(readyOrders);
     } catch (err) {
       console.error("Error fetching orders:", err);
     }
   };
+
+  // ===== Mongo users (email -> { name, company, preferredCarrier, insureShipment }) =====
+  const [mongoUsers, setMongoUsers] = useState({}); // { [email]: { name, company, preferredCarrier, insureShipment } }
+
+  useEffect(() => {
+    const emails = Array.from(
+      new Set(
+        (orders || [])
+          .map((o) => normalize(o.userEmail))
+          .filter(Boolean)
+      )
+    );
+    if (emails.length === 0) return;
+
+    // fetch only missing emails
+    const missing = emails.filter((e) => !mongoUsers[e]);
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.allSettled(
+          missing.map((email) =>
+            axios.get(`${API}/users/by-email`, { params: { email } })
+          )
+        );
+
+        const next = { ...mongoUsers };
+        results.forEach((res, idx) => {
+          const email = missing[idx];
+          if (res.status === "fulfilled") {
+            const u = res.value?.data || {};
+            const nombre = (u.nombre || "").toString().trim();
+            const apellido = (u.apellido || "").toString().trim();
+            const empresa = (u.empresa || "").toString().trim();
+
+            // Shipping prefs might be nested or at top level
+            const prefCarrier =
+              (u.shippingPreferences && u.shippingPreferences.preferredCarrier) ||
+              u.preferredCarrier ||
+              "";
+            const insure =
+              (u.shippingPreferences && u.shippingPreferences.insureShipment) ??
+              u.insureShipment;
+
+            next[email] = {
+              name: [nombre, apellido].filter(Boolean).join(" ") || email,
+              company: empresa || "",
+              preferredCarrier: (prefCarrier || "").toString().trim(),
+              insureShipment: Boolean(insure),
+            };
+          }
+        });
+
+        if (!cancelled) setMongoUsers(next);
+      } catch (e) {
+        // Ignore: we’ll fall back to CSV/email in render
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleOrderClick = (orderId) => {
     navigate(`/manageDelivery/${orderId}`);
@@ -94,6 +159,45 @@ export default function ManageDelivery() {
     }
     return data;
   }
+
+  // Helpers to display values with fallback priority: Mongo → CSV → default/email
+  const nameForEmail = (emailRaw) => {
+    const email = normalize(emailRaw);
+    return (
+      mongoUsers[email]?.name ||
+      clientLookupCSV[email]?.name ||
+      emailRaw ||
+      ""
+    );
+  };
+
+  const companyForEmail = (emailRaw) => {
+    const email = normalize(emailRaw);
+    return (
+      mongoUsers[email]?.company ||
+      clientLookupCSV[email]?.company ||
+      ""
+    );
+  };
+
+  const carrierForEmail = (emailRaw) => {
+    const email = normalize(emailRaw);
+    return (
+      mongoUsers[email]?.preferredCarrier ||
+      clientLookupCSV[email]?.carrier ||
+      ""
+    );
+  };
+
+  const insuranceForEmail = (emailRaw) => {
+    const email = normalize(emailRaw);
+    // Prefer Mongo boolean → "Sí"/"No"
+    if (mongoUsers[email]) {
+      return mongoUsers[email].insureShipment ? "Sí" : "No";
+    }
+    // Fallback CSV (string like "Sí"/"No" or empty)
+    return clientLookupCSV[email]?.insurance || "";
+  };
 
   return (
     <body className="body-BG-Gradient">
@@ -125,13 +229,10 @@ export default function ManageDelivery() {
 
       <div className="newQuotesScroll-Div">
         {orders.map((order) => {
-          const email = normalize(order.userEmail);
-          const displayName = clientLookup[email]?.name || order.userEmail;
-          const companyName = clientLookup[email]?.company || order.nombreEmpresa || "";
-          // aug18
-          const carrierName = clientLookup[email]?.carrier || "";
-          const insurancePref = clientLookup[email]?.insurance || "";
-          // aug18
+          const displayName = nameForEmail(order.userEmail);
+          const companyName = companyForEmail(order.userEmail);
+          const carrierName = carrierForEmail(order.userEmail);
+          const insurancePref = insuranceForEmail(order.userEmail);
 
           return (
             <div className="existingQuote-Div" key={order._id}>
@@ -143,8 +244,8 @@ export default function ManageDelivery() {
                   {String(order._id).slice(-5)}
                 </label>
                 <label className="orderQuick-Label">
-                  <b>Instrucción:</b><br></br> 
-                  Paquetería: {carrierName || "Sin preferencia especificada"}<br></br>
+                  <b>Instrucción:</b><br />
+                  Paquetería: {carrierName || "Sin preferencia especificada"}<br />
                   Mercancía Asegurada: {insurancePref || "Sin preferencia especificada"}
                 </label>
               </div>

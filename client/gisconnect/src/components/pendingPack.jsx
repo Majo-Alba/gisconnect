@@ -22,10 +22,67 @@ export default function PendingPack() {
   // ===== Client DB (Google Sheets CSV) =====
   const [csvData, setCsvData] = useState([]);
 
+  // ===== Mongo users (email -> { name, company }) =====
+  const [mongoUsers, setMongoUsers] = useState({}); // { [email]: { name, company } }
+
   useEffect(() => {
     fetchOrders();
     fetchCSVData();
   }, []);
+
+  useEffect(() => {
+    // After orders arrive, fetch Mongo user info for involved emails (deduped)
+    const emails = Array.from(
+      new Set(
+        (orders || [])
+          .map((o) => String(o.userEmail || "").trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    if (emails.length === 0) return;
+
+    // Only fetch missing ones
+    const missing = emails.filter((e) => !mongoUsers[e]);
+
+    if (missing.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const results = await Promise.allSettled(
+          missing.map((email) =>
+            axios.get(`${API}/users/by-email`, { params: { email } })
+          )
+        );
+
+        const next = { ...mongoUsers };
+        results.forEach((res, idx) => {
+          const email = missing[idx];
+          if (res.status === "fulfilled") {
+            const u = res.value?.data || {};
+            const nombre = (u.nombre || "").toString().trim();
+            const apellido = (u.apellido || "").toString().trim();
+            const empresa = (u.empresa || "").toString().trim();
+            const full = [nombre, apellido].filter(Boolean).join(" ");
+            next[email] = {
+              name: full || email,
+              company: empresa || "",
+            };
+          } else {
+            // keep absent; we’ll fall back to CSV/email
+          }
+        });
+
+        if (!cancelled) setMongoUsers(next);
+      } catch {
+        // ignore — fallbacks will handle display
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [orders]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchOrders = async () => {
     try {
@@ -69,8 +126,8 @@ export default function PendingPack() {
     return out;
   }
 
-  // Build lookup: email -> { name, company }
-  const emailToClient = useMemo(() => {
+  // Build lookup: email -> { name, company } from CSV (fallback)
+  const emailToClientCSV = useMemo(() => {
     const map = {};
     const norm = (s) => String(s || "").trim().toLowerCase();
     csvData.forEach((row) => {
@@ -84,20 +141,31 @@ export default function PendingPack() {
     return map;
   }, [csvData]);
 
+  // Prefer Mongo full name → CSV → email
   const displayForEmail = (email) => {
-    const norm = String(email || "").trim().toLowerCase();
-    const hit = emailToClient[norm];
-    return hit?.name || email || "";
+    const key = String(email || "").trim().toLowerCase();
+    const mongoHit = mongoUsers[key];
+    if (mongoHit?.name) return mongoHit.name;
+
+    const csvHit = emailToClientCSV[key];
+    if (csvHit?.name) return csvHit.name;
+
+    return email || "";
   };
 
-  // Optional (if you want to show it later)
+  // Optional company display helper (Mongo first → CSV)
   const companyForEmail = (email) => {
-    const norm = String(email || "").trim().toLowerCase();
-    const hit = emailToClient[norm];
-    return hit?.company || "";
+    const key = String(email || "").trim().toLowerCase();
+    const mongoHit = mongoUsers[key];
+    if (mongoHit?.company) return mongoHit.company;
+
+    const csvHit = emailToClientCSV[key];
+    if (csvHit?.company) return csvHit.company;
+
+    return "";
   };
 
-  // Homologated “final USD” extraction (same idea as NewOrders.jsx)
+  // Homologated “final USD” extraction (same idea as NewOrders.jsx) — kept in case you need it later
   const getFinalUSD = (order) => {
     const t = order?.totals;
     if (t && typeof t === "object" && !Array.isArray(t)) {
@@ -191,7 +259,8 @@ export default function PendingPack() {
       <ul>
         {filteredOrders.map((order) => {
           const displayName = displayForEmail(order.userEmail);
-          const finalUSD = getFinalUSD(order);
+          // const company = companyForEmail(order.userEmail); // available if you want to show it too
+          // const finalUSD = getFinalUSD(order); // available if you want to display totals
           return (
             <li key={order._id} onClick={() => goToPackDetails(order)}>
               <div className="orderQuickDetails-Div">
@@ -210,6 +279,7 @@ export default function PendingPack() {
                     : "Sin fecha"}
                 </label>
                 <label className="orderQuick-Label">{displayName}</label>
+                {/* <label className="orderQuick-Label">{company}</label> */}
               </div>
             </li>
           );
@@ -230,7 +300,7 @@ export default function PendingPack() {
             <label className="footerIcon-Name">PRINCIPAL</label>
           </div>
 
-          <div className="footerIcon-NameDiv" onClick={goToNewOrders}>
+        <div className="footerIcon-NameDiv" onClick={goToNewOrders}>
             <FontAwesomeIcon icon={faCartShopping} className="footerIcons" />
             <label className="footerIcon-Name">ORDENES</label>
           </div>

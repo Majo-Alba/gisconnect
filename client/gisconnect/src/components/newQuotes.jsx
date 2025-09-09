@@ -16,19 +16,13 @@ export default function NewQuotes() {
   const [loading, setLoading] = useState(true);
   const [filterRange, setFilterRange] = useState("Filtrar por..."); // Día | Semana | Mes | Bimestre | Trimestre | Semestre
 
+  // NEW: cache for "email -> nombre completo"
+  const [namesByEmail, setNamesByEmail] = useState({}); // { [emailLower]: "Nombre Apellido" }
+
   const goHomeLogo = () => navigate("/adminHome");
-    
-    function goToAdminHome() {
-        navigate("/adminHome")
-    }
-
-    function goToNewOrders() {
-        navigate("/newOrders")
-    }
-
-    function goToPackageReady() {
-        navigate("/deliverReady")
-    }
+  function goToAdminHome() { navigate("/adminHome"); }
+  function goToNewOrders() { navigate("/newOrders"); }
+  function goToPackageReady() { navigate("/deliverReady"); }
 
   // Fetch all pdfquotes from backend
   useEffect(() => {
@@ -36,8 +30,6 @@ export default function NewQuotes() {
     (async () => {
       try {
         const { data } = await axios.get(`${API}/pdfquotes`);
-        // Expecting an array of docs. Each doc should look like:
-        // { _id, filename, createdAt, metadata: { userEmail, totals: {...}, items: [...] }, fileUrl? }
         if (mounted) setQuotes(Array.isArray(data) ? data : []);
       } catch (e) {
         console.error("Failed to fetch pdfquotes:", e);
@@ -46,10 +38,51 @@ export default function NewQuotes() {
         if (mounted) setLoading(false);
       }
     })();
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; };
   }, []);
+
+  // NEW: When quotes arrive, fetch display names for each unique email (once)
+  useEffect(() => {
+    const emails = Array.from(
+      new Set(
+        (quotes || [])
+          .map((q) => (q.metadata?.userEmail || q.userEmail || "").trim().toLowerCase())
+          .filter((e) => e && e !== "sin correo")
+      )
+    );
+
+    // which emails are not cached yet?
+    const toFetch = emails.filter((e) => !(e in namesByEmail));
+    if (toFetch.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      const updates = {};
+      await Promise.all(
+        toFetch.map(async (email) => {
+          try {
+            const res = await axios.get(`${API}/users/by-email`, {
+              params: { email },
+            });
+            const u = res?.data || {};
+            const nombre = (u.nombre || "").toString().trim();
+            const apellido = (u.apellido || "").toString().trim();
+            const full = [nombre, apellido].filter(Boolean).join(" ");
+            if (full) updates[email] = full; // only set if we have at least one part
+          } catch (err) {
+            // 404 or other error → leave it unmapped; we'll fall back to raw email
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setNamesByEmail((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [quotes, namesByEmail]);
 
   // Helpers
   const asDate = (v) => (v ? new Date(v) : null);
@@ -63,23 +96,17 @@ export default function NewQuotes() {
     const d = new Date(now);
     switch (filterRange) {
       case "Día":
-        d.setDate(now.getDate() - 1);
-        return d;
+        d.setDate(now.getDate() - 1); return d;
       case "Semana":
-        d.setDate(now.getDate() - 7);
-        return d;
+        d.setDate(now.getDate() - 7); return d;
       case "Mes":
-        d.setMonth(now.getMonth() - 1);
-        return d;
+        d.setMonth(now.getMonth() - 1); return d;
       case "Bimestre":
-        d.setMonth(now.getMonth() - 2);
-        return d;
+        d.setMonth(now.getMonth() - 2); return d;
       case "Trimestre":
-        d.setMonth(now.getMonth() - 3);
-        return d;
+        d.setMonth(now.getMonth() - 3); return d;
       case "Semestre":
-        d.setMonth(now.getMonth() - 6);
-        return d;
+        d.setMonth(now.getMonth() - 6); return d;
       default:
         return null; // no filter
     }
@@ -141,15 +168,18 @@ export default function NewQuotes() {
 
         {!loading &&
           filteredQuotes.map((q) => {
-            const email = q.metadata?.userEmail || q.userEmail || "sin correo";
+            const emailRaw = q.metadata?.userEmail || q.userEmail || "sin correo";
+            const emailKey = emailRaw.trim().toLowerCase();
+            // Prefer "Nombre Apellido" if fetched; otherwise show email
+            const displayName = namesByEmail[emailKey] || emailRaw;
+
             const when =
               asDate(q.createdAt) || asDate(q.metadata?.createdAt) || new Date();
             const totals = q.metadata?.totals || {};
-            // prefer a final total in USD if available; otherwise fall back
             const amount =
-            typeof totals.allUSD === "number"
+              typeof totals.allUSD === "number"
                 ? `$${fmtMoney(totals.allUSD)} USD`
-                :typeof totals.totalUSD === "number"
+                : typeof totals.totalUSD === "number"
                 ? `$${fmtMoney(totals.totalUSD)} USD`
                 : typeof totals.totalMXN === "number"
                 ? `$${fmtMoney(totals.totalMXN)} MXN`
@@ -165,7 +195,7 @@ export default function NewQuotes() {
                 style={{ cursor: "pointer" }}
               >
                 <label className="summary-Label">
-                  {email}
+                  {displayName}
                   <br />
                   <span style={{ fontSize: 12, color: "#666" }}>
                     {when.toLocaleDateString("es-MX", {
@@ -185,32 +215,24 @@ export default function NewQuotes() {
           })}
       </div>
 
-                {/* FOOTER MENU */}
-                <div className="footerMenuDiv">
-                <div className="footerHolder">
-                    {/* HOME FOOTER DIV */}
-                    <div className="footerIcon-NameDiv" onClick={goToAdminHome}>
-                        <FontAwesomeIcon icon={faHouse} className="footerIcons"/>
-                        {/* <img className="footerIcons" src="./src/assets/images/Icono_Home.png" alt="Home Icon" width="25" height="25"/> */}
-                        <label className="footerIcon-Name">PRINCIPAL</label>
-                    </div>
-
-                    {/* USER FOOTER DIV */}
-                    <div className="footerIcon-NameDiv" onClick={goToNewOrders}>
-                        <FontAwesomeIcon icon={faCartShopping} className="footerIcons"/>
-                        {/* <img className="footerIcons" src="./src/assets/images/Icono_User.png" alt="User Icon" width="25" height="25"/> */}
-                        <label className="footerIcon-Name">ORDENES</label>
-                    </div>
-
-                    {/* SETTINGS FOOTER DIV */}
-                    <div className="footerIcon-NameDiv" onClick={goToPackageReady}>
-                        <FontAwesomeIcon icon={faCheckToSlot} className="footerIcons"/>
-                        {/* <img className="footerIcons" src="./src/assets/images/Icono_Settings.png" alt="Settings Icon" width="25" height="25"/> */}
-                        <label className="footerIcon-Name">ENTREGAR</label>
-                    </div>
-                </div>
-            </div>
-            {/* FOOTER MENU END */}
+      {/* FOOTER MENU */}
+      <div className="footerMenuDiv">
+        <div className="footerHolder">
+          <div className="footerIcon-NameDiv" onClick={goToAdminHome}>
+            <FontAwesomeIcon icon={faHouse} className="footerIcons"/>
+            <label className="footerIcon-Name">PRINCIPAL</label>
+          </div>
+          <div className="footerIcon-NameDiv" onClick={goToNewOrders}>
+            <FontAwesomeIcon icon={faCartShopping} className="footerIcons"/>
+            <label className="footerIcon-Name">ORDENES</label>
+          </div>
+          <div className="footerIcon-NameDiv" onClick={goToPackageReady}>
+            <FontAwesomeIcon icon={faCheckToSlot} className="footerIcons"/>
+            <label className="footerIcon-Name">ENTREGAR</label>
+          </div>
+        </div>
+      </div>
+      {/* FOOTER MENU END */}
     </body>
   );
 }

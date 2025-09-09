@@ -1,4 +1,3 @@
-// we might actually need to keep those legacy vars, since they are used in my jsPDF file. Rather than removing them, can you help me integrate them so that jspDDF doesnt get corrupted. Here is my full orderNow.jsx file
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";

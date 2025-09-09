@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -20,6 +20,10 @@ export default function ManageDeliveryDetails() {
   const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
+
+  // ===== NEW: Mongo user data (by email) =====
+  const [mongoUser, setMongoUser] = useState(null);
+  const [mongoError, setMongoError] = useState(null);
 
   function goToAdminHome() {
     navigate("/adminHome");
@@ -45,49 +49,55 @@ export default function ManageDeliveryDetails() {
     }
   };
 
-  // ===== Shipping preferences (Google Sheets via your backend) =====
-  const [preferences, setPreferences] = useState(null);
-  const [allPrefs, setAllPrefs] = useState([]);
-
+  // Fetch Mongo user once we know the order (need order.userEmail)
   useEffect(() => {
-    axios
-      .get(`${API}/shipping-preferences`)
-      .then((res) => {
-        const parsedData = parseCSV(res.data);
-        setAllPrefs(parsedData);
-      })
-      .catch((err) => console.error("Error fetching shipping preferences:", err));
-  }, []);
+    const email = (order?.userEmail || "").trim().toLowerCase();
+    if (!email) return;
 
-  useEffect(() => {
-    if (!order || allPrefs.length === 0) return;
-
-    const match = allPrefs.find(
-      (row) =>
-        row.CORREO_EMPRESA?.trim().toLowerCase() ===
-        order.userEmail?.trim().toLowerCase()
-    );
-    setPreferences(match || null);
-  }, [order, allPrefs]);
-
-  function parseCSV(csvText) {
-    const rows = csvText.split(/\r?\n/);
-    const headers = rows[0].split(",");
-    const data = [];
-    for (let i = 1; i < rows.length; i++) {
-      const rowData = rows[i].split(",");
-      const rowObject = {};
-      for (let j = 0; j < headers.length; j++) {
-        rowObject[headers[j]] = rowData[j];
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await axios.get(`${API}/users/by-email`, { params: { email } });
+        if (cancelled) return;
+        setMongoUser(res.data || null);
+        setMongoError(null);
+      } catch (e) {
+        if (cancelled) return;
+        console.error("GET /users/by-email error:", e);
+        setMongoUser(null);
+        setMongoError("No se pudo obtener el usuario de Mongo.");
       }
-      data.push(rowObject);
-    }
-    return data;
-  }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [order?.userEmail]);
 
-  const nombreCliente = preferences ? preferences.NOMBRE_APELLIDO : "Cargando...";
-  const preferenciaCarrier = preferences ? preferences.PAQUETERIA_ENVIO : "Cargando...";
-  const seguroEnvio = preferences ? preferences.SEGURO_ENVIO : "Cargando...";
+  // Convenience getters from Mongo
+  const displayName = useMemo(() => {
+    const nombre = (mongoUser?.nombre || "").trim();
+    const apellido = (mongoUser?.apellido || "").trim();
+    const full = [nombre, apellido].filter(Boolean).join(" ");
+    return full || order?.userEmail || "";
+  }, [mongoUser, order?.userEmail]);
+
+  const preferredCarrier = useMemo(() => {
+    return (
+      (mongoUser?.shippingPreferences?.preferredCarrier ||
+        mongoUser?.preferredCarrier ||
+        "")?.toString()
+        .trim()
+    );
+  }, [mongoUser]);
+
+  const insureShipmentLabel = useMemo(() => {
+    const val =
+      mongoUser?.shippingPreferences?.insureShipment ??
+      mongoUser?.insureShipment;
+    if (typeof val === "boolean") return val ? "Sí" : "No";
+    // Fallback if not boolean (undefined/null) → empty string
+    return "";
+  }, [mongoUser]);
 
   if (!order) return <p>Cargando pedido...</p>;
 
@@ -119,7 +129,7 @@ export default function ManageDeliveryDetails() {
   const bCP    = billIsArray ? (billRaw?.[9] || "") : (billRaw?.cpFiscal || "");
 
   // ===== SHIPPING LABEL =====
-  const generateShippingLabel = async (order, preferences) => {
+  const generateShippingLabel = async (order) => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -144,33 +154,25 @@ export default function ManageDeliveryDetails() {
     doc.text("Destinatario:", 10, 62);
     doc.setFont("helvetica", "normal");
 
-    // Prefer Google DB recipient name/address (preferences). If missing, fall back to order.shippingInfo object/array
-    const recName = preferences?.NOMBRE_APELLIDO || nombreCliente || "";
-    const recStreet =
-      preferences?.CALLE_ENVIO && preferences?.EXTERIOR_ENVIO
-        ? `${preferences.CALLE_ENVIO} #${preferences.EXTERIOR_ENVIO} Int. ${preferences.INTERIOR_ENVIO || ""}`
-        : `${sCalle} #${sExt} Int. ${sInt}`;
-    const recCol = preferences?.COLONIA_ENVIO || sCol;
-    const recCityState =
-      preferences?.CIUDAD_ENVIO && preferences?.ESTADO_ENVIO
-        ? `${preferences.CIUDAD_ENVIO}, ${preferences.ESTADO_ENVIO}`
-        : `${sCiudad}, ${sEstado}`;
-    const recCP = preferences?.CP_ENVIO || sCP;
-    const recTel = preferences?.TELEFONO_EMPRESA || "";
+    // Recipient name from Mongo; address from order shippingInfo
+    const recName = displayName || "";
+    const recStreet = `${sCalle} #${sExt}${sInt ? ` Int. ${sInt}` : ""}`;
+    const recCol = sCol;
+    const recCityState = `${sCiudad}${sCiudad && sEstado ? ", " : ""}${sEstado}`;
+    const recCP = sCP;
 
     doc.text(recName, 10, 67);
     doc.text(recStreet, 10, 72);
-    doc.text(`Col. ${recCol}`, 10, 77);
-    doc.text(recCityState, 10, 82);
-    doc.text(`C.P. ${recCP}`, 10, 87);
-    if (recTel) doc.text(`Tel. ${recTel}`, 10, 94);
+    if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
+    if (recCityState) doc.text(recCityState, 10, 82);
+    if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
 
     doc.setFont("helvetica", "bold");
     doc.text("Transportista:", 10, 104);
     doc.setFont("helvetica", "normal");
-    doc.text(`${preferenciaCarrier || ""}`, 10, 109);
+    doc.text(`${preferredCarrier || ""}`, 10, 109);
 
-    if (seguroEnvio === "Sí") {
+    if (insureShipmentLabel === "Sí") {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 0, 0);
       doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
@@ -225,16 +227,16 @@ export default function ManageDeliveryDetails() {
       <div className="newQuotesScroll-Div">
         {/* SHIPPING (object-based, with array fallback) */}
         <div className="shippingDetails-Div">
-          <label className="productDetail-Label">{nombreCliente}</label>
+          <label className="productDetail-Label">{displayName || order.userEmail}</label>
           <br />
           <label className="productDetail-Label">
-            {sCalle} #{sExt} Int. {sInt}
+            {sCalle} #{sExt} {sInt ? `Int. ${sInt}` : ""}
           </label>
-          <label className="productDetail-Label">Col. {sCol}</label>
+          {sCol && <label className="productDetail-Label">Col. {sCol}</label>}
           <label className="productDetail-Label">
-            {sCiudad}, {sEstado}
+            {sCiudad}{sCiudad && sEstado ? ", " : ""}{sEstado}
           </label>
-          <label className="productDetail-Label">C.P.: {sCP}</label>
+          {sCP && <label className="productDetail-Label">C.P.: {sCP}</label>}
           <br />
         </div>
 
@@ -243,14 +245,14 @@ export default function ManageDeliveryDetails() {
         </div>
 
         <div className="shippingDetails-Div">
-          <label className="shippingMethod-Label">Método de envío</label>
+          <label className="shippingMethod-Label">Paquetería</label>
           <label className="productDetail-Label">
-            {preferenciaCarrier || "No especificado"}
+            {preferredCarrier || "No especificado"}
           </label>
           <br />
-          <label className="shippingMethod-Label">Seguro Incluido</label>
+          <label className="shippingMethod-Label">Mercancía Asegurada</label>
           <label className="productDetail-Label">
-            {seguroEnvio || "No especificado"}
+            {insureShipmentLabel || "No especificado"}
           </label>
           <br />
         </div>
@@ -260,7 +262,7 @@ export default function ManageDeliveryDetails() {
           <button
             className="packDetails-Btn"
             type="button"
-            onClick={() => generateShippingLabel(order, preferences || {})}
+            onClick={() => generateShippingLabel(order)}
           >
             Generar Etiqueta
           </button>
