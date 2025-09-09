@@ -1,3 +1,4 @@
+// we might actually need to keep those legacy vars, since they are used in my jsPDF file. Rather than removing them, can you help me integrate them so that jspDDF doesnt get corrupted. Here is my full orderNow.jsx file
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -28,6 +29,10 @@ export default function OrderNow() {
 
   // Items now can carry: { product, presentation, packPresentation, amount, price, currency, priceUSD?, priceMXN?, weight }
   const items = location.state?.items || [];
+  // sep09
+  const preferredCurrency = (location.state?.preferredCurrency || "USD").toUpperCase(); // <-- NEW
+  // sep09
+  console.log(items)
 
   const [discountTotal, setDiscountTotal] = useState("");
   // replaced by boolean "wantsInvoice" but we keep this for backwards compatibility reading
@@ -383,46 +388,135 @@ export default function OrderNow() {
     cpFiscal,
   ]);
 
-  // ====== CURRENCY-AWARE TOTALS ======
-  const {
-    totalUSDNative,
-    totalMXNNative,
-    totalAllUSD,
-    totalAllMXN,
-  } = useMemo(() => {
-    let usdNative = 0;
-    let mxnNative = 0;
+  // -----> sep09
 
-    items.forEach((it) => {
-      const qty = Number(it.amount) || 0;
+  // ====== CURRENCY-AWARE TOTALS (refined for preferredCurrency) ======
+const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+const fmtMXN = (v) =>
+  `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
-      if ((it.currency || "USD").toUpperCase() === "MXN") {
-        const mxnUnit = Number(
-          it.priceMXN ?? (it.currency?.toUpperCase() === "MXN" ? it.price : null)
-        );
-        if (Number.isFinite(mxnUnit)) {
-          mxnNative += qty * mxnUnit;
-        }
-      } else {
-        const usdUnit = Number(it.priceUSD ?? it.price);
-        if (Number.isFinite(usdUnit)) {
-          usdNative += qty * usdUnit;
-        }
-      }
-    });
+const {
+  subtotalUSD,         // native USD (no VAT)
+  subtotalMXN,         // native MXN (no VAT)
+  isMixed,             // both USD and MXN present
+  hasUSD,
+  hasMXN,
+  payableUSD_only,     // subtotalUSD (+ IVA if wantsInvoice) — used when pref USD and only USD items
+  payableMXN_only,     // subtotalMXN (+ IVA if wantsInvoice) — used when pref USD and only MXN items OR as bucket
+  splitUSD_withIVA,    // USD bucket w/ IVA (pref USD & mixed)
+  splitMXN_withIVA,    // MXN bucket w/ IVA (pref USD & mixed)
+  grandMXN_withIVA,    // MXN grand total w/ IVA (pref MXN)
+  usdInMXN_detail,     // converted USD→MXN part (no IVA by itself; used in detail lines)
+} = useMemo(() => {
+  let usd = 0;
+  let mxn = 0;
 
-    const allUSD =
-      dofRate && Number.isFinite(dofRate) ? usdNative + mxnNative / dofRate : null;
-    const allMXN =
-      dofRate && Number.isFinite(dofRate) ? mxnNative + usdNative * dofRate : null;
+  items.forEach((it) => {
+    const qty = Number(it.amount) || 0;
+    const cur = (it.currency || "USD").toUpperCase();
+    if (cur === "MXN") {
+      const unit = Number(it.priceMXN ?? it.price);
+      if (Number.isFinite(unit)) mxn += qty * unit;
+    } else {
+      const unit = Number(it.priceUSD ?? it.price);
+      if (Number.isFinite(unit)) usd += qty * unit;
+    }
+  });
 
-    return {
-      totalUSDNative: usdNative,
-      totalMXNNative: mxnNative,
-      totalAllUSD: allUSD,
-      totalAllMXN: allMXN,
-    };
-  }, [items, dofRate]);
+  const mixed = usd > 0 && mxn > 0;
+  const _hasUSD = usd > 0;
+  const _hasMXN = mxn > 0;
+
+  // IVA helper
+  const addIVA = (v) => (wantsInvoice ? v * 1.16 : v);
+
+  // USD preference → split: USD bucket in USD, MXN bucket in MXN (no conversion)
+  const _splitUSD_withIVA = addIVA(usd);
+  const _splitMXN_withIVA = addIVA(mxn);
+
+  // MXN preference → convert USD to MXN and build one grand total (if we have dofRate)
+  let usdToMXN = null;
+  let _grandMXN_withIVA = null;
+  if (dofRate && Number.isFinite(dofRate)) {
+    usdToMXN = usd * Number(dofRate);
+    _grandMXN_withIVA = addIVA(mxn + usdToMXN);
+  }
+
+  return {
+    subtotalUSD: usd,
+    subtotalMXN: mxn,
+    isMixed: mixed,
+    hasUSD: _hasUSD,
+    hasMXN: _hasMXN,
+    payableUSD_only: addIVA(usd),
+    payableMXN_only: addIVA(mxn),
+    splitUSD_withIVA: _splitUSD_withIVA,
+    splitMXN_withIVA: _splitMXN_withIVA,
+    grandMXN_withIVA: _grandMXN_withIVA,
+    usdInMXN_detail: usdToMXN, // only meaningful when dofRate exists
+  };
+}, [items, dofRate, wantsInvoice]);
+
+// SEP09
+// ---- Legacy totals compatibility (for jsPDF & saved payload) ----
+// Map new fields to the legacy names the rest of the file expects.
+const totalUSDNative = subtotalUSD; // native USD (no FX)
+const totalMXNNative = subtotalMXN; // native MXN (no FX)
+
+const totalAllUSD =
+  Number.isFinite(dofRate) && dofRate
+    ? subtotalUSD + subtotalMXN / Number(dofRate)   // MXN → USD
+    : null;
+
+const totalAllMXN =
+  Number.isFinite(dofRate) && dofRate
+    ? subtotalMXN + subtotalUSD * Number(dofRate)   // USD → MXN
+    : null;
+
+// SEP09
+
+  // // ====== CURRENCY-AWARE TOTALS ======
+  // const {
+  //   totalUSDNative,
+  //   totalMXNNative,
+  //   totalAllUSD,
+  //   totalAllMXN,
+  // } = useMemo(() => {
+  //   let usdNative = 0;
+  //   let mxnNative = 0;
+
+  //   items.forEach((it) => {
+  //     const qty = Number(it.amount) || 0;
+
+  //     if ((it.currency || "USD").toUpperCase() === "MXN") {
+  //       const mxnUnit = Number(
+  //         it.priceMXN ?? (it.currency?.toUpperCase() === "MXN" ? it.price : null)
+  //       );
+  //       if (Number.isFinite(mxnUnit)) {
+  //         mxnNative += qty * mxnUnit;
+  //       }
+  //     } else {
+  //       const usdUnit = Number(it.priceUSD ?? it.price);
+  //       if (Number.isFinite(usdUnit)) {
+  //         usdNative += qty * usdUnit;
+  //       }
+  //     }
+  //   });
+
+  //   const allUSD =
+  //     dofRate && Number.isFinite(dofRate) ? usdNative + mxnNative / dofRate : null;
+  //   const allMXN =
+  //     dofRate && Number.isFinite(dofRate) ? mxnNative + usdNative * dofRate : null;
+
+  //   return {
+  //     totalUSDNative: usdNative,
+  //     totalMXNNative: mxnNative,
+  //     totalAllUSD: allUSD,
+  //     totalAllMXN: allMXN,
+  //   };
+  // }, [items, dofRate]);
+
+  // -----> Sep09
 
   const numericDiscount = Number(discountTotal || 0);
   const baseAllUSD = totalAllUSD ?? 0;
@@ -1075,7 +1169,195 @@ export default function OrderNow() {
             </ul>
 
             {/* Summary box */}
+            {/* ----> SEP09 */}
+            {/* Summary box (keeps your styling; content depends on preferredCurrency) */}
             <div className="orderNow-summaryDiv">
+              {(() => {
+                const rows = [
+                  { label: "Moneda de pago:", value: preferredCurrency, boldLabel: true },
+                ];
+
+                if (preferredCurrency === "USD") {
+                  if (hasUSD) {
+                    rows.push({
+                      label: "A pagar en USD (artículos en USD):",
+                      value: `${fmtUSD(splitUSD_withIVA)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+                      boldLabel: true,
+                    });
+                  }
+                  if (hasMXN) {
+                    rows.push({
+                      label: "A pagar en MXN (artículos en MXN):",
+                      value: `${fmtMXN(splitMXN_withIVA)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+                      boldLabel: true,
+                    });
+                  }
+                  // if (isMixed) {
+                  //   rows.push({
+                  //     label: "Tipo de Cambio (referencia):",
+                  //     value: dofRate
+                  //       ? `${dofRate.toFixed(4)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                  //       : fxError
+                  //       ? "—"
+                  //       : "Cargando...",
+                  //     boldLabel: true,
+                  //   });
+                  // }
+                } else {
+                  // Preferred MXN
+                  rows.push({
+                    label: "Total a pagar en MXN:",
+                    value:
+                      grandMXN_withIVA != null
+                        ? `${fmtMXN(grandMXN_withIVA)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`
+                        : "—",
+                    boldLabel: true,
+                  });
+
+                  if (isMixed || hasUSD) {
+                    rows.push({
+                      label: "Detalle:",
+                      value:
+                        dofRate && usdInMXN_detail != null
+                          ? `USD (${fmtUSD(subtotalUSD)}) × ${Number(dofRate).toFixed(4)} = ${fmtMXN(usdInMXN_detail)}; + MXN nativo ${fmtMXN(subtotalMXN)}`
+                          : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.",
+                    });
+                    rows.push({
+                      label: "Tipo de cambio:",
+                      value: dofRate
+                        ? `${dofRate.toFixed(4)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                        : fxError
+                        ? "—"
+                        : "Cargando...",
+                    });
+                  }
+                }
+
+                return (
+                  <>
+                    {rows.map((r, i) => (
+                      <div className="summary-pair" key={i}>
+                        <div className={`summary-label ${r.boldLabel ? "bold" : ""}`}>{r.label}</div>
+                        <div className="summary-value">{r.value}</div>
+                      </div>
+                    ))}
+
+                    {isMixed && (
+                      <div className="summary-note">
+                        En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+
+            {/* ----> sep09 2 */}
+            {/* <div className="orderNow-summaryDiv">
+              <div className="orderSummary-subDivs">
+                <label className="orderNowSummary-Label"><b>Moneda de pago:</b></label>
+
+                {preferredCurrency === "USD" ? (
+                  <>
+                    {hasUSD && (
+                      <label className="orderNowSummary-Label"><b>A pagar en USD (artículos en USD):</b></label>
+                    )}
+                    {hasMXN && (
+                      <label className="orderNowSummary-Label"><b>A pagar en MXN (artículos en MXN):</b></label>
+                    )}
+                    {isMixed && (
+                      <label className="orderNowSummary-Label"><b>Tipo de Cambio (referencia):</b></label>
+                    )}
+                    {isMixed && (
+                      <label className="orderNowSummary-Label"><b>IMPORTANTE:</b></label>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <label className="orderNowSummary-Label"><b>Total a pagar en MXN:</b></label>
+                    {(isMixed || hasUSD) && (
+                      <label className="orderNowSummary-Label"><b>Detalle:</b></label>
+                    )}
+                    {(isMixed || hasUSD) && (
+                      <label className="orderNowSummary-Label"><b>Tipo de cambio:</b></label>
+                    )}
+                    {isMixed && (
+                      <label className="orderNowSummary-Label"><b>IMPORTANTE:</b></label>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="orderSummary-subDivs">
+                <label className="orderNowSummary-Label">{preferredCurrency}</label>
+
+                {preferredCurrency === "USD" ? (
+                  <>
+                    {hasUSD && (
+                      <label className="orderNowSummary-Label">
+                        {fmtUSD(splitUSD_withIVA)}
+                        {wantsInvoice ? " (incluye IVA 16%)" : ""}
+                      </label>
+                    )}
+                    {hasMXN && (
+                      <label className="orderNowSummary-Label">
+                        {fmtMXN(splitMXN_withIVA)}
+                        {wantsInvoice ? " (incluye IVA 16%)" : ""}
+                      </label>
+                    )}
+                    {isMixed && (
+                      <label className="orderNowSummary-Label">
+                        {dofRate
+                          ? `${dofRate.toFixed(4)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                          : fxError
+                          ? "—"
+                          : "Cargando..."}
+                      </label>
+                    )}
+                    {isMixed && (
+                      <label className="orderNowSummary-Label" style={{ color: "#b00", fontWeight: 600 }}>
+                        En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.
+                      </label>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <label className="orderNowSummary-Label">
+                      {grandMXN_withIVA != null
+                        ? `${fmtMXN(grandMXN_withIVA)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`
+                        : "—"}
+                    </label>
+
+                    {(isMixed || hasUSD) && (
+                      <label className="orderNowSummary-Label" style={{ color: "#777", fontSize: 13 }}>
+                        {dofRate && usdInMXN_detail != null
+                          ? `USD (${fmtUSD(subtotalUSD)}) × ${Number(dofRate).toFixed(4)} = ${fmtMXN(usdInMXN_detail)}; + MXN nativo ${fmtMXN(subtotalMXN)}`
+                          : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN."}
+                      </label>
+                    )}
+
+                    {(isMixed || hasUSD) && (
+                      <label className="orderNowSummary-Label">
+                        {dofRate
+                          ? `${dofRate.toFixed(4)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                          : fxError
+                          ? "—"
+                          : "Cargando..."}
+                      </label>
+                    )}
+
+                    {isMixed && (
+                      <label className="orderNowSummary-Label" style={{ color: "#b00", fontWeight: 600 }}>
+                        En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.
+                      </label>
+                    )}
+                  </>
+                )}
+              </div>
+            </div> */}
+            {/* ------> sep09 2 */}
+
+            {/* <div className="orderNow-summaryDiv">
               <div className="orderSummary-subDivs">
                 <label className="orderNowSummary-Label">
                   <b>Total USD (nativo):</b>
@@ -1141,7 +1423,8 @@ export default function OrderNow() {
                   </label>
                 )}
               </div>
-            </div>
+            </div> */}
+            {/* ----> SEP09 */}
           </div>
 
           {/* Payment option / Credit */}

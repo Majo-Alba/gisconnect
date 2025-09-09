@@ -1956,22 +1956,69 @@ input:checked + .quoterSlider:before {
   /* color: #3A7426; */
 }
 
-.orderNow-summaryDiv{
-  width: 80%;
+/* sep09 */
+.orderNow-summaryDiv {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  padding: 12px 16px;
+  background: #f1f1f1;     /* keep your summary box look */
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+/* Each label/value pair */
+.summary-pair {
+  display: grid;
+  grid-template-rows: min-content min-content; /* label row then value row */
+  row-gap: 4px;
+  min-width: 0; /* allow wrapping */
+}
+
+/* Label + value styling */
+.summary-label {
+  font-size: 14px;
+  color: #222;
+  line-height: 1.25;
+}
+.summary-label.bold { font-weight: 700; }
+
+.summary-value {
+  font-size: 14px;
+  color: #000;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere; /* long figures/amounts won’t overflow */
+}
+
+/* Full-width warning line */
+.summary-note {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  font-weight: 600;
+  color: #b00;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+/* Optional: tight screens – nothing to change; it already stacks */
+@media (max-width: 640px) {
+  .orderNow-summaryDiv { padding: 10px 12px; }
+}
+/* .orderNow-summaryDiv{
+  width: 90%;
   padding: 10px 15px;
 
   box-sizing: border-box;
 
   display: grid;
-  margin-left: 25%;
-  /* margin-left: auto;
-  margin-right: auto; */
+  margin-left: 2%;
   margin-top: 7%;
 
   grid-template-columns: 45% 55%;
-
-  
-}
+} */
+ /* sep09 */
 
 /* ORDER DETAILS */
 .headerEditIcon-Div{

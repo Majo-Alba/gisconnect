@@ -285,6 +285,7 @@ const handleAddItem = () => {
         price: unitPrice,
         currency: cur,      // <-- normalized
         weight: Number(baseRow.PESO_PRODUCTO || 0),
+        preferredCurrency,
       },
     ]);
 
@@ -1045,10 +1046,10 @@ if (mxnItems.length) {
   };
   
   const submitOrder = () => {
-    // pass items with currency to OrderNow
+     // pass items + preferredCurrency to OrderNow
     localStorage.setItem("discountTotal", "0");
     localStorage.setItem("billRequest", JSON.stringify(isActive));
-    navigate("/orderNow", { state: { items } });
+    navigate("/orderNow", { state: { items, preferredCurrency } }); // <-- add this
   };
 
   return (
@@ -1331,42 +1332,6 @@ if (mxnItems.length) {
             </div>
           );
         })()}
-
-        {/* <label className="newUserData-Label">Resumen financiero</label>
-
-        <div className="quoter-summaryDiv">
-          <label className="summary-Label">
-            <b>Total USD (solo artículos en USD):</b> {fmtUSD(totalUSD)}
-          </label>
-          <label className="summary-Label">
-            <b>Total MXN (solo artículos en MXN):</b> {fmtMXN(totalMXN)}
-          </label>
-
-          <label className="summaryTotal-Label">
-            <b>Total USD:</b>{" "}
-            {fxError
-              ? "—"
-              : (allUSDWithIVA != null
-                  ? fmtUSD(allUSDWithIVA)
-                  : (allUSD != null ? fmtUSD(allUSD) : "Cargando tipo de cambio..."))}
-          </label>
-          <label className="summaryTotal-Label">
-            <b>Total MXN:</b>{" "}
-            {fxError
-              ? "—"
-              : (allMXNWithIVA != null
-                  ? fmtMXN(allMXNWithIVA)
-                  : (allMXN != null ? fmtMXN(allMXN) : "Cargando tipo de cambio..."))}
-          </label>
-
-          <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
-            {fxError
-              ? fxError
-              : dofRate
-              ? `Tipo de cambio DOF ${dofDate}: $${dofRate.toFixed(2)} MXN/USD`
-              : "Cargando tipo de cambio DOF..."}
-          </div>
-        </div> */}
         {/* SEP05 */}
 
         <div className="newOrderActionButtons-Div">

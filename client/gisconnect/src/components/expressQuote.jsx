@@ -1045,10 +1045,10 @@ if (mxnItems.length) {
   };
   
   const submitOrder = () => {
-    // pass items with currency to OrderNow
+    // pass items + preferredCurrency to OrderNow
     localStorage.setItem("discountTotal", "0");
     localStorage.setItem("billRequest", JSON.stringify(isActive));
-    navigate("/orderNow", { state: { items } });
+    navigate("/orderNow", { state: { items, preferredCurrency } }); // <-- add this
   };
 
   return (
