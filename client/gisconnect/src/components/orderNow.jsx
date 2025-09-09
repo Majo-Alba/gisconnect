@@ -1218,13 +1218,13 @@ const totalAllMXN =
                       label: "Detalle:",
                       value:
                         dofRate && usdInMXN_detail != null
-                          ? `USD (${fmtUSD(subtotalUSD)}) × ${Number(dofRate).toFixed(4)} = ${fmtMXN(usdInMXN_detail)}; + MXN nativo ${fmtMXN(subtotalMXN)}`
+                          ? `USD (${fmtUSD(subtotalUSD)}) × ${Number(dofRate).toFixed(2)} = ${fmtMXN(usdInMXN_detail)}; + MXN nativo ${fmtMXN(subtotalMXN)}`
                           : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.",
                     });
                     rows.push({
                       label: "Tipo de cambio:",
                       value: dofRate
-                        ? `${dofRate.toFixed(4)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                        ? `${dofRate.toFixed(2)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
                         : fxError
                         ? "—"
                         : "Cargando...",

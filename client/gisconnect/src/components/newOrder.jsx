@@ -596,8 +596,8 @@ if (mxnItems.length) {
       if (isMixed || hasUSD) {
         const det = rate
           ? (isMixed
-              ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
-              : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}.`)
+              ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
+              : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}.`)
           : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
         const detLines = doc.splitTextToSize(det, textMaxW);
         y += detLines.length * 5 + 3;
@@ -695,13 +695,13 @@ if (mxnItems.length) {
         // (3) Detalle
         doc.setFontSize(9);
         doc.setTextColor(120,120,120);
-        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
         const detLines = doc.splitTextToSize(det, textMaxW);
         doc.text(detLines, boxX + boxPad, y + 3);
         y += detLines.length * 5 + 3;
 
         // (4) Tipo de cambio
-        doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
+        doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
         doc.setTextColor(0,0,0);
         doc.setFontSize(10);
         y += 5;
@@ -724,13 +724,13 @@ if (mxnItems.length) {
         // (3) Detalle
         doc.setFontSize(9);
         doc.setTextColor(120,120,120);
-        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(4)} = ${fmtMXN(base)}.`;
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(base)}.`;
         const detLines = doc.splitTextToSize(det, textMaxW);
         doc.text(detLines, boxX + boxPad, y);
         y += detLines.length * 5 + 3;
 
         // (4) Tipo de cambio
-        doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
+        doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
         doc.setTextColor(0,0,0);
         doc.setFontSize(10);
         y += 5;
@@ -779,7 +779,7 @@ if (mxnItems.length) {
     if (isMixed && rate) {
       doc.setFontSize(9);
       doc.setTextColor(120,120,120);
-      doc.text(`Tipo de cambio DOF: ${rate.toFixed(4)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
+      doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
       doc.setTextColor(0,0,0);
       doc.setFontSize(10);
       y += 5;
