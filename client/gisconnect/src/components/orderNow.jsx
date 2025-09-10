@@ -555,441 +555,1084 @@ const totalAllMXN =
     });
 
   // ===== PDF + Save order (updated with wantsInvoice + shippingPrefs + conditional bank accounts) =====
-  const handleDownloadAndSave = async () => {
-    const doc = new jsPDF();
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const today = new Date();
+// ===== PDF + Save order (USD first, then MXN, then Resumen Financiero; keeps factura rules) =====
+const handleDownloadAndSave = async () => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const today = new Date();
 
-    doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+  // Background
+  doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Fecha de Elaboración: ${today.toLocaleDateString("es-MX")}`, 195, 15, null, null, "right");
+  // Header
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Fecha de Elaboración: ${today.toLocaleDateString("es-MX")}`, 195, 15, null, null, "right");
 
-    doc.setLineWidth(0.1);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(10, 45, 200, 45);
+  // Separator
+  doc.setLineWidth(0.1);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 45, 200, 45);
 
-    // Cliente - Envío
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Información de Envío", 13, 51);
+  // ========= Cliente - Envío =========
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Información de Envío", 13, 51);
 
-    doc.setFontSize(10);
-    doc.addImage(iconBuilding, 13, 53, 5, 5);
-    doc.text(`${nombreEmpresa || ""}`, 19, 57);
+  doc.setFontSize(10);
+  doc.addImage(iconBuilding, 13, 53, 5, 5);
+  doc.text(`${nombreEmpresa || ""}`, 19, 57);
 
-    doc.addImage(iconContact, 13.5, 59.5, 4, 4);
-    doc.text(`${nombreEncargado || ""}`, 19, 63);
+  doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+  doc.text(`${nombreEncargado || ""}`, 19, 63);
 
-    doc.addImage(iconLocation, 13.7, 65, 3, 4);
+  doc.addImage(iconLocation, 13.7, 65, 3, 4);
+  doc.text(
+    `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
+    19, 68
+  );
+  doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
+  doc.text(
+    `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
+    19, 76
+  );
+
+  doc.addImage(iconPhone, 13.7, 78, 3, 4);
+  doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
+
+  doc.addImage(iconEmail, 13.7, 84, 4, 3);
+  doc.text(`${correoEmpresa || ""}`, 19, 87);
+
+  // ========= Información Fiscal (solo si factura) =========
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text("Información Fiscal", 100, 51);
+
+  doc.setFontSize(10);
+  if (wantsInvoice) {
+    doc.text(`Razón Social: ${currentBilling.razonSocial || ""}`, 106, 57);
+    doc.text(`RFC: ${currentBilling.rfcEmpresa || ""}`, 106, 63);
+
+    doc.addImage(iconEmail, 100, 65, 4, 3);
+    doc.text(`${currentBilling.correoFiscal || ""}`, 106, 68);
+
+    doc.addImage(iconLocation, 100.5, 70, 3, 4);
     doc.text(
-      `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
-      19, 68
+      `${(currentBilling.calleFiscal || "")}  # ${(currentBilling.exteriorFiscal || "")}  Int. ${(currentBilling.interiorFiscal || "")}`,
+      106, 73
     );
-    doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
+    doc.text(`Col. ${currentBilling.coloniaFiscal || ""}`, 106, 77);
     doc.text(
-      `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
-      19, 76
+      `${(currentBilling.ciudadFiscal || "")}, ${(currentBilling.estadoFiscal || "")}. C.P. ${(currentBilling.cpFiscal || "")}`,
+      106, 81
     );
+  } else {
+    doc.setFont("helvetica", "italic");
+    doc.text("Sin factura.", 106, 57);
+    doc.setFont("helvetica", "normal");
+  }
 
-    doc.addImage(iconPhone, 13.7, 78, 3, 4);
-    doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
+  // Separator
+  doc.setLineWidth(0.1);
+  doc.setDrawColor(200, 200, 200);
+  doc.line(10, 92, 200, 92);
 
-    doc.addImage(iconEmail, 13.7, 84, 4, 3);
-    doc.text(`${correoEmpresa || ""}`, 19, 87);
+  // ========= Items por divisa =========
 
-    // Billing (only render details if wantsInvoice)
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "bold");
-    doc.text("Información Fiscal", 100, 51);
+  // Helpers de moneda
+  const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+  const isMXN = (it) => normCur(it.currency) === "MXN";
+  const isUSD = (it) => normCur(it.currency) === "USD";
 
-    doc.setFontSize(10);
-    if (wantsInvoice) {
-      doc.text(`Razón Social: ${currentBilling.razonSocial || ""}`, 106, 57);
-      doc.text(`RFC: ${currentBilling.rfcEmpresa || ""}`, 106, 63);
+  const usdItems = (items || []).filter(isUSD);
+  const mxnItems = (items || []).filter(isMXN);
 
-      doc.addImage(iconEmail, 100, 65, 4, 3);
-      doc.text(`${currentBilling.correoFiscal || ""}`, 106, 68);
-
-      doc.addImage(iconLocation, 100.5, 70, 3, 4);
-      doc.text(
-        `${(currentBilling.calleFiscal || "")}  # ${(currentBilling.exteriorFiscal || "")}  Int. ${(currentBilling.interiorFiscal || "")}`,
-        106, 73
-      );
-      doc.text(`Col. ${currentBilling.coloniaFiscal || ""}`, 106, 77);
-      doc.text(
-        `${(currentBilling.ciudadFiscal || "")}, ${(currentBilling.estadoFiscal || "")}. C.P. ${(currentBilling.cpFiscal || "")}`,
-        106, 81
-      );
-    } else {
-      doc.setFont("helvetica", "italic");
-      doc.text("Sin factura.", 106, 57);
-      doc.setFont("helvetica", "normal");
-    }
-
-    // Separator
-    doc.setLineWidth(0.1);
-    doc.setDrawColor(200, 200, 200);
-    doc.line(10, 92, 200, 92);
-
-    // Items table
-    const tableData = items.map((it) => {
-      const cur = (it.currency || "USD").toUpperCase();
-      const unit =
-        cur === "MXN"
-          ? `$${Number(it.priceMXN ?? it.price).toFixed(2)} MXN`
-          : `$${Number(it.priceUSD ?? it.price).toFixed(2)} USD`;
-      const line =
-        cur === "MXN"
-          ? `$${(Number(it.amount) * Number(it.priceMXN ?? it.price)).toFixed(2)} MXN`
-          : `$${(Number(it.amount) * Number(it.priceUSD ?? it.price)).toFixed(2)} USD`;
+  const makeBodyUSD = (arr) =>
+    arr.map((it) => {
+      const qty = Number(it.amount) || 0;
+      const unit = Number(it.priceUSD ?? it.price) || 0;
       const pack = it.packPresentation ? ` — ${it.packPresentation}` : "";
-      return [it.product, `${it.presentation}${pack}`, it.amount, unit, line];
+      return [
+        it.product,
+        `${it.presentation || ""}${pack}`,
+        String(qty),
+        `$${unit.toFixed(2)} USD`,
+        `$${(qty * unit).toFixed(2)} USD`,
+      ];
     });
 
+  const makeBodyMXN = (arr) =>
+    arr.map((it) => {
+      const qty = Number(it.amount) || 0;
+      const unit = Number(it.priceMXN ?? it.price) || 0;
+      const pack = it.packPresentation ? ` — ${it.packPresentation}` : "";
+      return [
+        it.product,
+        `${it.presentation || ""}${pack}`,
+        String(qty),
+        `$${unit.toFixed(2)} MXN`,
+        `$${(qty * unit).toFixed(2)} MXN`,
+      ];
+    });
+
+  const sectionTitle = (text, y) => {
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(24, 144, 69);
+    doc.text(text, 13, y);
+    doc.setTextColor(0, 0, 0);
+  };
+
+  let cursorY = 100;
+
+  // --- USD primero ---
+  if (usdItems.length) {
+    sectionTitle("Artículos en USD", cursorY - 5);
     autoTable(doc, {
       head: [["Producto", "Presentación", "Cantidad", "Precio Unitario", "Total"]],
-      body: tableData,
-      startY: 100,
+      body: makeBodyUSD(usdItems),
+      startY: cursorY,
       headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+      styles: { fontSize: 9 },
+      margin: { left: 10, right: 10 },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          // Si hay salto de página, vuelve a dibujar fondo
+          doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+        }
+      },
     });
 
-    let extraY = doc.lastAutoTable.finalY + 12;
+    cursorY = doc.lastAutoTable.finalY + 6;
 
-    // Totals box
-    const boxX = 141;
-    const boxY = extraY - 8;
-    const boxWidth = 55;
-    const boxHeight = 30;
-    const radius = 4;
-
-    if (doc.roundedRect) {
-      doc.setFillColor(207, 242, 137);
-      doc.roundedRect(boxX, boxY, boxWidth, boxHeight, radius, radius, "F");
-    } else {
-      doc.setFillColor(207, 242, 137);
-      doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
-    }
-
-    const y0 = extraY;
-    doc.text(
-      `Total en USD: ${totalAllUSD !== null ? `$${totalAllUSD.toFixed(2)}` : "—"}`,
-      146,
-      y0
+    // Subtotal USD
+    const subtotalUSD = usdItems.reduce(
+      (s, it) => s + (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0),
+      0
     );
-    doc.text(
-      `Total en MXN: ${
-        totalAllMXN !== null
-          ? `$${totalAllMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-          : "—"
-      }`,
-      146,
-      y0 + 5
-    );
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "italic");
-    doc.text(
-      dofRate ? `${dofRate.toFixed(2)} MXN/USD \n (DOF ${dofDate})` : "Tipo de cambio no disponible",
-      146,
-      y0 + 12
-    );
-
-    // Payment option box
-    const creditBoxX = 10;
-    const creditBoxY = y0 + 30;
-    const creditBoxWidth = 190;
-    const creditBoxHeight = 20;
-    const creditBoxRadius = 4;
-
-    if (doc.roundedRect) {
-      doc.setFillColor(241, 241, 241);
-      doc.roundedRect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, creditBoxRadius, creditBoxRadius, "F");
-    } else {
-      doc.setFillColor(241, 241, 241);
-      doc.rect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, "F");
-    }
-
     doc.setFontSize(11);
     doc.setFont("helvetica", "bold");
-    doc.text(`Opción de Pago: ${paymentOption}` , 15, y0 + 36);
-    if (paymentOption === "Crédito") {
-      doc.text(`Plazo de Crédito: ${creditDays} Días` , 15, y0 + 41);
-      doc.text(`Vencimiento: ${addDays(new Date(), creditDays).toLocaleDateString('es-MX')}` , 15, y0 + 46);
-    }
+    doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 140, cursorY);
+    doc.setFont("helvetica", "normal");
+    cursorY += 12;
+  }
 
-    // Payment accounts page (conditional by wantsInvoice)
-    doc.addPage();
-    doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
-
-    let y = 35;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(24, 144, 69);
-    doc.text(`Cuentas para realizar pago:`, 13, y + 5);
-
-    const payBoxX = 10;
-    const payBoxY = y + 10;
-    const payBoxWidth = 190;
-    const payBoxHeight = 135;
-    const payBoxRadius = 4;
-
-    if (doc.roundedRect) {
-      doc.setFillColor(241, 241, 241);
-      doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
-    } else {
-      doc.setFillColor(241, 241, 241);
-      doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
-    }
-
-    doc.setFontSize(11);
-    doc.setTextColor(0, 0, 0);
-
-    if (wantsInvoice) {
-      // ===== FACTURA: mostrar cuentas de empresa (MXN + USD) =====
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
-
-      // // hey chatgpt, I'd like for each bank account to be placed in its own mini-box within the main bank account box. Can you do a direct edit
-      // --- Mini-box helper (inside the main pay box) ---
-      const miniBox = (title, lines, startY) => {
-        const x = 12;               // a bit inside the main gray box (10…200)
-        // const w = 186;              // keep it visually inset
-        const w = 120;              // keep it visually inset
-        const pad = 4;
-        const lineH = 5;
-
-        // compute height
-        const titleH = title ? lineH + 1 : 0;
-        const h = pad * 2 + titleH + lines.length * lineH;
-
-        // box
-        if (doc.roundedRect) {
-          doc.setFillColor(255, 255, 255);
-          doc.roundedRect(x, startY, w, h, 3, 3, "F");
-        } else {
-          doc.setFillColor(255, 255, 255);
-          doc.rect(x, startY, w, h, "F");
+  // --- MXN después ---
+  if (mxnItems.length) {
+    sectionTitle("Artículos en MXN", cursorY - 5);
+    autoTable(doc, {
+      head: [["Producto", "Presentación", "Cantidad", "Precio Unitario", "Total"]],
+      body: makeBodyMXN(mxnItems),
+      startY: cursorY,
+      headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+      styles: { fontSize: 9 },
+      margin: { left: 10, right: 10 },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
         }
-
-        // content
-        let ty = startY + pad + (title ? lineH : 0);
-
-        if (title) {
-          doc.setFont("helvetica", "bold");
-          doc.setFontSize(11);
-          doc.text(title, x + pad, startY + pad + 3.5);
-        }
-
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(10);
-        lines.forEach((t) => {
-          doc.text(t, x + pad, ty + 2);
-          ty += lineH;
-        });
-
-        return startY + h; // returns bottom Y
-      };
-
-      // ===== MXN (Empresa) =====
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO:`, 15, y + 24);
-
-      let cursorY = y + 28;
-
-      // Mini-box: BBVA (MXN)
-      cursorY = miniBox(
-        "BANCO: BBVA",
-        [
-          "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-          "NO. DE CUENTA: 010 115 1207",
-          "CLABE: 012 320 001 011 512 076",
-        ],
-        cursorY
-      );
-      cursorY += 6; // spacing between mini-boxes/sections
-
-      // ===== USD (Empresa) =====
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, cursorY + 12);
-      doc.setFontSize(11);
-      doc.setFont("helvetica", "bold");
-      doc.text(`TRANSFERENCIA:`, 15, cursorY + 19);
-
-      cursorY += 24;
-
-      // Mini-box: MONEX (USD)
-      cursorY = miniBox(
-        "BANCO: GRUPO FINANCIERO MONEX",
-        [
-          "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-          "CLABE: 112 180 000 028 258 341",
-        ],
-        cursorY
-      );
-      cursorY += 6;
-
-      // Mini-box: INVEX (USD)
-      cursorY = miniBox(
-        "BANCO: BANCO INVEX, S.A.",
-        [
-          "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-          "CLABE: 059 180 030 020 014 234",
-        ],
-        cursorY
-      );
-      // doc.setFontSize(11);
-      // doc.setFont("helvetica", "bold");
-      // doc.text(`TRANSFERENCIA:`, 15, y + 24);
-      // // bank 1 box start
-      // doc.text(`BANCO: BBVA`, 15, y + 31);
-
-      // doc.setFont("helvetica", "normal");
-      // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 37);
-      // doc.text(`NO. DE CUENTA: 010 115 1207`, 15, y + 42);
-      // doc.text(`CLABE: 012 320 001 011 512 076`, 15, y + 47);
-      // // bank 1 box end
-
-      // doc.setFont("helvetica", "bold");
-      // doc.setFontSize(13);
-      // doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, y + 60);
-      // // doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, y + 105);
-
-      // doc.setFontSize(11);
-      // doc.text(`NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV`, 15, y + 67);
-     
-      // // bank 2 box start
-      // doc.setFont("helvetica", "normal");
-      // doc.text(`BANCO: GRUPO FINANCIERO MONEX`, 15, y + 73);
-      // doc.text(`CLABE: 112 180 000 028 258 341`, 15, y + 78);
-      // // bank 2 box end
-
-      // // bank 3 box start
-      // doc.text(`BANCO: BANCO INVEX, S.A.`, 15, y + 83);
-      // doc.text(`CLABE: 059 180 030 020 014 234`, 120, y + 88);
-      // // bank 3 box end
-
-    } else {
-      // ===== SIN FACTURA: mostrar cuenta personal (MXN) =====
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 17);
-
-      doc.setFontSize(11);
-      doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 24);
-      doc.text(`BANCO: BBVA`, 15, y + 31);
-
-      doc.setFont("helvetica", "normal");
-      doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 36);
-      // doc.text(`BANCO: BBVA`, 15, y + 36);
-      doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 41);
-      doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 46);
-      doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 51);
-    }
-
-    // Build payload
-    const userEmail = userCredentials?.correo;
-    const creditDue =
-      paymentOption === "Crédito" && creditAllowed
-        ? addDays(new Date(), creditDays).toISOString()
-        : null;
-
-    const orderInfo = {
-      userEmail,
-      items,
-      totals: {
-        totalUSDNative: Number(totalUSDNative.toFixed(2)),
-        totalMXNNative: Number(totalMXNNative.toFixed(2)),
-        totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
-        totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
-        dofRate,
-        dofDate,
-        discountUSD: Number(discountTotal || 0),
-        vatUSD: Number(vatUSD.toFixed(2)),
-        finalAllUSD: Number(finalAllUSD.toFixed(2)),
-        vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
-        finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
       },
-      requestBill: !!wantsInvoice, // ⬅️ boolean
-      shippingInfo: { ...currentShipping },
-      billingInfo: wantsInvoice ? { ...currentBilling } : {}, // if no invoice, billing is irrelevant
-      shippingPreferences: { ...shippingPrefs }, // ⬅️ NEW: include for traceability
-      orderDate: new Date().toISOString(),
-      orderStatus: "Pedido Realizado",
-      paymentOption,
-      creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
-      creditDueDate: creditDue,
-    };
+    });
 
-    try {
-      // Upload
-      const pdfBlob = doc.output("blob");
-      const form = new FormData();
-      form.append("order", JSON.stringify(orderInfo));
-      form.append("pdf", pdfBlob, "order_summary.pdf");
+    cursorY = doc.lastAutoTable.finalY + 6;
 
-      let createdOrderId = null;
-      try {
-        const ac = new AbortController();
-        const timer = setTimeout(() => ac.abort("timeout"), 20000);
-        const res = await fetch(`${API}/orderDets`, {
-          method: "POST",
-          body: form,
-          mode: "cors",
-          cache: "no-store",
-          credentials: "omit",
-          signal: ac.signal,
-        });
-        clearTimeout(timer);
-        if (!res.ok) {
-          const text = await res.text().catch(() => "");
-          throw new Error(text || `HTTP ${res.status}`);
-        }
-        const data = await res.json().catch(() => ({}));
-        createdOrderId =
-          data?.id || data?.data?._id || data?._id || data?.order?._id || null;
-      } catch (fetchErr) {
-        const { data } = await axios.post(`${API}/orderDets`, form, {
-          withCredentials: false,
-          timeout: 20000,
-        });
-        createdOrderId =
-          data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+    // Subtotal MXN
+    const subtotalMXN = mxnItems.reduce(
+      (s, it) => s + (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0),
+      0
+    );
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(
+      `Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`,
+      140,
+      cursorY
+    );
+    doc.setFont("helvetica", "normal");
+    cursorY += 12;
+  }
+
+  // ========= Resumen Financiero (sustituye el viejo "Totals box") =========
+  // (usa mismas reglas de DOF/IVA que tu app)
+  const fmtUSD = (v) => `$${(Number(v) || 0).toFixed(2)} USD`;
+  const fmtMXN = (v) => `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+  const rate = Number(dofRate) || 0; // MXN por USD
+  const addIVA = (v) => (wantsInvoice ? v * 1.16 : v);
+
+  const hasUSD = usdItems.length > 0;
+  const hasMXN = mxnItems.length > 0;
+  const isMixed = hasUSD && hasMXN;
+
+  const subtotalUSD = usdItems.reduce(
+    (s, it) => s + (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0),
+    0
+  );
+  const subtotalMXN = mxnItems.reduce(
+    (s, it) => s + (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0),
+    0
+  );
+
+  const preferred = String(preferredCurrency || "USD").toUpperCase();
+
+  // Título
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text("Resumen Financiero", 13, cursorY);
+  cursorY += 6;
+
+  // Caja
+  const boxX = 12, boxW = 186, boxPad = 4, lineH = 6;
+  const textMaxW = boxW - boxPad * 2;
+
+  // Pre-cálculos
+  const usdEnMXN = rate ? subtotalUSD * rate : 0;
+  const totalMXN_mixto = addIVA(subtotalMXN + usdEnMXN);
+  const totalUSD_solo = addIVA(subtotalUSD);
+  const totalMXN_solo = addIVA(subtotalMXN);
+
+  // Medir alto
+  const measure = () => {
+    let y = cursorY + boxPad;
+    // moneda
+    y += lineH;
+    if (preferred === "MXN") {
+      // total MXN
+      y += lineH;
+      if (isMixed || hasUSD) {
+        const det = rate
+          ? (isMixed
+              ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
+              : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}.`)
+          : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+        const detLines = doc.splitTextToSize(det, textMaxW);
+        y += detLines.length * 5 + 3;
+        if (rate) y += 5; // tipo de cambio
       }
-
-      // Optional inventory hold
-      try {
-        const holdLines = buildHoldLines();
-        if (createdOrderId && holdLines.length > 0) {
-          await axios.post(
-            `${API}/inventory/hold`,
-            { orderId: createdOrderId, holdMinutes: 120, lines: holdLines },
-            { withCredentials: false, timeout: 15000 }
-          );
-        }
-      } catch (holdErr) {
-        console.error("Error al reservar inventario:", holdErr);
+      if (isMixed) {
+        const legend = "IMPORTANTE: En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.";
+        const l = doc.splitTextToSize(legend, textMaxW);
+        y += l.length * 5 + 5;
       }
-
-      // Save locally after server success
-      doc.save("order_summary.pdf");
-
-      alert("Orden guardada exitosamente");
-      navigate("/myOrders", { state: { from: "orderNow" } });
-    } catch (error) {
-      console.error("Error al guardar la orden o al reservar inventario", error);
-      const msg =
-        error?.message ||
-        error?.response?.data?.error ||
-        "Revisa tu conexión y vuelve a intentar.";
-      alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+    } else {
+      if (hasUSD) y += lineH; // pagar USD
+      if (hasMXN) y += lineH; // pagar MXN
+      if (isMixed && rate) y += 5; // tipo de cambio
+      if (isMixed) {
+        const legend = "IMPORTANTE: En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.";
+        const l = doc.splitTextToSize(legend, textMaxW);
+        y += l.length * 5 + 5;
+      }
+      if (!hasUSD && hasMXN) {
+        const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+        const n = doc.splitTextToSize(note, textMaxW);
+        y += n.length * 5 + 3;
+      }
     }
+    return y + boxPad;
   };
+
+  const boxHeight = Math.max(14, measure() - cursorY);
+  doc.setFillColor(241, 241, 241);
+  doc.setDrawColor(200, 200, 200);
+  if (doc.roundedRect) doc.roundedRect(boxX, cursorY, boxW, boxHeight, 2.5, 2.5, "FD");
+  else doc.rect(boxX, cursorY, boxW, boxHeight, "FD");
+
+  // Render dentro de la caja
+  let y = cursorY + boxPad;
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Moneda de pago seleccionada: ${preferred}`, boxX + boxPad, y + 3);
+  y += lineH;
+  doc.setFont("helvetica", "normal");
+
+  if (preferred === "MXN") {
+    if (isMixed) {
+      if (!rate) {
+        doc.setTextColor(180, 0, 0);
+        const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+        doc.text(doc.splitTextToSize(err, textMaxW), boxX + boxPad, y);
+        doc.setTextColor(0, 0, 0);
+        y += 10;
+      } else {
+        doc.text(
+          `Total a pagar en MXN: ${fmtMXN(totalMXN_mixto)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+          boxX + boxPad,
+          y + 3
+        );
+        y += lineH;
+
+        doc.setFontSize(9);
+        doc.setTextColor(120, 120, 120);
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
+        doc.text(doc.splitTextToSize(det, textMaxW), boxX + boxPad, y + 2);
+        y += 8;
+
+        doc.text(
+          `Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
+          boxX + boxPad,
+          y + 2
+        );
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        y += 5;
+      }
+    } else if (hasUSD) {
+      if (!rate) {
+        doc.setTextColor(180, 0, 0);
+        const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total en MXN.";
+        doc.text(doc.splitTextToSize(err, textMaxW), boxX + boxPad, y);
+        doc.setTextColor(0, 0, 0);
+        y += 10;
+      } else {
+        const base = subtotalUSD * rate;
+        doc.text(
+          `Total a pagar en MXN: ${fmtMXN(addIVA(base))}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+          boxX + boxPad,
+          y + 3
+        );
+        y += lineH;
+
+        doc.setFontSize(9);
+        doc.setTextColor(120, 120, 120);
+        const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(base)}.`;
+        doc.text(doc.splitTextToSize(det, textMaxW), boxX + boxPad, y + 2);
+        y += 8;
+
+        doc.text(
+          `Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
+          boxX + boxPad,
+          y + 2
+        );
+        doc.setFontSize(10);
+        doc.setTextColor(0, 0, 0);
+        y += 5;
+      }
+    } else if (hasMXN) {
+      doc.text(
+        `Total a pagar en MXN: ${fmtMXN(totalMXN_solo)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+        boxX + boxPad,
+        y + 3
+      );
+      y += lineH;
+    }
+
+    if (isMixed) {
+      doc.setTextColor(180, 0, 0);
+      doc.setFont("helvetica", "bold");
+      const legend = "IMPORTANTE: En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.";
+      doc.text(doc.splitTextToSize(legend, textMaxW), boxX + boxPad, y + 3);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+    }
+  } else {
+    // Preferencia USD
+    if (hasUSD) {
+      doc.text(
+        `A pagar en USD (artículos en USD): ${fmtUSD(totalUSD_solo)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+        boxX + boxPad,
+        y + 3
+      );
+      y += lineH;
+    }
+    if (hasMXN) {
+      doc.text(
+        `A pagar en MXN (artículos en MXN): ${fmtMXN(totalMXN_solo)}${wantsInvoice ? " (incluye IVA 16%)" : ""}`,
+        boxX + boxPad,
+        y + 3
+      );
+      y += lineH;
+    }
+    if (isMixed && rate) {
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      doc.text(
+        `Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
+        boxX + boxPad,
+        y + 2
+      );
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      y += 5;
+    }
+    if (isMixed) {
+      doc.setTextColor(180, 0, 0);
+      doc.setFont("helvetica", "bold");
+      const legend = "IMPORTANTE: En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.";
+      doc.text(doc.splitTextToSize(legend, textMaxW), boxX + boxPad, y + 5);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "normal");
+    }
+    if (!hasUSD && hasMXN) {
+      doc.setFontSize(9);
+      doc.setTextColor(120, 120, 120);
+      const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+      doc.text(doc.splitTextToSize(note, textMaxW), boxX + boxPad, y + 2);
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(10);
+    }
+  }
+
+  // Avanza debajo del resumen
+  cursorY = cursorY + boxHeight + 6;
+
+  // ========= Opción de Pago (igual que tenías) =========
+  const creditBoxX = 10;
+  const creditBoxY = cursorY;
+  const creditBoxWidth = 190;
+  const creditBoxHeight = 20;
+  const creditBoxRadius = 4;
+
+  if (doc.roundedRect) {
+    doc.setFillColor(241, 241, 241);
+    doc.roundedRect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, creditBoxRadius, creditBoxRadius, "F");
+  } else {
+    doc.setFillColor(241, 241, 241);
+    doc.rect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, "F");
+  }
+
+  doc.setFontSize(11);
+  doc.setFont("helvetica", "bold");
+  doc.text(`Opción de Pago: ${paymentOption}`, 15, creditBoxY + 6);
+  if (paymentOption === "Crédito") {
+    doc.text(`Plazo de Crédito: ${creditDays} Días`, 15, creditBoxY + 11);
+    doc.text(`Vencimiento: ${addDays(new Date(), creditDays).toLocaleDateString("es-MX")}`, 15, creditBoxY + 16);
+  }
+
+  // ========= PÁGINA DE CUENTAS (igual que tu versión, mini-boxes incluidos) =========
+  doc.addPage();
+  doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+
+  let y2 = 35;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(16);
+  doc.setTextColor(24, 144, 69);
+  doc.text(`Cuentas para realizar pago:`, 13, y2 + 5);
+
+  const payBoxX = 10;
+  const payBoxY = y2 + 10;
+  const payBoxWidth = 190;
+  const payBoxHeight = 135;
+  const payBoxRadius = 4;
+
+  if (doc.roundedRect) {
+    doc.setFillColor(241, 241, 241);
+    doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
+  } else {
+    doc.setFillColor(241, 241, 241);
+    doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
+  }
+
+  // Mini-box helper
+  const miniBox = (title, lines, startY) => {
+    const x = 12;
+    const w = 120;
+    const pad = 4;
+    const lineH = 5;
+    const titleH = title ? lineH + 1 : 0;
+    const h = pad * 2 + titleH + lines.length * lineH;
+
+    if (doc.roundedRect) {
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(x, startY, w, h, 3, 3, "F");
+    } else {
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x, startY, w, h, "F");
+    }
+
+    let ty = startY + pad + (title ? lineH : 0);
+
+    if (title) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.text(title, x + pad, startY + pad + 3.5);
+    }
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    lines.forEach((t) => {
+      doc.text(t, x + pad, ty + 2);
+      ty += lineH;
+    });
+
+    return startY + h;
+  };
+
+  doc.setFontSize(11);
+  doc.setTextColor(0, 0, 0);
+
+  if (wantsInvoice) {
+    // ===== FACTURA: Cuentas empresa (MXN + USD)
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y2 + 17);
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO:`, 15, y2 + 24);
+
+    let cursor2 = y2 + 28;
+
+    cursor2 = miniBox(
+      "BANCO: BBVA",
+      [
+        "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+        "NO. DE CUENTA: 010 115 1207",
+        "CLABE: 012 320 001 011 512 076",
+      ],
+      cursor2
+    );
+    cursor2 += 6;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, cursor2 + 12);
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
+    doc.text(`TRANSFERENCIA:`, 15, cursor2 + 19);
+
+    cursor2 += 24;
+
+    cursor2 = miniBox(
+      "BANCO: GRUPO FINANCIERO MONEX",
+      [
+        "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+        "CLABE: 112 180 000 028 258 341",
+      ],
+      cursor2
+    );
+    cursor2 += 6;
+
+    miniBox(
+      "BANCO: BANCO INVEX, S.A.",
+      [
+        "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+        "CLABE: 059 180 030 020 014 234",
+      ],
+      cursor2
+    );
+  } else {
+    // ===== SIN FACTURA: Cuenta personal MXN
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y2 + 17);
+
+    doc.setFontSize(11);
+    doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y2 + 24);
+    doc.text(`BANCO: BBVA`, 15, y2 + 31);
+
+    doc.setFont("helvetica", "normal");
+    doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y2 + 36);
+    doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y2 + 41);
+    doc.text(`CLABE: 012 320 012 452 540 780`, 15, y2 + 46);
+    doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y2 + 51);
+  }
+
+  // ========= Build payload (sin cambios funcionales) =========
+  const userEmail = userCredentials?.correo;
+  const creditDue =
+    paymentOption === "Crédito" && creditAllowed
+      ? addDays(new Date(), creditDays).toISOString()
+      : null;
+
+  const orderInfo = {
+    userEmail,
+    items,
+    totals: {
+      totalUSDNative: Number(totalUSDNative.toFixed(2)),
+      totalMXNNative: Number(totalMXNNative.toFixed(2)),
+      totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+      totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+      dofRate,
+      dofDate,
+      discountUSD: Number(discountTotal || 0),
+      vatUSD: Number(vatUSD.toFixed(2)),
+      finalAllUSD: Number(finalAllUSD.toFixed(2)),
+      vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+      finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+    },
+    requestBill: !!wantsInvoice,
+    shippingInfo: { ...currentShipping },
+    billingInfo: wantsInvoice ? { ...currentBilling } : {},
+    shippingPreferences: { ...shippingPrefs },
+    orderDate: new Date().toISOString(),
+    orderStatus: "Pedido Realizado",
+    paymentOption,
+    creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+    creditDueDate: creditDue,
+  };
+
+  try {
+    // Subir primero
+    const pdfBlob = doc.output("blob");
+    const form = new FormData();
+    form.append("order", JSON.stringify(orderInfo));
+    form.append("pdf", pdfBlob, "order_summary.pdf");
+
+    let createdOrderId = null;
+    try {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort("timeout"), 20000);
+      const res = await fetch(`${API}/orderDets`, {
+        method: "POST",
+        body: form,
+        mode: "cors",
+        cache: "no-store",
+        credentials: "omit",
+        signal: ac.signal,
+      });
+      clearTimeout(timer);
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(text || `HTTP ${res.status}`);
+      }
+      const data = await res.json().catch(() => ({}));
+      createdOrderId =
+        data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+    } catch (fetchErr) {
+      const { data } = await axios.post(`${API}/orderDets`, form, {
+        withCredentials: false,
+        timeout: 20000,
+      });
+      createdOrderId =
+        data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+    }
+
+    // Reserva inventario (opcional)
+    try {
+      const holdLines = buildHoldLines();
+      if (createdOrderId && holdLines.length > 0) {
+        await axios.post(
+          `${API}/inventory/hold`,
+          { orderId: createdOrderId, holdMinutes: 120, lines: holdLines },
+          { withCredentials: false, timeout: 15000 }
+        );
+      }
+    } catch (holdErr) {
+      console.error("Error al reservar inventario:", holdErr);
+    }
+
+    // Descargar local
+    doc.save("order_summary.pdf");
+
+    alert("Orden guardada exitosamente");
+    navigate("/myOrders", { state: { from: "orderNow" } });
+  } catch (error) {
+    console.error("Error al guardar la orden o al reservar inventario", error);
+    const msg =
+      error?.message ||
+      error?.response?.data?.error ||
+      "Revisa tu conexión y vuelve a intentar.";
+    alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+  }
+};
+
+  // const handleDownloadAndSave = async () => {
+  //   const doc = new jsPDF();
+  //   const pageWidth = doc.internal.pageSize.getWidth();
+  //   const pageHeight = doc.internal.pageSize.getHeight();
+  //   const today = new Date();
+
+  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+
+  //   doc.setFontSize(10);
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text(`Fecha de Elaboración: ${today.toLocaleDateString("es-MX")}`, 195, 15, null, null, "right");
+
+  //   doc.setLineWidth(0.1);
+  //   doc.setDrawColor(200, 200, 200);
+  //   doc.line(10, 45, 200, 45);
+
+  //   // Cliente - Envío
+  //   doc.setFontSize(11);
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text("Información de Envío", 13, 51);
+
+  //   doc.setFontSize(10);
+  //   doc.addImage(iconBuilding, 13, 53, 5, 5);
+  //   doc.text(`${nombreEmpresa || ""}`, 19, 57);
+
+  //   doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+  //   doc.text(`${nombreEncargado || ""}`, 19, 63);
+
+  //   doc.addImage(iconLocation, 13.7, 65, 3, 4);
+  //   doc.text(
+  //     `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
+  //     19, 68
+  //   );
+  //   doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
+  //   doc.text(
+  //     `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
+  //     19, 76
+  //   );
+
+  //   doc.addImage(iconPhone, 13.7, 78, 3, 4);
+  //   doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
+
+  //   doc.addImage(iconEmail, 13.7, 84, 4, 3);
+  //   doc.text(`${correoEmpresa || ""}`, 19, 87);
+
+  //   // Billing (only render details if wantsInvoice)
+  //   doc.setFontSize(11);
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text("Información Fiscal", 100, 51);
+
+  //   doc.setFontSize(10);
+  //   if (wantsInvoice) {
+  //     doc.text(`Razón Social: ${currentBilling.razonSocial || ""}`, 106, 57);
+  //     doc.text(`RFC: ${currentBilling.rfcEmpresa || ""}`, 106, 63);
+
+  //     doc.addImage(iconEmail, 100, 65, 4, 3);
+  //     doc.text(`${currentBilling.correoFiscal || ""}`, 106, 68);
+
+  //     doc.addImage(iconLocation, 100.5, 70, 3, 4);
+  //     doc.text(
+  //       `${(currentBilling.calleFiscal || "")}  # ${(currentBilling.exteriorFiscal || "")}  Int. ${(currentBilling.interiorFiscal || "")}`,
+  //       106, 73
+  //     );
+  //     doc.text(`Col. ${currentBilling.coloniaFiscal || ""}`, 106, 77);
+  //     doc.text(
+  //       `${(currentBilling.ciudadFiscal || "")}, ${(currentBilling.estadoFiscal || "")}. C.P. ${(currentBilling.cpFiscal || "")}`,
+  //       106, 81
+  //     );
+  //   } else {
+  //     doc.setFont("helvetica", "italic");
+  //     doc.text("Sin factura.", 106, 57);
+  //     doc.setFont("helvetica", "normal");
+  //   }
+
+  //   // Separator
+  //   doc.setLineWidth(0.1);
+  //   doc.setDrawColor(200, 200, 200);
+  //   doc.line(10, 92, 200, 92);
+
+  //   // Items table
+  //   const tableData = items.map((it) => {
+  //     const cur = (it.currency || "USD").toUpperCase();
+  //     const unit =
+  //       cur === "MXN"
+  //         ? `$${Number(it.priceMXN ?? it.price).toFixed(2)} MXN`
+  //         : `$${Number(it.priceUSD ?? it.price).toFixed(2)} USD`;
+  //     const line =
+  //       cur === "MXN"
+  //         ? `$${(Number(it.amount) * Number(it.priceMXN ?? it.price)).toFixed(2)} MXN`
+  //         : `$${(Number(it.amount) * Number(it.priceUSD ?? it.price)).toFixed(2)} USD`;
+  //     const pack = it.packPresentation ? ` — ${it.packPresentation}` : "";
+  //     return [it.product, `${it.presentation}${pack}`, it.amount, unit, line];
+  //   });
+
+  //   autoTable(doc, {
+  //     head: [["Producto", "Presentación", "Cantidad", "Precio Unitario", "Total"]],
+  //     body: tableData,
+  //     startY: 100,
+  //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+  //   });
+
+  //   let extraY = doc.lastAutoTable.finalY + 12;
+
+  //   // Totals box
+  //   const boxX = 141;
+  //   const boxY = extraY - 8;
+  //   const boxWidth = 55;
+  //   const boxHeight = 30;
+  //   const radius = 4;
+
+  //   if (doc.roundedRect) {
+  //     doc.setFillColor(207, 242, 137);
+  //     doc.roundedRect(boxX, boxY, boxWidth, boxHeight, radius, radius, "F");
+  //   } else {
+  //     doc.setFillColor(207, 242, 137);
+  //     doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
+  //   }
+
+  //   const y0 = extraY;
+  //   doc.text(
+  //     `Total en USD: ${totalAllUSD !== null ? `$${totalAllUSD.toFixed(2)}` : "—"}`,
+  //     146,
+  //     y0
+  //   );
+  //   doc.text(
+  //     `Total en MXN: ${
+  //       totalAllMXN !== null
+  //         ? `$${totalAllMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  //         : "—"
+  //     }`,
+  //     146,
+  //     y0 + 5
+  //   );
+
+  //   doc.setFontSize(9);
+  //   doc.setFont("helvetica", "italic");
+  //   doc.text(
+  //     dofRate ? `${dofRate.toFixed(2)} MXN/USD \n (DOF ${dofDate})` : "Tipo de cambio no disponible",
+  //     146,
+  //     y0 + 12
+  //   );
+
+  //   // Payment option box
+  //   const creditBoxX = 10;
+  //   const creditBoxY = y0 + 30;
+  //   const creditBoxWidth = 190;
+  //   const creditBoxHeight = 20;
+  //   const creditBoxRadius = 4;
+
+  //   if (doc.roundedRect) {
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.roundedRect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, creditBoxRadius, creditBoxRadius, "F");
+  //   } else {
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.rect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, "F");
+  //   }
+
+  //   doc.setFontSize(11);
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text(`Opción de Pago: ${paymentOption}` , 15, y0 + 36);
+  //   if (paymentOption === "Crédito") {
+  //     doc.text(`Plazo de Crédito: ${creditDays} Días` , 15, y0 + 41);
+  //     doc.text(`Vencimiento: ${addDays(new Date(), creditDays).toLocaleDateString('es-MX')}` , 15, y0 + 46);
+  //   }
+
+  //   // Payment accounts page (conditional by wantsInvoice)
+  //   doc.addPage();
+  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+
+  //   let y = 35;
+  //   doc.setFont("helvetica", "bold");
+  //   doc.setFontSize(16);
+  //   doc.setTextColor(24, 144, 69);
+  //   doc.text(`Cuentas para realizar pago:`, 13, y + 5);
+
+  //   const payBoxX = 10;
+  //   const payBoxY = y + 10;
+  //   const payBoxWidth = 190;
+  //   const payBoxHeight = 135;
+  //   const payBoxRadius = 4;
+
+  //   if (doc.roundedRect) {
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
+  //   } else {
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
+  //   }
+
+  //   doc.setFontSize(11);
+  //   doc.setTextColor(0, 0, 0);
+
+  //   if (wantsInvoice) {
+  //     // ===== FACTURA: mostrar cuentas de empresa (MXN + USD) =====
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setFontSize(13);
+  //     doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
+
+  //     // // hey chatgpt, I'd like for each bank account to be placed in its own mini-box within the main bank account box. Can you do a direct edit
+  //     // --- Mini-box helper (inside the main pay box) ---
+  //     const miniBox = (title, lines, startY) => {
+  //       const x = 12;               // a bit inside the main gray box (10…200)
+  //       // const w = 186;              // keep it visually inset
+  //       const w = 120;              // keep it visually inset
+  //       const pad = 4;
+  //       const lineH = 5;
+
+  //       // compute height
+  //       const titleH = title ? lineH + 1 : 0;
+  //       const h = pad * 2 + titleH + lines.length * lineH;
+
+  //       // box
+  //       if (doc.roundedRect) {
+  //         doc.setFillColor(255, 255, 255);
+  //         doc.roundedRect(x, startY, w, h, 3, 3, "F");
+  //       } else {
+  //         doc.setFillColor(255, 255, 255);
+  //         doc.rect(x, startY, w, h, "F");
+  //       }
+
+  //       // content
+  //       let ty = startY + pad + (title ? lineH : 0);
+
+  //       if (title) {
+  //         doc.setFont("helvetica", "bold");
+  //         doc.setFontSize(11);
+  //         doc.text(title, x + pad, startY + pad + 3.5);
+  //       }
+
+  //       doc.setFont("helvetica", "normal");
+  //       doc.setFontSize(10);
+  //       lines.forEach((t) => {
+  //         doc.text(t, x + pad, ty + 2);
+  //         ty += lineH;
+  //       });
+
+  //       return startY + h; // returns bottom Y
+  //     };
+
+  //     // ===== MXN (Empresa) =====
+  //     doc.setFontSize(11);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO:`, 15, y + 24);
+
+  //     let cursorY = y + 28;
+
+  //     // Mini-box: BBVA (MXN)
+  //     cursorY = miniBox(
+  //       "BANCO: BBVA",
+  //       [
+  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+  //         "NO. DE CUENTA: 010 115 1207",
+  //         "CLABE: 012 320 001 011 512 076",
+  //       ],
+  //       cursorY
+  //     );
+  //     cursorY += 6; // spacing between mini-boxes/sections
+
+  //     // ===== USD (Empresa) =====
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setFontSize(13);
+  //     doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, cursorY + 12);
+  //     doc.setFontSize(11);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(`TRANSFERENCIA:`, 15, cursorY + 19);
+
+  //     cursorY += 24;
+
+  //     // Mini-box: MONEX (USD)
+  //     cursorY = miniBox(
+  //       "BANCO: GRUPO FINANCIERO MONEX",
+  //       [
+  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+  //         "CLABE: 112 180 000 028 258 341",
+  //       ],
+  //       cursorY
+  //     );
+  //     cursorY += 6;
+
+  //     // Mini-box: INVEX (USD)
+  //     cursorY = miniBox(
+  //       "BANCO: BANCO INVEX, S.A.",
+  //       [
+  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
+  //         "CLABE: 059 180 030 020 014 234",
+  //       ],
+  //       cursorY
+  //     );
+
+  //   } else {
+  //     // ===== SIN FACTURA: mostrar cuenta personal (MXN) =====
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setFontSize(13);
+  //     doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 17);
+
+  //     doc.setFontSize(11);
+  //     doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 24);
+  //     doc.text(`BANCO: BBVA`, 15, y + 31);
+
+  //     doc.setFont("helvetica", "normal");
+  //     doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 36);
+  //     // doc.text(`BANCO: BBVA`, 15, y + 36);
+  //     doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 41);
+  //     doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 46);
+  //     doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 51);
+  //   }
+
+  //   // Build payload
+  //   const userEmail = userCredentials?.correo;
+  //   const creditDue =
+  //     paymentOption === "Crédito" && creditAllowed
+  //       ? addDays(new Date(), creditDays).toISOString()
+  //       : null;
+
+  //   const orderInfo = {
+  //     userEmail,
+  //     items,
+  //     totals: {
+  //       totalUSDNative: Number(totalUSDNative.toFixed(2)),
+  //       totalMXNNative: Number(totalMXNNative.toFixed(2)),
+  //       totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
+  //       totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
+  //       dofRate,
+  //       dofDate,
+  //       discountUSD: Number(discountTotal || 0),
+  //       vatUSD: Number(vatUSD.toFixed(2)),
+  //       finalAllUSD: Number(finalAllUSD.toFixed(2)),
+  //       vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
+  //       finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
+  //     },
+  //     requestBill: !!wantsInvoice, // ⬅️ boolean
+  //     shippingInfo: { ...currentShipping },
+  //     billingInfo: wantsInvoice ? { ...currentBilling } : {}, // if no invoice, billing is irrelevant
+  //     shippingPreferences: { ...shippingPrefs }, // ⬅️ NEW: include for traceability
+  //     orderDate: new Date().toISOString(),
+  //     orderStatus: "Pedido Realizado",
+  //     paymentOption,
+  //     creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
+  //     creditDueDate: creditDue,
+  //   };
+
+  //   try {
+  //     // Upload
+  //     const pdfBlob = doc.output("blob");
+  //     const form = new FormData();
+  //     form.append("order", JSON.stringify(orderInfo));
+  //     form.append("pdf", pdfBlob, "order_summary.pdf");
+
+  //     let createdOrderId = null;
+  //     try {
+  //       const ac = new AbortController();
+  //       const timer = setTimeout(() => ac.abort("timeout"), 20000);
+  //       const res = await fetch(`${API}/orderDets`, {
+  //         method: "POST",
+  //         body: form,
+  //         mode: "cors",
+  //         cache: "no-store",
+  //         credentials: "omit",
+  //         signal: ac.signal,
+  //       });
+  //       clearTimeout(timer);
+  //       if (!res.ok) {
+  //         const text = await res.text().catch(() => "");
+  //         throw new Error(text || `HTTP ${res.status}`);
+  //       }
+  //       const data = await res.json().catch(() => ({}));
+  //       createdOrderId =
+  //         data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+  //     } catch (fetchErr) {
+  //       const { data } = await axios.post(`${API}/orderDets`, form, {
+  //         withCredentials: false,
+  //         timeout: 20000,
+  //       });
+  //       createdOrderId =
+  //         data?.id || data?.data?._id || data?._id || data?.order?._id || null;
+  //     }
+
+  //     // Optional inventory hold
+  //     try {
+  //       const holdLines = buildHoldLines();
+  //       if (createdOrderId && holdLines.length > 0) {
+  //         await axios.post(
+  //           `${API}/inventory/hold`,
+  //           { orderId: createdOrderId, holdMinutes: 120, lines: holdLines },
+  //           { withCredentials: false, timeout: 15000 }
+  //         );
+  //       }
+  //     } catch (holdErr) {
+  //       console.error("Error al reservar inventario:", holdErr);
+  //     }
+
+  //     // Save locally after server success
+  //     doc.save("order_summary.pdf");
+
+  //     alert("Orden guardada exitosamente");
+  //     navigate("/myOrders", { state: { from: "orderNow" } });
+  //   } catch (error) {
+  //     console.error("Error al guardar la orden o al reservar inventario", error);
+  //     const msg =
+  //       error?.message ||
+  //       error?.response?.data?.error ||
+  //       "Revisa tu conexión y vuelve a intentar.";
+  //     alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
+  //   }
+  // };
 
   return (
     <body className="app-shell body-BG-Gradient">

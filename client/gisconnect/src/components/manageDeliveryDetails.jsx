@@ -187,16 +187,39 @@ export default function ManageDeliveryDetails() {
 
     doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
 
+    // sep10
     try {
-      await axios.put(`${API}/orders/${order._id}`, {
-        orderStatus: "Etiqueta Generada",
-      });
-      alert("Etiqueta generada y estado actualizado.");
-      navigate("/deliverReady");
+      await axios.patch(
+        `${API}/orders/${order._id}`,
+        { orderStatus: "Etiqueta Generada" },
+        {
+          headers: { "Content-Type": "application/json" },
+          timeout: 15000,
+          withCredentials: false,
+        }
+      );
     } catch (error) {
-      console.error("Error updating order status:", error);
+      console.error("PATCH /orders/:orderId failed:", error?.response?.data || error.message);
       alert("Error al actualizar el estado del pedido.");
+      return; // stop if we couldn't update on the server
     }
+    
+    // 2) Then save the PDF (after server success)
+    doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
+    
+    alert("Etiqueta generada y estado actualizado.");
+    navigate("/deliverReady");
+    // try {
+    //   await axios.put(`${API}/orders/${order._id}`, {
+    //     orderStatus: "Etiqueta Generada",
+    //   });
+    //   alert("Etiqueta generada y estado actualizado.");
+    //   navigate("/deliverReady");
+    // } catch (error) {
+    //   console.error("Error updating order status:", error);
+    //   alert("Error al actualizar el estado del pedido.");
+    // }
+    // sep10
   };
 
   return (
