@@ -9,6 +9,9 @@ const verifyToken = require("../verifyToken")
 
 const multer = require("multer")
 const path = require('path')
+// sep10
+const fs = require("fs");
+// sep10
 
 // jul29
 const crypto = require("crypto");
@@ -29,6 +32,31 @@ const PdfQuote = require("../models/pdfQuoteModel"); // <- you'll create this mo
 // const { pushHoldsToSheets, applyPermanentDecrement } = require("../services/sheetsBridge");
 
 // GISCONNECT END
+// SEP10
+// If you already created these helpers, use the imports below:
+const { sendToTopic } = require("../utils/fcm");          // <-- make sure path is correct
+const { roleTopics, rolesForStage } = require("../utils/roles");
+
+// If you DON'T have the helpers/files above, you can TEMPORARILY inline these maps:
+
+const roleTopics = {
+  FULL_ACCESS: "role-full-access",
+  ADMIN_FACTURAS_Y_LOGISTICA: "role-admin-facturas-logistica",
+  LOGISTICA_Y_ALMACEN: "role-logistica-almacen",
+  ALMACEN_LIMITADO: "role-almacen-limitado",
+};
+const rolesForStage = (stage) => {
+  switch (stage) {
+    case "EVIDENCIA_PAGO":            return ["FULL_ACCESS"];
+    case "PAGO_VERIFICADO":           return ["ADMIN_FACTURAS_Y_LOGISTICA", "LOGISTICA_Y_ALMACEN", "ALMACEN_LIMITADO"];
+    case "PREPARANDO_PEDIDO":         return ["ADMIN_FACTURAS_Y_LOGISTICA"];
+    case "ETIQUETA_GENERADA":         return ["LOGISTICA_Y_ALMACEN"];
+    case "PEDIDO_ENTREGADO":          return ["FULL_ACCESS"];
+    default:                          return [];
+  }
+};
+const { sendToTopic } = require("../utils/fcm"); // still needed for actual send
+// SEP10
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
@@ -641,7 +669,6 @@ router.get('/shipping-address/:email', async (req, res) => {
     }
   });
 
-
 // ENDPOINT FOR UPLOADING A NEW BILLING ADDRESS
 router.post("/billing-address", async (req, res) => {
     const { userEmail, ...addressData } = req.body;
@@ -723,6 +750,8 @@ router.get('/orders/:id', async (req, res) => {
   });
 
 // ENDPOINT FOR UPDATING ORDER AT PAYMENT VALIDATION STAGE - ADMIN SIDE
+// ----> SEP10 MODIFS AREA!
+// For step 5: "Fire notifications from your existing order update logic" you mention that I need to hook up extra code to my existing "PUT /orders/:orderId". This is my current piece of code, can you help me direct edit 
 router.put(
   "/orders/:orderId",
   upload.fields([
@@ -745,21 +774,13 @@ router.put(
     // helper: convert a multer file to { filename, mimetype, data, uploadedAt }
     const fileToDoc = (file) => {
       if (!file) return null;
-
-      // Prefer memory storage buffer
       let buffer = file.buffer || null;
-
-      // Fallback for disk storage (not recommended if you configured memoryStorage)
       if (!buffer && file.path) {
-        const abs = path.isAbsolute(file.path)
-          ? file.path
-          : path.join(__dirname, "..", file.path);
+        const abs = path.isAbsolute(file.path) ? file.path : path.join(__dirname, "..", file.path);
         buffer = fs.readFileSync(abs);
         try { fs.unlinkSync(abs); } catch (_) {}
       }
-
       if (!buffer) return null;
-
       return {
         filename: file.originalname || file.filename || "evidence",
         mimetype: file.mimetype || "application/octet-stream",
@@ -769,6 +790,12 @@ router.put(
     };
 
     try {
+      // === Load PREVIOUS order (to detect transitions) ===
+      const prevOrder = await newOrderModel.findById(orderId);
+      if (!prevOrder) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
       // Pull files (may be absent)
       const paymentEvidenceFile = (req.files?.evidenceImage || [])[0];
       const packingFiles = req.files?.packingImages || [];
@@ -778,10 +805,9 @@ router.put(
       const packingDocs = packingFiles.map(fileToDoc).filter(Boolean);
       const deliveryDoc = fileToDoc(deliveryFile);
 
-      // Normalize some fields (optional but robust)
+      // Normalize some fields
       const numericInsured = insuredAmount ? Number(insuredAmount) : undefined;
-      const parsedDeliveryDate =
-        deliveryDate ? new Date(deliveryDate) : undefined;
+      const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
 
       // Build $set payload
       const $set = {
@@ -795,31 +821,119 @@ router.put(
       };
 
       if (paymentEvidenceDoc) {
-        // single object field
         $set.evidenceFile = paymentEvidenceDoc;
       }
-
       if (deliveryDoc) {
-        // single object field for delivery evidence
         $set.deliveryEvidence = deliveryDoc;
       }
 
       // Build update
       const update = { $set };
-
       if (packingDocs.length > 0) {
-        // append (don’t overwrite) packing images
         update.$push = { packingEvidence: { $each: packingDocs } };
       }
 
-      const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, {
-        new: true,
-      });
-
+      // === Apply update ===
+      const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
       if (!updatedOrder) {
-        return res.status(404).json({ message: "Order not found" });
+        return res.status(404).json({ message: "Order not found after update" });
       }
 
+      // === Compute triggered stages ===
+      const triggeredStages = [];
+
+      // 1) Evidence added for the first time
+      if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
+        triggeredStages.push("EVIDENCIA_PAGO");
+      }
+
+      // 2) Status transitions we care about
+      const prevStatus = prevOrder?.orderStatus || "";
+      const nextStatus = updatedOrder?.orderStatus || prevStatus;
+
+      if (orderStatus && orderStatus !== prevStatus) {
+        const s = orderStatus.toLowerCase();
+        if (s === "pago verificado")          triggeredStages.push("PAGO_VERIFICADO");
+        if (s === "preparando pedido")        triggeredStages.push("PREPARANDO_PEDIDO");
+        if (s === "pedido entregado")         triggeredStages.push("PEDIDO_ENTREGADO");
+      }
+
+      // 3) Label/tracking created
+      const prevTracking = (prevOrder?.trackingNumber || "").trim();
+      const nextTracking = (updatedOrder?.trackingNumber || "").trim();
+      if (nextTracking && nextTracking !== prevTracking) {
+        triggeredStages.push("ETIQUETA_GENERADA");
+      }
+
+      // === Fire notifications (non-blocking) ===
+      if (triggeredStages.length > 0) {
+        const shortId = String(updatedOrder._id || "").slice(-5);
+        const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
+
+        // build a generic message per stage
+        const messageForStage = (stage) => {
+          switch (stage) {
+            case "EVIDENCIA_PAGO":
+              return {
+                title: `Evidencia de pago recibida`,
+                body: `Pedido #${shortId} — Cliente: ${userEmail}`,
+              };
+            case "PAGO_VERIFICADO":
+              return {
+                title: `Pago verificado`,
+                body: `Pedido #${shortId} listo para logística/almacén`,
+              };
+            case "PREPARANDO_PEDIDO":
+              return {
+                title: `Preparando pedido`,
+                body: `Pedido #${shortId} en empaque`,
+              };
+            case "ETIQUETA_GENERADA":
+              return {
+                title: `Etiqueta generada`,
+                body: `Pedido #${shortId} — Tracking: ${nextTracking}`,
+              };
+            case "PEDIDO_ENTREGADO":
+              return {
+                title: `Pedido entregado`,
+                body: `Pedido #${shortId} marcado como entregado`,
+              };
+            default:
+              return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
+          }
+        };
+
+        // send to each role topic interested in this stage
+        (async () => {
+          try {
+            for (const stage of triggeredStages) {
+              const roles = rolesForStage(stage); // e.g. ["FULL_ACCESS", ...]
+              const msg = messageForStage(stage);
+
+              for (const role of roles) {
+                const topic = roleTopics[role];
+                if (!topic) continue;
+
+                await sendToTopic(topic, {
+                  notification: { title: msg.title, body: msg.body },
+                  data: {
+                    orderId: String(updatedOrder._id),
+                    stage,
+                    email: userEmail,
+                    orderStatus: nextStatus || "",
+                    trackingNumber: nextTracking || "",
+                  },
+                });
+              }
+            }
+          } catch (notifyErr) {
+            // Don’t fail the request if FCM fails
+            console.error("FCM notify error:", notifyErr);
+          }
+        })();
+      }
+
+      // === Respond ===
       res.json(updatedOrder);
     } catch (error) {
       console.error("Error updating order:", error);
@@ -827,6 +941,112 @@ router.put(
     }
   }
 );
+// router.put(
+//   "/orders/:orderId",
+//   upload.fields([
+//     { name: "evidenceImage", maxCount: 1 },  // user's payment evidence
+//     { name: "packingImages", maxCount: 3 },  // up to 3 packing images
+//     { name: "deliveryImage", maxCount: 1 },  // carrier/shipping evidence
+//   ]),
+//   async (req, res) => {
+//     const { orderId } = req.params;
+//     const {
+//       paymentMethod,
+//       paymentAccount,
+//       orderStatus,
+//       packerName,
+//       insuredAmount,
+//       deliveryDate,
+//       trackingNumber,
+//     } = req.body;
+
+//     // helper: convert a multer file to { filename, mimetype, data, uploadedAt }
+//     const fileToDoc = (file) => {
+//       if (!file) return null;
+
+//       // Prefer memory storage buffer
+//       let buffer = file.buffer || null;
+
+//       // Fallback for disk storage (not recommended if you configured memoryStorage)
+//       if (!buffer && file.path) {
+//         const abs = path.isAbsolute(file.path)
+//           ? file.path
+//           : path.join(__dirname, "..", file.path);
+//         buffer = fs.readFileSync(abs);
+//         try { fs.unlinkSync(abs); } catch (_) {}
+//       }
+
+//       if (!buffer) return null;
+
+//       return {
+//         filename: file.originalname || file.filename || "evidence",
+//         mimetype: file.mimetype || "application/octet-stream",
+//         data: buffer,
+//         uploadedAt: new Date(),
+//       };
+//     };
+
+//     try {
+//       // Pull files (may be absent)
+//       const paymentEvidenceFile = (req.files?.evidenceImage || [])[0];
+//       const packingFiles = req.files?.packingImages || [];
+//       const deliveryFile = (req.files?.deliveryImage || [])[0];
+
+//       const paymentEvidenceDoc = fileToDoc(paymentEvidenceFile);
+//       const packingDocs = packingFiles.map(fileToDoc).filter(Boolean);
+//       const deliveryDoc = fileToDoc(deliveryFile);
+
+//       // Normalize some fields (optional but robust)
+//       const numericInsured = insuredAmount ? Number(insuredAmount) : undefined;
+//       const parsedDeliveryDate =
+//         deliveryDate ? new Date(deliveryDate) : undefined;
+
+//       // Build $set payload
+//       const $set = {
+//         ...(paymentMethod && { paymentMethod }),
+//         ...(paymentAccount && { paymentAccount }),
+//         ...(orderStatus && { orderStatus }),
+//         ...(packerName && { packerName }),
+//         ...(numericInsured !== undefined && { insuredAmount: numericInsured }),
+//         ...(parsedDeliveryDate && { deliveryDate: parsedDeliveryDate }),
+//         ...(trackingNumber && { trackingNumber }),
+//       };
+
+//       if (paymentEvidenceDoc) {
+//         // single object field
+//         $set.evidenceFile = paymentEvidenceDoc;
+//       }
+
+//       if (deliveryDoc) {
+//         // single object field for delivery evidence
+//         $set.deliveryEvidence = deliveryDoc;
+//       }
+
+//       // Build update
+//       const update = { $set };
+
+//       if (packingDocs.length > 0) {
+//         // append (don’t overwrite) packing images
+//         update.$push = { packingEvidence: { $each: packingDocs } };
+//       }
+
+//       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, {
+//         new: true,
+//       });
+
+//       if (!updatedOrder) {
+//         return res.status(404).json({ message: "Order not found" });
+//       }
+
+//       res.json(updatedOrder);
+//     } catch (error) {
+//       console.error("Error updating order:", error);
+//       res.status(500).json({ message: "Failed to update order" });
+//     }
+//   }
+// );
+
+// ----> SEP10 MODIFS AREA
 
 // sep07
 // JSON-only partial updates (no files) — used by mobile/admin forms
@@ -1281,7 +1501,6 @@ router.get("/__routes", (_req, res) => {
   const stack = app._router?.stack ? flatten(app._router.stack) : [];
   res.json(stack);
 });
-
 
 // GISCONNECT END
 

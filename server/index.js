@@ -4,6 +4,7 @@ const cookieParser = require("cookie-parser");
 const mongoose = require("mongoose");
 require("dotenv/config");
 
+
 const router = require("./routes/router"); // main routes
 let evidenceRouter; try { evidenceRouter = require("./routes/evidence"); } catch {}
 
@@ -149,6 +150,11 @@ if (evidenceRouter) app.use("/orders", evidenceRouter);
 // Main app router last (contains /orderDets, /userOrders, etc.)
 app.use("/", router);
 /* ----------------------------------------------------------------------- */
+
+// SEP08
+const { router: notifyRouter } = require("./routes/notify");
+app.use("/", notifyRouter);
+// SEP08
 
 /* ------------------------------- MongoDB ------------------------------- */
 const mongoUri = process.env.DB_URI || process.env.MONGO_URI;

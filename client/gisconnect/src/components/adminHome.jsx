@@ -19,6 +19,11 @@ import GestionaIcono from "/src/assets/images/Icono_gestionarEntrega.png"
 import PorEntregarIcono from "/src/assets/images/Icono_porEntregar.png"
 import EntregadoIcono from "/src/assets/images/Icono_entregado.png"
 
+// SEP10
+import { registerAdminPushToken } from "/src/lib/pushClient";
+import { API } from "/src/lib/api";
+// SEP10
+
 export default function AdminHome() {
 
     const navigate = useNavigate();
@@ -62,6 +67,15 @@ export default function AdminHome() {
         console.log("Go to admin home")
         navigate("/adminHome")
     }
+
+    // SEP10
+    useEffect(() => {
+        const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+        const email = raw?.correo || localStorage.getItem("userEmail");
+        // Ensure this is an admin email before registering
+        if (email) registerAdminPushToken(API, email);
+      }, []);
+    // SEP10
 
     return (
         <body className="body-BG-Gradient">

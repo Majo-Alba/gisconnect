@@ -50,6 +50,7 @@ export default function EditInvoice() {
         cpFiscal:"",
         usoCFDI:"",
         regimenFiscal:"",
+        correoFiscal:""
     })
 
     function handleInput(event) {
@@ -169,14 +170,17 @@ export default function EditInvoice() {
 
             <div className="billingInputs-Div">
 
-                <label className="newUserData-Label">Apodo del Domicilio</label>
-                <input className="addressInfo-Input" type="text" value={newBillingInfo.apodo} onChange={handleInput} required placeholder="Apodo o identificador de facturación" name="apodo"></input>
+                {/* <label className="newUserData-Label">Apodo del Domicilio</label>
+                <input className="addressInfo-Input" type="text" value={newBillingInfo.apodo} onChange={handleInput} required placeholder="Apodo o identificador de facturación" name="apodo"></input> */}
                 
                 <label className="newUserData-Label">Nombre o Razón Social</label>
                 <input className="addressInfo-Input" type="text" value={newBillingInfo.razonSocial} onChange={handleInput} required placeholder="Ingrese nombre o razón social" name="razonSocial"></input>
 
                 <label className="newUserData-Label">R.F.C.</label>
                 <input className="addressInfo-Input" type="text" value={newBillingInfo.rfcEmpresa} onChange={handleInput} required placeholder="R.F.C. con homoclave" name="rfcEmpresa"></input>
+            
+                <label className="newUserData-Label">Correo de Facturación</label>
+                <input className="addressInfo-Input" type="text" value={newBillingInfo.correoFiscal} onChange={handleInput} required placeholder="Correo de facturación" name="correoFiscal"></input>
             
                 <label className="newUserData-Label">Calle</label>
                 <input className="addressInfo-Input" type="text" value={newBillingInfo.calleFiscal} onChange={handleInput} required placeholder="Nombre de vialidad principal" name="calleFiscal"></input>
