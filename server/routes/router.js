@@ -119,39 +119,97 @@ router.post('/register', (req,res) => {
 })
 
 //API || ENDPOINT FOR LOGIN
-router.post('/login', (req, res) => {
-    let userCred = req.body
-    console.log(userCred)
+// POST /login  (direct replacement)
+router.post('/login', async (req, res) => {
+  try {
+    const { correo, contrasena } = req.body || {};
+    if (!correo || !contrasena) {
+      return res.status(400).json({ message: "Faltan credenciales (correo y contraseña)." });
+    }
 
-    newUserModel.findOne({correo:userCred.correo})
-    .then((user) => {
-        if(user !==null) {
-            bcrypt.compare(userCred.contrasena, user.contrasena, (err, result) => {
-                if(result===true) {
-                    //TOKEN GENERATION
-                    jwt.sign({correo:userCred.correo}, "kangarookey", (err, token) => {
-                        if(!err) {
-                            res.send({token:token})
-                        }
-                        else {
-                            res.status(500).send({message: " Some problem while creating token. Please try again"})
-                        }
-                    })
-                }
-                else {
-                    res.status(403).send({message: "Contraseña incorrecta!"})
-                }
-            })
-        }
-        else {
-            res.status(404).send({message: "El usuario no se encontró"})
-        }
-    })
-    .catch((err) => {
-        console.log(err)
-        res.send({message: "Encountered some problem!"})
-    })
-})
+    const user = await newUserModel.findOne({ correo });
+    if (!user) {
+      return res.status(404).json({ message: "El usuario no se encontró" });
+    }
+
+    const stored = user.contrasena || "";
+    const looksHashed = /^\$2[aby]\$\d{2}\$.{53}$/.test(stored); // bcrypt format
+
+    let authOK = false;
+    if (looksHashed) {
+      // bcrypt flow
+      try {
+        authOK = await bcrypt.compare(contrasena, stored);
+      } catch (e) {
+        // if something odd with hash, fail closed
+        authOK = false;
+      }
+    } else {
+      // plain-text fallback (temporary until you migrate)
+      authOK = (contrasena === stored);
+    }
+
+    if (!authOK) {
+      return res.status(403).json({ message: "Contraseña incorrecta!" });
+    }
+
+    // Build token
+    const jwtSecret = process.env.JWT_SECRET || "kangarookey";
+    const token = jwt.sign(
+      { correo: user.correo, id: user._id },
+      jwtSecret,
+      { expiresIn: "30d" }
+    );
+
+    // Return a bit more data so client can use it if needed
+    return res.json({
+      token,
+      correo: user.correo,
+      nombre: user.nombre,
+      empresa: user.empresa,
+      // Add role/isAdmin if you later store it on user:
+      // role: user.role || "user",
+      // isAdmin: user.role === "admin",
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    return res.status(500).json({ message: "Encountered some problem!" });
+  }
+});
+
+// router.post('/login', (req, res) => {
+//     let userCred = req.body
+//     console.log(userCred)
+
+//     newUserModel.findOne({correo:userCred.correo})
+//     .then((user) => {
+//         if(user !==null) {
+//             bcrypt.compare(userCred.contrasena, user.contrasena, (err, result) => {
+//                 if(result===true) {
+//                     //TOKEN GENERATION
+//                     jwt.sign({correo:userCred.correo}, "kangarookey", (err, token) => {
+//                         if(!err) {
+//                             res.send({token:token})
+//                         }
+//                         else {
+//                             res.status(500).send({message: " Some problem while creating token. Please try again"})
+//                         }
+//                     })
+//                 }
+//                 else {
+//                     res.status(403).send({message: "Contraseña incorrecta!"})
+//                 }
+//             })
+//         }
+//         else {
+//             res.status(404).send({message: "El usuario no se encontró"})
+//         }
+//     })
+//     .catch((err) => {
+//         console.log(err)
+//         res.send({message: "Encountered some problem!"})
+//     })
+// })
 
 // ENDPOINT FOR RESTORING FORGOTTEN PASSWORD
 router.post("/forgot-password", async (req, res) => {
