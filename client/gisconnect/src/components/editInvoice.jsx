@@ -72,28 +72,78 @@ export default function EditInvoice() {
           ...newBillingInfo,
           userEmail: userEmail
         };
+    //   sep10
+    try {
+        const ac = new AbortController();
+        const t = setTimeout(() => ac.abort("timeout"), 15000);
       
-        try {    
-          const response = await fetch(`${API}/billing-address`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(payload)
-          });
+        const response = await fetch(`${API}/billing-address`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json; charset=utf-8",
+            // Add CSRF header if your server expects it:
+            // "X-CSRF-Token": csrfToken,
+          },
+          body: JSON.stringify(payload),
+          // If your auth is cookie-based sessions, include this:
+          // Remove if you use Authorization headers instead.
+          credentials: "include",
+          mode: "cors",
+          signal: ac.signal,
+        });
       
-          if (response.ok) {
-            alert("Dirección guardada exitosamente.");
-            navigate('/userProfile');
+        clearTimeout(t);
+      
+        if (!response.ok) {
+          // Try to parse JSON; fallback to text; show status code for debugging
+          let errMsg = `HTTP ${response.status}`;
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const err = await response.json().catch(() => ({}));
+            if (err?.message) errMsg = err.message;
           } else {
-            const error = await response.json();
-            alert("Error al guardar dirección: " + error.message);
+            const txt = await response.text().catch(() => "");
+            if (txt) errMsg = txt.slice(0, 300);
           }
-        } catch (err) {
-          console.error("Error al guardar dirección:", err);
-          alert("Error del servidor al guardar la dirección.");
+          alert("Error al guardar dirección: " + errMsg);
+          return;
         }
-      };
+      
+        alert("Dirección guardada exitosamente.");
+        navigate("/userProfile");
+      } catch (err) {
+        // Differentiate likely causes to aid debugging
+        const isAbort = err?.name === "AbortError" || err === "timeout";
+        const hint = isAbort
+          ? "La solicitud tardó demasiado (timeout)."
+          : "Fallo de red/CORS/TLS (consulta consola).";
+        console.error("Error al guardar dirección:", err);
+        alert(`Error del servidor al guardar la dirección. ${hint}`);
+      }
+    }
+    // sep10
+
+    //     try {    
+    //       const response = await fetch(`${API}/billing-address`, {
+    //         method: "POST",
+    //         headers: {
+    //           "Content-Type": "application/json"
+    //         },
+    //         body: JSON.stringify(payload)
+    //       });
+      
+    //       if (response.ok) {
+    //         alert("Dirección guardada exitosamente.");
+    //         navigate('/userProfile');
+    //       } else {
+    //         const error = await response.json();
+    //         alert("Error al guardar dirección: " + error.message);
+    //       }
+    //     } catch (err) {
+    //       console.error("Error al guardar dirección:", err);
+    //       alert("Error del servidor al guardar la dirección.");
+    //     }
+    //   };
 
     return (
         <body className="app-shell body-BG-Gradient">
