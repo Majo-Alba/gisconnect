@@ -25,7 +25,7 @@ client/.env
 client/gisconnect/.env
 server/.env
 server/gisconnect/.env
-# server/firebase-service-account.json
+server/firebase-service-account.json
 
 
 # Allow example env files
