@@ -1,4 +1,7 @@
-import { useState } from "react"
+// though file pushClient.js does indeed exist (server/src/lib/pushClient.js) Im still getting the error. Here is my current adminHome.jsx, mind taking a look and make neccesary tweaks
+// import { useState } from "react"
+import { useState, useEffect } from "react"
+
 import { Link, useNavigate } from "react-router-dom"
 import axios from "axios"
 
@@ -19,10 +22,8 @@ import GestionaIcono from "/src/assets/images/Icono_gestionarEntrega.png"
 import PorEntregarIcono from "/src/assets/images/Icono_porEntregar.png"
 import EntregadoIcono from "/src/assets/images/Icono_entregado.png"
 
-// SEP10
-import { registerAdminPushToken } from "/src/lib/pushClient";
+import { registerAdminPushToken } from "../lib/pushClient";
 import { API } from "/src/lib/api";
-// SEP10
 
 export default function AdminHome() {
 
@@ -69,12 +70,14 @@ export default function AdminHome() {
     }
 
     // SEP10
+    // Register push token for signed-in admin
     useEffect(() => {
         const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
-        const email = raw?.correo || localStorage.getItem("userEmail");
-        // Ensure this is an admin email before registering
-        if (email) registerAdminPushToken(API, email);
-      }, []);
+        const email = raw?.correo || localStorage.getItem("userEmail") || "";
+        if (!email) return;
+        // Optional: gate by your known admin list here before calling
+        registerAdminPushToken(API, email);
+    }, []);
     // SEP10
 
     return (
