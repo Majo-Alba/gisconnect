@@ -185,7 +185,7 @@ export default function ManageDeliveryDetails() {
     doc.setFontSize(8);
     doc.text("Código de rastreo", 30, 128);
 
-    doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
+    // doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
 
     // sep10
     try {
