@@ -83,3 +83,4 @@ server/service_account.b64
 # *.log
 # .vscode/*
 # !.vscode/settings.json
+server/firebase-service-account.json
