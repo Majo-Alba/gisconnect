@@ -813,6 +813,55 @@ if (mxnItems.length) {
   cursorY = cursorY + boxHeight + 4;
 }
 
+// sep10
+// =========================
+  // NEW: Mini-box de “Keep-in-mind” al fondo de la ÚLTIMA página
+  // =========================
+  {
+    const last = doc.internal.getNumberOfPages();
+    doc.setPage(last);
+
+    const boxPad = 4;
+    const boxX = 12;
+    const boxW = 186;
+    const lineH = 5.2;
+
+    // tus 4 puntos (con wording exacto)
+    const bullets = [
+      "1) Disponibilidad inmediata.",
+      "2) Precios LAB Guadalajara, Jalisco.",
+      "3) Precios en dólares americanos, pagaderos al TC del DOF del día del pago.",
+      "4) Precios sujetos a cambio sin previo aviso.",
+    ];
+
+    // medir alto total con wrapping
+    const textLines = bullets.flatMap((b) => doc.splitTextToSize(b, boxW - boxPad * 2));
+    const boxH = boxPad * 2 + textLines.length * lineH;
+
+    // lo pegamos al fondo con un pequeño margen
+    const bottomMargin = 10;
+    const boxY = pageHeight - boxH - bottomMargin;
+
+    // dibujar caja clara
+    doc.setFillColor(241, 241, 241);
+    doc.setDrawColor(200, 200, 200);
+    if (typeof doc.roundedRect === "function") {
+      doc.roundedRect(boxX, boxY, boxW, boxH, 2.5, 2.5, "FD");
+    } else {
+      doc.rect(boxX, boxY, boxW, boxH, "FD");
+    }
+
+    // contenido
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    let y = boxY + boxPad + 3;
+    textLines.forEach((ln) => {
+      doc.text(ln, boxX + boxPad, y);
+      y += lineH;
+    });
+  }
+// sep10
+
 // ----> 
 
     // --- Build the PDF once ---
