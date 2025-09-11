@@ -22,6 +22,7 @@ export default function UserProfile() {
   const editAddresses = () => navigate("/editAddress");
   const editInvoiceInfo = () => navigate("/editInvoice");
   const editShippingPrefs = () => navigate("/editShippingPreferences");
+  
 
   // NEW: go to full manager
   const goToManageAll = () => navigate("/manageAddresses");
@@ -212,7 +213,7 @@ export default function UserProfile() {
           {/* DIRECCIONES */}
           <div className="sectionHeader-iconEdit-Div">
             <label className="subSection-headerLabel">Datos de Envío</label>
-            <div className="icon-editLabel-Div" onClick={goToManageAll}>
+            <div className="icon-editLabel-Div" onClick={editAddresses}>
               <img src={LocationIcon} alt="Editar" width="25" height="25" />
               <label className="edit-Label">Administrar <br /> direcciones</label>
             </div>
@@ -234,7 +235,7 @@ export default function UserProfile() {
           {/* PREFERENCIAS DE ENVÍO */}
           <div className="sectionHeader-iconEdit-Div" style={{ marginTop: 14 }}>
             <label className="subSection-headerLabel">Preferencias de Envío</label>
-            <div className="icon-editLabel-Div" onClick={goToManageAll}>
+            <div className="icon-editLabel-Div" onClick={editShippingPrefs}>
               <img src={GestionaIcono} alt="Editar" width="29" height="29" />
               <label className="edit-Label">Administrar <br /> preferencias</label>
             </div>
@@ -252,7 +253,7 @@ export default function UserProfile() {
           {/* FACTURACIÓN */}
           <div className="sectionHeader-iconEdit-Div" style={{ marginTop: 14 }}>
             <label className="subSection-invoiceLabel">Datos de Facturación</label>
-            <div className="icon-editLabel-Div" onClick={goToManageAll}>
+            <div className="icon-editLabel-Div" onClick={editInvoiceInfo}>
               <img src={InvoiceIcon} alt="Editar" width="25" height="25" />
               <label className="edit-Label">Administrar datos <br /> de facturación</label>
             </div>
