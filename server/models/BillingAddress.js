@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const BillingAddressSchema = new mongoose.Schema({
-  apodo: { type: String, required: true }, // Nickname
+  // apodo: { type: String, required: true }, // Nickname
   razonSocial: { type: String, required: true },
   rfcEmpresa: { type: String, required: true },
 //   correoFiscal: { type: String, required: true },
