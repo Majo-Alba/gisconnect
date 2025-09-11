@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -63,6 +64,30 @@ export default function OrderNow() {
   // fetch product images
   const makeKey = (name = "", pres = "") =>
     `${name}`.trim().toLowerCase() + "__" + `${pres}`.trim().toLowerCase();
+
+  // sep11
+   // ⬇️ ADD: helpers + “newest” holders
+   const _idToMs = (id) => {
+    try { return parseInt(String(id).slice(0, 8), 16) * 1000; } catch { return 0; }
+  };
+  const pickNewest = (arr) =>
+    Array.isArray(arr) && arr.length
+      ? [...arr].sort((a, b) => _idToMs(b?._id) - _idToMs(a?._id))[0]
+      : null;
+
+  // ⬇️ ADD: store newest records so we can auto-use them
+  const [newestShipping, setNewestShipping] = useState(null);
+  const [newestBilling, setNewestBilling] = useState(null);
+  // sep11
+
+  // sep11
+  const [userProfile, setUserProfile] = useState({
+    empresa: "",
+    nombre: "",
+    apellido: "",
+    correo: "",
+  });
+  // sep11
 
   useEffect(() => {
     const csvUrl =
@@ -266,51 +291,173 @@ export default function OrderNow() {
       });
   }, [clientNameFromSheet]);
 
-  // Load saved addresses + shipping preferences (Mongo)
+  // sep11
   useEffect(() => {
     const email = userCredentials?.correo;
     if (!email) return;
-
-    // Shipping addresses for this user
-    axios
-      .get(`${API}/shipping-address/${encodeURIComponent(email)}`)
-      .then((res) => setShippingOptions(Array.isArray(res.data) ? res.data : []))
-      .catch((err) => console.error("Error fetching shipping addresses:", err));
-
-    // Billing addresses for this user
-    axios
-      .get(`${API}/billing-address/${encodeURIComponent(email)}`)
-      .then((res) => setBillingOptions(Array.isArray(res.data) ? res.data : []))
-      .catch((err) => console.error("Error fetching billing addresses:", err));
-
-    // ⬅️ NEW: shipping preferences
-    fetch(`${API}/users/by-email?email=${encodeURIComponent(email)}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data = await res.json();
-        const prefs =
-          data?.shippingPreferences || {
-            preferredCarrier: data?.preferredCarrier || "",
-            insureShipment: !!data?.insureShipment,
-          };
-        setShippingPrefs({
-          preferredCarrier: (prefs?.preferredCarrier || "").trim(),
-          insureShipment: !!prefs?.insureShipment,
+  
+    (async () => {
+      try {
+        const [sRes, bRes] = await Promise.all([
+          axios.get(`${API}/shipping-address/${encodeURIComponent(email)}`),
+          axios.get(`${API}/billing-address/${encodeURIComponent(email)}`),
+        ]);
+  
+        const sList = Array.isArray(sRes.data) ? sRes.data : [];
+        const bList = Array.isArray(bRes.data) ? bRes.data : [];
+  
+        setShippingOptions(sList);
+        setBillingOptions(bList);
+  
+        // pick newest so it's used by default if user doesn’t pick one
+        setNewestShipping(pickNewest(sList));
+        setNewestBilling(pickNewest(bList));
+      } catch (err) {
+        console.error("Error fetching addresses:", err);
+        setShippingOptions([]);
+        setBillingOptions([]);
+        setNewestShipping(null);
+        setNewestBilling(null);
+      }
+        // shipping preferences (kept) + user profile from Mongo
+      try {
+        const res = await fetch(`${API}/users/by-email?email=${encodeURIComponent(email)}`, {
+          method: "GET",
+          headers: { Accept: "application/json" },
+          cache: "no-store",
         });
-      })
-      .catch(() => {});
+        if (res.ok) {
+          const data = await res.json();
+
+          // NEW: set profile for PDF Shipping header
+          setUserProfile({
+            empresa: data?.empresa || "",
+            nombre: data?.nombre || "",
+            apellido: data?.apellido || "",
+            correo: data?.correo || email || "",
+          });
+
+          // keep: shipping preferences
+          const prefs =
+            data?.shippingPreferences || {
+              preferredCarrier: data?.preferredCarrier || "",
+              insureShipment: !!data?.insureShipment,
+            };
+          setShippingPrefs({
+            preferredCarrier: (prefs?.preferredCarrier || "").trim(),
+            insureShipment: !!prefs?.insureShipment,
+          });
+        }
+      } catch {
+        /* ignore */
+      }
+      // // shipping preferences (kept)
+      // try {
+      //   const res = await fetch(`${API}/users/by-email?email=${encodeURIComponent(email)}`, {
+      //     method: "GET",
+      //     headers: { Accept: "application/json" },
+      //     cache: "no-store",
+      //   });
+      //   if (res.ok) {
+      //     const data = await res.json();
+      //     const prefs =
+      //       data?.shippingPreferences || {
+      //         preferredCarrier: data?.preferredCarrier || "",
+      //         insureShipment: !!data?.insureShipment,
+      //       };
+      //     setShippingPrefs({
+      //       preferredCarrier: (prefs?.preferredCarrier || "").trim(),
+      //       insureShipment: !!prefs?.insureShipment,
+      //     });
+      //   }
+      // } catch {
+      //   /* ignore */
+      // }
+    })();
   }, [userCredentials?.correo]);
+  // // Load saved addresses + shipping preferences (Mongo)
+  // useEffect(() => {
+  //   const email = userCredentials?.correo;
+  //   if (!email) return;
+
+  //   // Shipping addresses for this user
+  //   axios
+  //     .get(`${API}/shipping-address/${encodeURIComponent(email)}`)
+  //     .then((res) => setShippingOptions(Array.isArray(res.data) ? res.data : []))
+  //     .catch((err) => console.error("Error fetching shipping addresses:", err));
+
+  //   // Billing addresses for this user
+  //   axios
+  //     .get(`${API}/billing-address/${encodeURIComponent(email)}`)
+  //     .then((res) => setBillingOptions(Array.isArray(res.data) ? res.data : []))
+  //     .catch((err) => console.error("Error fetching billing addresses:", err));
+
+  //   // ⬅️ NEW: shipping preferences
+  //   fetch(`${API}/users/by-email?email=${encodeURIComponent(email)}`, {
+  //     method: "GET",
+  //     headers: { Accept: "application/json" },
+  //     cache: "no-store",
+  //   })
+  //     .then(async (res) => {
+  //       if (!res.ok) return;
+  //       const data = await res.json();
+  //       const prefs =
+  //         data?.shippingPreferences || {
+  //           preferredCarrier: data?.preferredCarrier || "",
+  //           insureShipment: !!data?.insureShipment,
+  //         };
+  //       setShippingPrefs({
+  //         preferredCarrier: (prefs?.preferredCarrier || "").trim(),
+  //         insureShipment: !!prefs?.insureShipment,
+  //       });
+  //     })
+  //     .catch(() => {});
+  // }, [userCredentials?.correo]);
+// sep11
 
   // Build the current shipping/billing objects shown on screen
+  // const currentShipping = useMemo(() => {
+  //   if (selectedShippingId) {
+  //     const s = shippingOptions.find((x) => x._id === selectedShippingId);
+  //     if (s) {
+  //       return {
+  //         calleEnvio: s.calleEnvio || "",
+  //         exteriorEnvio: s.exteriorEnvio || "",
+  //         interiorEnvio: s.interiorEnvio || "",
+  //         coloniaEnvio: s.coloniaEnvio || "",
+  //         ciudadEnvio: s.ciudadEnvio || "",
+  //         estadoEnvio: s.estadoEnvio || "",
+  //         cpEnvio: s.cpEnvio || "",
+  //       };
+  //     }
+  //   }
+  //   return {
+  //     calleEnvio: calleEnvio || "",
+  //     exteriorEnvio: exteriorEnvio || "",
+  //     interiorEnvio: interiorEnvio || "",
+  //     coloniaEnvio: coloniaEnvio || "",
+  //     ciudadEnvio: ciudadEnvio || "",
+  //     estadoEnvio: estadoEnvio || "",
+  //     cpEnvio: cpEnvio || "",
+  //   };
+  // }, [
+  //   selectedShippingId,
+  //   shippingOptions,
+  //   calleEnvio,
+  //   exteriorEnvio,
+  //   interiorEnvio,
+  //   coloniaEnvio,
+  //   ciudadEnvio,
+  //   estadoEnvio,
+  //   cpEnvio,
+  // ]);
   const currentShipping = useMemo(() => {
+    // 1) user explicitly selected an address
     if (selectedShippingId) {
       const s = shippingOptions.find((x) => x._id === selectedShippingId);
       if (s) {
         return {
+          apodo: s.apodo || "",
           calleEnvio: s.calleEnvio || "",
           exteriorEnvio: s.exteriorEnvio || "",
           interiorEnvio: s.interiorEnvio || "",
@@ -321,28 +468,49 @@ export default function OrderNow() {
         };
       }
     }
+    // 2) fallback to newest from Mongo
+    if (newestShipping) {
+      return {
+        apodo: newestShipping.apodo || "",
+        calleEnvio: newestShipping.calleEnvio || "",
+        exteriorEnvio: newestShipping.exteriorEnvio || "",
+        interiorEnvio: newestShipping.interiorEnvio || "",
+        coloniaEnvio: newestShipping.coloniaEnvio || "",
+        ciudadEnvio: newestShipping.ciudadEnvio || "",
+        estadoEnvio: newestShipping.estadoEnvio || "",
+        cpEnvio: newestShipping.cpEnvio || "",
+      };
+    }
+    // 3) nothing available
     return {
-      calleEnvio: calleEnvio || "",
-      exteriorEnvio: exteriorEnvio || "",
-      interiorEnvio: interiorEnvio || "",
-      coloniaEnvio: coloniaEnvio || "",
-      ciudadEnvio: ciudadEnvio || "",
-      estadoEnvio: estadoEnvio || "",
-      cpEnvio: cpEnvio || "",
+      apodo: "",
+      calleEnvio: "",
+      exteriorEnvio: "",
+      interiorEnvio: "",
+      coloniaEnvio: "",
+      ciudadEnvio: "",
+      estadoEnvio: "",
+      cpEnvio: "",
     };
-  }, [
-    selectedShippingId,
-    shippingOptions,
-    calleEnvio,
-    exteriorEnvio,
-    interiorEnvio,
-    coloniaEnvio,
-    ciudadEnvio,
-    estadoEnvio,
-    cpEnvio,
-  ]);
+  }, [selectedShippingId, shippingOptions, newestShipping]);
 
   const currentBilling = useMemo(() => {
+    if (!wantsInvoice) {
+      return {
+        razonSocial: "",
+        rfcEmpresa: "",
+        correoFiscal: "",
+        calleFiscal: "",
+        exteriorFiscal: "",
+        interiorFiscal: "",
+        coloniaFiscal: "",
+        ciudadFiscal: "",
+        estadoFiscal: "",
+        cpFiscal: "",
+      };
+    }
+  
+    // 1) user explicitly selected an address
     if (selectedBillingId) {
       const b = billingOptions.find((x) => x._id === selectedBillingId);
       if (b) {
@@ -360,32 +528,84 @@ export default function OrderNow() {
         };
       }
     }
+    // 2) fallback to newest from Mongo
+    if (newestBilling) {
+      return {
+        razonSocial: newestBilling.razonSocial || "",
+        rfcEmpresa: newestBilling.rfcEmpresa || "",
+        correoFiscal: newestBilling.correoFiscal || "",
+        calleFiscal: newestBilling.calleFiscal || "",
+        exteriorFiscal: newestBilling.exteriorFiscal || "",
+        interiorFiscal: newestBilling.interiorFiscal || "",
+        coloniaFiscal: newestBilling.coloniaFiscal || "",
+        ciudadFiscal: newestBilling.ciudadFiscal || "",
+        estadoFiscal: newestBilling.estadoFiscal || "",
+        cpFiscal: newestBilling.cpFiscal || "",
+      };
+    }
+    // 3) nothing available
     return {
-      razonSocial: razonSocial || "",
-      rfcEmpresa: rfcEmpresa || "",
-      correoFiscal: correoFiscal || "",
-      calleFiscal: calleFiscal || "",
-      exteriorFiscal: exteriorFiscal || "",
-      interiorFiscal: interiorFiscal || "",
-      coloniaFiscal: coloniaFiscal || "",
-      ciudadFiscal: ciudadFiscal || "",
-      estadoFiscal: estadoFiscal || "",
-      cpFiscal: cpFiscal || "",
+      razonSocial: "",
+      rfcEmpresa: "",
+      correoFiscal: "",
+      calleFiscal: "",
+      exteriorFiscal: "",
+      interiorFiscal: "",
+      coloniaFiscal: "",
+      ciudadFiscal: "",
+      estadoFiscal: "",
+      cpFiscal: "",
     };
-  }, [
-    selectedBillingId,
-    billingOptions,
-    razonSocial,
-    rfcEmpresa,
-    correoFiscal,
-    calleFiscal,
-    exteriorFiscal,
-    interiorFiscal,
-    coloniaFiscal,
-    ciudadFiscal,
-    estadoFiscal,
-    cpFiscal,
-  ]);
+  }, [wantsInvoice, selectedBillingId, billingOptions, newestBilling]);
+
+  useEffect(() => {
+    if (!selectedShippingId && newestShipping?._id) setSelectedShippingId(newestShipping._id);
+    if (!selectedBillingId && newestBilling?._id) setSelectedBillingId(newestBilling._id);
+  }, [newestShipping?._id, newestBilling?._id]);
+  // const currentBilling = useMemo(() => {
+  //   if (selectedBillingId) {
+  //     const b = billingOptions.find((x) => x._id === selectedBillingId);
+  //     if (b) {
+  //       return {
+  //         razonSocial: b.razonSocial || "",
+  //         rfcEmpresa: b.rfcEmpresa || "",
+  //         correoFiscal: b.correoFiscal || "",
+  //         calleFiscal: b.calleFiscal || "",
+  //         exteriorFiscal: b.exteriorFiscal || "",
+  //         interiorFiscal: b.interiorFiscal || "",
+  //         coloniaFiscal: b.coloniaFiscal || "",
+  //         ciudadFiscal: b.ciudadFiscal || "",
+  //         estadoFiscal: b.estadoFiscal || "",
+  //         cpFiscal: b.cpFiscal || "",
+  //       };
+  //     }
+  //   }
+  //   return {
+  //     razonSocial: razonSocial || "",
+  //     rfcEmpresa: rfcEmpresa || "",
+  //     correoFiscal: correoFiscal || "",
+  //     calleFiscal: calleFiscal || "",
+  //     exteriorFiscal: exteriorFiscal || "",
+  //     interiorFiscal: interiorFiscal || "",
+  //     coloniaFiscal: coloniaFiscal || "",
+  //     ciudadFiscal: ciudadFiscal || "",
+  //     estadoFiscal: estadoFiscal || "",
+  //     cpFiscal: cpFiscal || "",
+  //   };
+  // }, [
+  //   selectedBillingId,
+  //   billingOptions,
+  //   razonSocial,
+  //   rfcEmpresa,
+  //   correoFiscal,
+  //   calleFiscal,
+  //   exteriorFiscal,
+  //   interiorFiscal,
+  //   coloniaFiscal,
+  //   ciudadFiscal,
+  //   estadoFiscal,
+  //   cpFiscal,
+  // ]);
 
   // -----> sep09
 
@@ -472,50 +692,6 @@ const totalAllMXN =
     ? subtotalMXN + subtotalUSD * Number(dofRate)   // USD → MXN
     : null;
 
-// SEP09
-
-  // // ====== CURRENCY-AWARE TOTALS ======
-  // const {
-  //   totalUSDNative,
-  //   totalMXNNative,
-  //   totalAllUSD,
-  //   totalAllMXN,
-  // } = useMemo(() => {
-  //   let usdNative = 0;
-  //   let mxnNative = 0;
-
-  //   items.forEach((it) => {
-  //     const qty = Number(it.amount) || 0;
-
-  //     if ((it.currency || "USD").toUpperCase() === "MXN") {
-  //       const mxnUnit = Number(
-  //         it.priceMXN ?? (it.currency?.toUpperCase() === "MXN" ? it.price : null)
-  //       );
-  //       if (Number.isFinite(mxnUnit)) {
-  //         mxnNative += qty * mxnUnit;
-  //       }
-  //     } else {
-  //       const usdUnit = Number(it.priceUSD ?? it.price);
-  //       if (Number.isFinite(usdUnit)) {
-  //         usdNative += qty * usdUnit;
-  //       }
-  //     }
-  //   });
-
-  //   const allUSD =
-  //     dofRate && Number.isFinite(dofRate) ? usdNative + mxnNative / dofRate : null;
-  //   const allMXN =
-  //     dofRate && Number.isFinite(dofRate) ? mxnNative + usdNative * dofRate : null;
-
-  //   return {
-  //     totalUSDNative: usdNative,
-  //     totalMXNNative: mxnNative,
-  //     totalAllUSD: allUSD,
-  //     totalAllMXN: allMXN,
-  //   };
-  // }, [items, dofRate]);
-
-  // -----> Sep09
 
   const numericDiscount = Number(discountTotal || 0);
   const baseAllUSD = totalAllUSD ?? 0;
@@ -575,34 +751,72 @@ const handleDownloadAndSave = async () => {
   doc.setDrawColor(200, 200, 200);
   doc.line(10, 45, 200, 45);
 
-  // ========= Cliente - Envío =========
-  doc.setFontSize(11);
-  doc.setFont("helvetica", "bold");
-  doc.text("Información de Envío", 13, 51);
+  // // ========= Cliente - Envío =========
+  // ========= Cliente - Envío (Mongo user + selected/newest shipping address) =========
+doc.setFontSize(11);
+doc.setFont("helvetica", "bold");
+doc.text("Información de Envío", 13, 51);
 
-  doc.setFontSize(10);
-  doc.addImage(iconBuilding, 13, 53, 5, 5);
-  doc.text(`${nombreEmpresa || ""}`, 19, 57);
+doc.setFontSize(10);
 
-  doc.addImage(iconContact, 13.5, 59.5, 4, 4);
-  doc.text(`${nombreEncargado || ""}`, 19, 63);
+// Empresa (Mongo: empresa)
+doc.addImage(iconBuilding, 13, 53, 5, 5);
+doc.text(`${userProfile.empresa || ""}`, 19, 57);
 
-  doc.addImage(iconLocation, 13.7, 65, 3, 4);
-  doc.text(
-    `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
-    19, 68
-  );
-  doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
-  doc.text(
-    `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
-    19, 76
-  );
+// Contacto (Mongo: nombre + apellido)
+doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+doc.text(
+  `${[userProfile.nombre, userProfile.apellido].filter(Boolean).join(" ")}`,
+  19,
+  63
+);
 
-  doc.addImage(iconPhone, 13.7, 78, 3, 4);
-  doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
+// Dirección (Mongo shipping address)
+doc.addImage(iconLocation, 13.7, 65, 3, 4);
+doc.text(
+  `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
+  19,
+  68
+);
+doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
+doc.text(
+  `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
+  19,
+  76
+);
 
-  doc.addImage(iconEmail, 13.7, 84, 4, 3);
-  doc.text(`${correoEmpresa || ""}`, 19, 87);
+// (REMOVED phone block)
+
+// Correo (Mongo: correo)
+doc.addImage(iconEmail, 13.7, 84, 4, 3);
+doc.text(`${userProfile.correo || userCredentials?.correo || ""}`, 19, 87);
+  // doc.setFontSize(11);
+  // doc.setFont("helvetica", "bold");
+  // doc.text("Información de Envío", 13, 51);
+
+  // doc.setFontSize(10);
+  // doc.addImage(iconBuilding, 13, 53, 5, 5);
+  // doc.text(`${nombreEmpresa || ""}`, 19, 57);
+
+  // doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+  // doc.text(`${nombreEncargado || ""}`, 19, 63);
+
+  // doc.addImage(iconLocation, 13.7, 65, 3, 4);
+  // doc.text(
+  //   `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
+  //   19, 68
+  // );
+  // doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
+  // doc.text(
+  //   `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
+  //   19, 76
+  // );
+
+  // doc.addImage(iconPhone, 13.7, 78, 3, 4);
+  // doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
+
+  // doc.addImage(iconEmail, 13.7, 84, 4, 3);
+  // doc.text(`${correoEmpresa || ""}`, 19, 87);
 
   // ========= Información Fiscal (solo si factura) =========
   doc.setFontSize(11);
@@ -1227,412 +1441,6 @@ const handleDownloadAndSave = async () => {
     alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
   }
 };
-
-  // const handleDownloadAndSave = async () => {
-  //   const doc = new jsPDF();
-  //   const pageWidth = doc.internal.pageSize.getWidth();
-  //   const pageHeight = doc.internal.pageSize.getHeight();
-  //   const today = new Date();
-
-  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
-
-  //   doc.setFontSize(10);
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text(`Fecha de Elaboración: ${today.toLocaleDateString("es-MX")}`, 195, 15, null, null, "right");
-
-  //   doc.setLineWidth(0.1);
-  //   doc.setDrawColor(200, 200, 200);
-  //   doc.line(10, 45, 200, 45);
-
-  //   // Cliente - Envío
-  //   doc.setFontSize(11);
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text("Información de Envío", 13, 51);
-
-  //   doc.setFontSize(10);
-  //   doc.addImage(iconBuilding, 13, 53, 5, 5);
-  //   doc.text(`${nombreEmpresa || ""}`, 19, 57);
-
-  //   doc.addImage(iconContact, 13.5, 59.5, 4, 4);
-  //   doc.text(`${nombreEncargado || ""}`, 19, 63);
-
-  //   doc.addImage(iconLocation, 13.7, 65, 3, 4);
-  //   doc.text(
-  //     `${(currentShipping.calleEnvio || "")}  # ${(currentShipping.exteriorEnvio || "")}  Int. ${(currentShipping.interiorEnvio || "")}`,
-  //     19, 68
-  //   );
-  //   doc.text(`Col. ${currentShipping.coloniaEnvio || ""}`, 19, 72);
-  //   doc.text(
-  //     `${(currentShipping.ciudadEnvio || "")}, ${(currentShipping.estadoEnvio || "")}. C.P. ${(currentShipping.cpEnvio || "")}`,
-  //     19, 76
-  //   );
-
-  //   doc.addImage(iconPhone, 13.7, 78, 3, 4);
-  //   doc.text(`${telefonoEmpresa || ""}`, 19, 81.5);
-
-  //   doc.addImage(iconEmail, 13.7, 84, 4, 3);
-  //   doc.text(`${correoEmpresa || ""}`, 19, 87);
-
-  //   // Billing (only render details if wantsInvoice)
-  //   doc.setFontSize(11);
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text("Información Fiscal", 100, 51);
-
-  //   doc.setFontSize(10);
-  //   if (wantsInvoice) {
-  //     doc.text(`Razón Social: ${currentBilling.razonSocial || ""}`, 106, 57);
-  //     doc.text(`RFC: ${currentBilling.rfcEmpresa || ""}`, 106, 63);
-
-  //     doc.addImage(iconEmail, 100, 65, 4, 3);
-  //     doc.text(`${currentBilling.correoFiscal || ""}`, 106, 68);
-
-  //     doc.addImage(iconLocation, 100.5, 70, 3, 4);
-  //     doc.text(
-  //       `${(currentBilling.calleFiscal || "")}  # ${(currentBilling.exteriorFiscal || "")}  Int. ${(currentBilling.interiorFiscal || "")}`,
-  //       106, 73
-  //     );
-  //     doc.text(`Col. ${currentBilling.coloniaFiscal || ""}`, 106, 77);
-  //     doc.text(
-  //       `${(currentBilling.ciudadFiscal || "")}, ${(currentBilling.estadoFiscal || "")}. C.P. ${(currentBilling.cpFiscal || "")}`,
-  //       106, 81
-  //     );
-  //   } else {
-  //     doc.setFont("helvetica", "italic");
-  //     doc.text("Sin factura.", 106, 57);
-  //     doc.setFont("helvetica", "normal");
-  //   }
-
-  //   // Separator
-  //   doc.setLineWidth(0.1);
-  //   doc.setDrawColor(200, 200, 200);
-  //   doc.line(10, 92, 200, 92);
-
-  //   // Items table
-  //   const tableData = items.map((it) => {
-  //     const cur = (it.currency || "USD").toUpperCase();
-  //     const unit =
-  //       cur === "MXN"
-  //         ? `$${Number(it.priceMXN ?? it.price).toFixed(2)} MXN`
-  //         : `$${Number(it.priceUSD ?? it.price).toFixed(2)} USD`;
-  //     const line =
-  //       cur === "MXN"
-  //         ? `$${(Number(it.amount) * Number(it.priceMXN ?? it.price)).toFixed(2)} MXN`
-  //         : `$${(Number(it.amount) * Number(it.priceUSD ?? it.price)).toFixed(2)} USD`;
-  //     const pack = it.packPresentation ? ` — ${it.packPresentation}` : "";
-  //     return [it.product, `${it.presentation}${pack}`, it.amount, unit, line];
-  //   });
-
-  //   autoTable(doc, {
-  //     head: [["Producto", "Presentación", "Cantidad", "Precio Unitario", "Total"]],
-  //     body: tableData,
-  //     startY: 100,
-  //     headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
-  //   });
-
-  //   let extraY = doc.lastAutoTable.finalY + 12;
-
-  //   // Totals box
-  //   const boxX = 141;
-  //   const boxY = extraY - 8;
-  //   const boxWidth = 55;
-  //   const boxHeight = 30;
-  //   const radius = 4;
-
-  //   if (doc.roundedRect) {
-  //     doc.setFillColor(207, 242, 137);
-  //     doc.roundedRect(boxX, boxY, boxWidth, boxHeight, radius, radius, "F");
-  //   } else {
-  //     doc.setFillColor(207, 242, 137);
-  //     doc.rect(boxX, boxY, boxWidth, boxHeight, "F");
-  //   }
-
-  //   const y0 = extraY;
-  //   doc.text(
-  //     `Total en USD: ${totalAllUSD !== null ? `$${totalAllUSD.toFixed(2)}` : "—"}`,
-  //     146,
-  //     y0
-  //   );
-  //   doc.text(
-  //     `Total en MXN: ${
-  //       totalAllMXN !== null
-  //         ? `$${totalAllMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-  //         : "—"
-  //     }`,
-  //     146,
-  //     y0 + 5
-  //   );
-
-  //   doc.setFontSize(9);
-  //   doc.setFont("helvetica", "italic");
-  //   doc.text(
-  //     dofRate ? `${dofRate.toFixed(2)} MXN/USD \n (DOF ${dofDate})` : "Tipo de cambio no disponible",
-  //     146,
-  //     y0 + 12
-  //   );
-
-  //   // Payment option box
-  //   const creditBoxX = 10;
-  //   const creditBoxY = y0 + 30;
-  //   const creditBoxWidth = 190;
-  //   const creditBoxHeight = 20;
-  //   const creditBoxRadius = 4;
-
-  //   if (doc.roundedRect) {
-  //     doc.setFillColor(241, 241, 241);
-  //     doc.roundedRect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, creditBoxRadius, creditBoxRadius, "F");
-  //   } else {
-  //     doc.setFillColor(241, 241, 241);
-  //     doc.rect(creditBoxX, creditBoxY, creditBoxWidth, creditBoxHeight, "F");
-  //   }
-
-  //   doc.setFontSize(11);
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text(`Opción de Pago: ${paymentOption}` , 15, y0 + 36);
-  //   if (paymentOption === "Crédito") {
-  //     doc.text(`Plazo de Crédito: ${creditDays} Días` , 15, y0 + 41);
-  //     doc.text(`Vencimiento: ${addDays(new Date(), creditDays).toLocaleDateString('es-MX')}` , 15, y0 + 46);
-  //   }
-
-  //   // Payment accounts page (conditional by wantsInvoice)
-  //   doc.addPage();
-  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
-
-  //   let y = 35;
-  //   doc.setFont("helvetica", "bold");
-  //   doc.setFontSize(16);
-  //   doc.setTextColor(24, 144, 69);
-  //   doc.text(`Cuentas para realizar pago:`, 13, y + 5);
-
-  //   const payBoxX = 10;
-  //   const payBoxY = y + 10;
-  //   const payBoxWidth = 190;
-  //   const payBoxHeight = 135;
-  //   const payBoxRadius = 4;
-
-  //   if (doc.roundedRect) {
-  //     doc.setFillColor(241, 241, 241);
-  //     doc.roundedRect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, payBoxRadius, payBoxRadius, "F");
-  //   } else {
-  //     doc.setFillColor(241, 241, 241);
-  //     doc.rect(payBoxX, payBoxY, payBoxWidth, payBoxHeight, "F");
-  //   }
-
-  //   doc.setFontSize(11);
-  //   doc.setTextColor(0, 0, 0);
-
-  //   if (wantsInvoice) {
-  //     // ===== FACTURA: mostrar cuentas de empresa (MXN + USD) =====
-  //     doc.setFont("helvetica", "bold");
-  //     doc.setFontSize(13);
-  //     doc.text(`CUENTA EN PESOS MEXICANOS`, 15, y + 17);
-
-  //     // // hey chatgpt, I'd like for each bank account to be placed in its own mini-box within the main bank account box. Can you do a direct edit
-  //     // --- Mini-box helper (inside the main pay box) ---
-  //     const miniBox = (title, lines, startY) => {
-  //       const x = 12;               // a bit inside the main gray box (10…200)
-  //       // const w = 186;              // keep it visually inset
-  //       const w = 120;              // keep it visually inset
-  //       const pad = 4;
-  //       const lineH = 5;
-
-  //       // compute height
-  //       const titleH = title ? lineH + 1 : 0;
-  //       const h = pad * 2 + titleH + lines.length * lineH;
-
-  //       // box
-  //       if (doc.roundedRect) {
-  //         doc.setFillColor(255, 255, 255);
-  //         doc.roundedRect(x, startY, w, h, 3, 3, "F");
-  //       } else {
-  //         doc.setFillColor(255, 255, 255);
-  //         doc.rect(x, startY, w, h, "F");
-  //       }
-
-  //       // content
-  //       let ty = startY + pad + (title ? lineH : 0);
-
-  //       if (title) {
-  //         doc.setFont("helvetica", "bold");
-  //         doc.setFontSize(11);
-  //         doc.text(title, x + pad, startY + pad + 3.5);
-  //       }
-
-  //       doc.setFont("helvetica", "normal");
-  //       doc.setFontSize(10);
-  //       lines.forEach((t) => {
-  //         doc.text(t, x + pad, ty + 2);
-  //         ty += lineH;
-  //       });
-
-  //       return startY + h; // returns bottom Y
-  //     };
-
-  //     // ===== MXN (Empresa) =====
-  //     doc.setFontSize(11);
-  //     doc.setFont("helvetica", "bold");
-  //     doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO:`, 15, y + 24);
-
-  //     let cursorY = y + 28;
-
-  //     // Mini-box: BBVA (MXN)
-  //     cursorY = miniBox(
-  //       "BANCO: BBVA",
-  //       [
-  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-  //         "NO. DE CUENTA: 010 115 1207",
-  //         "CLABE: 012 320 001 011 512 076",
-  //       ],
-  //       cursorY
-  //     );
-  //     cursorY += 6; // spacing between mini-boxes/sections
-
-  //     // ===== USD (Empresa) =====
-  //     doc.setFont("helvetica", "bold");
-  //     doc.setFontSize(13);
-  //     doc.text(`CUENTA EN DÓLARES AMERICANOS`, 15, cursorY + 12);
-  //     doc.setFontSize(11);
-  //     doc.setFont("helvetica", "bold");
-  //     doc.text(`TRANSFERENCIA:`, 15, cursorY + 19);
-
-  //     cursorY += 24;
-
-  //     // Mini-box: MONEX (USD)
-  //     cursorY = miniBox(
-  //       "BANCO: GRUPO FINANCIERO MONEX",
-  //       [
-  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-  //         "CLABE: 112 180 000 028 258 341",
-  //       ],
-  //       cursorY
-  //     );
-  //     cursorY += 6;
-
-  //     // Mini-box: INVEX (USD)
-  //     cursorY = miniBox(
-  //       "BANCO: BANCO INVEX, S.A.",
-  //       [
-  //         "NOMBRE: GREEN IMPORT SOLUTIONS SA DE CV",
-  //         "CLABE: 059 180 030 020 014 234",
-  //       ],
-  //       cursorY
-  //     );
-
-  //   } else {
-  //     // ===== SIN FACTURA: mostrar cuenta personal (MXN) =====
-  //     doc.setFont("helvetica", "bold");
-  //     doc.setFontSize(13);
-  //     doc.text(`CUENTA EN PESOS MEXICANOS - SIN FACTURA`, 15, y + 17);
-
-  //     doc.setFontSize(11);
-  //     doc.text(`TRANSFERENCIA O DEPÓSITO BANCARIO`, 15, y + 24);
-  //     doc.text(`BANCO: BBVA`, 15, y + 31);
-
-  //     doc.setFont("helvetica", "normal");
-  //     doc.text(`NOMBRE: ALEJANDRO GONZALEZ AGUIRRE`, 15, y + 36);
-  //     // doc.text(`BANCO: BBVA`, 15, y + 36);
-  //     doc.text(`NO. DE CUENTA: 124 525 4078`, 15, y + 41);
-  //     doc.text(`CLABE: 012 320 012 452 540 780`, 15, y + 46);
-  //     doc.text(`NO. DE TARJETA: 4152 3141 1021 5384`, 15, y + 51);
-  //   }
-
-  //   // Build payload
-  //   const userEmail = userCredentials?.correo;
-  //   const creditDue =
-  //     paymentOption === "Crédito" && creditAllowed
-  //       ? addDays(new Date(), creditDays).toISOString()
-  //       : null;
-
-  //   const orderInfo = {
-  //     userEmail,
-  //     items,
-  //     totals: {
-  //       totalUSDNative: Number(totalUSDNative.toFixed(2)),
-  //       totalMXNNative: Number(totalMXNNative.toFixed(2)),
-  //       totalAllUSD: totalAllUSD !== null ? Number(totalAllUSD.toFixed(2)) : null,
-  //       totalAllMXN: totalAllMXN !== null ? Number(totalAllMXN.toFixed(2)) : null,
-  //       dofRate,
-  //       dofDate,
-  //       discountUSD: Number(discountTotal || 0),
-  //       vatUSD: Number(vatUSD.toFixed(2)),
-  //       finalAllUSD: Number(finalAllUSD.toFixed(2)),
-  //       vatMXN: finalAllMXN !== null ? Number(vatMXN.toFixed(2)) : null,
-  //       finalAllMXN: finalAllMXN !== null ? Number(finalAllMXN.toFixed(2)) : null,
-  //     },
-  //     requestBill: !!wantsInvoice, // ⬅️ boolean
-  //     shippingInfo: { ...currentShipping },
-  //     billingInfo: wantsInvoice ? { ...currentBilling } : {}, // if no invoice, billing is irrelevant
-  //     shippingPreferences: { ...shippingPrefs }, // ⬅️ NEW: include for traceability
-  //     orderDate: new Date().toISOString(),
-  //     orderStatus: "Pedido Realizado",
-  //     paymentOption,
-  //     creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
-  //     creditDueDate: creditDue,
-  //   };
-
-  //   try {
-  //     // Upload
-  //     const pdfBlob = doc.output("blob");
-  //     const form = new FormData();
-  //     form.append("order", JSON.stringify(orderInfo));
-  //     form.append("pdf", pdfBlob, "order_summary.pdf");
-
-  //     let createdOrderId = null;
-  //     try {
-  //       const ac = new AbortController();
-  //       const timer = setTimeout(() => ac.abort("timeout"), 20000);
-  //       const res = await fetch(`${API}/orderDets`, {
-  //         method: "POST",
-  //         body: form,
-  //         mode: "cors",
-  //         cache: "no-store",
-  //         credentials: "omit",
-  //         signal: ac.signal,
-  //       });
-  //       clearTimeout(timer);
-  //       if (!res.ok) {
-  //         const text = await res.text().catch(() => "");
-  //         throw new Error(text || `HTTP ${res.status}`);
-  //       }
-  //       const data = await res.json().catch(() => ({}));
-  //       createdOrderId =
-  //         data?.id || data?.data?._id || data?._id || data?.order?._id || null;
-  //     } catch (fetchErr) {
-  //       const { data } = await axios.post(`${API}/orderDets`, form, {
-  //         withCredentials: false,
-  //         timeout: 20000,
-  //       });
-  //       createdOrderId =
-  //         data?.id || data?.data?._id || data?._id || data?.order?._id || null;
-  //     }
-
-  //     // Optional inventory hold
-  //     try {
-  //       const holdLines = buildHoldLines();
-  //       if (createdOrderId && holdLines.length > 0) {
-  //         await axios.post(
-  //           `${API}/inventory/hold`,
-  //           { orderId: createdOrderId, holdMinutes: 120, lines: holdLines },
-  //           { withCredentials: false, timeout: 15000 }
-  //         );
-  //       }
-  //     } catch (holdErr) {
-  //       console.error("Error al reservar inventario:", holdErr);
-  //     }
-
-  //     // Save locally after server success
-  //     doc.save("order_summary.pdf");
-
-  //     alert("Orden guardada exitosamente");
-  //     navigate("/myOrders", { state: { from: "orderNow" } });
-  //   } catch (error) {
-  //     console.error("Error al guardar la orden o al reservar inventario", error);
-  //     const msg =
-  //       error?.message ||
-  //       error?.response?.data?.error ||
-  //       "Revisa tu conexión y vuelve a intentar.";
-  //     alert(`Ocurrió un error al guardar la orden o al reservar inventario\n${msg}`);
-  //   }
-  // };
 
   return (
     <body className="app-shell body-BG-Gradient">
