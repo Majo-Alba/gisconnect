@@ -1352,6 +1352,37 @@ input:checked + .quoterSlider:before {
   margin-left: 5%;
   margin-bottom: 7%;
 }
+.userProfile-ManageBtn{
+  border: none;
+
+  width:fit-content;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 10px;
+  background-color: #0B9444;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.userProfile-ManageBtn-Btn:hover{
+  width:fit-content;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 10px;
+  background-color: #097838;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
 
 /* editAddress.jsx */
 

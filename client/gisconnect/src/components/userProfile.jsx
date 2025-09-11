@@ -196,15 +196,16 @@ export default function UserProfile() {
           <label className="clientProfile-subHeaderTitle">DETALLES DE TU CUENTA</label>
 
           {/* ===== Manage all button (NEW) ===== */}
-          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          {/* <div style={{ display: "flex", marginBottom: 8 }}> */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8, marginRight: 10 }}>
             <button
-              className="submitOrder-Btn"
+              className="userProfile-ManageBtn"
               onClick={goToManageAll}
               style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
               type="button"
             >
               <FontAwesomeIcon icon={faListCheck} />
-              Gestionar direcciones y preferencias
+              Gestionar preferencias
             </button>
           </div>
 
