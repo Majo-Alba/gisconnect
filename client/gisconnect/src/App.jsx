@@ -38,6 +38,7 @@ import NewOrderDetails from './components/newOrderDetails'
 import ManageDeliveryDetails from './components/manageDeliveryDetails'
 import DeliveredSummary from './components/deliveredSummary'
 import NoAccess from './components/NoAccess'
+import ManageAddresses from './components/ManageAddresses'
 // GISCONNECT - END
 
 function AdminRoute({ pathPrefix, Component }) {
@@ -112,6 +113,7 @@ function App() {
             <Route path='/userHome' element={<Private Component={UserHome}/>}/>
             <Route path='/expressQuote' element={<Private Component={ExpressQuote}/>}/>
             <Route path='/userProfile' element={<Private Component={UserProfile}/>}/>
+            <Route path='/manageAddresses' element={<Private Component={ManageAddresses}/>}/>
             <Route path='/editAddress' element={<Private Component={EditAddress}/>}/>
             <Route path='/editInvoice' element={<Private Component={EditInvoice}/>}/>
             <Route path='/editShippingPreferences' element={<Private Component={EditShippingPreferences}/>}/>
