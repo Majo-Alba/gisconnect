@@ -2340,16 +2340,20 @@ input:checked + .quoterSlider:before {
 }
 
 .adminHome-NotifsBtn:hover{
+  border: none;
+
   /* width:fit-content; */
-  padding-left: 30px;
-  padding-right: 30px;
-  padding-top: 10px;
-  padding-bottom: 10px;
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+
+  margin-left: 75%;
 
   color: white;
   font-weight: bold;
 
-  border-radius: 10px;
+  border-radius: 50%;
   background-color: #097838;
   box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
 }
