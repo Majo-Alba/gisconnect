@@ -2319,6 +2319,41 @@ input:checked + .quoterSlider:before {
 }
 
 /* GIS: ADMIN HOME */
+
+.adminHome-NotifsBtn{
+  border: none;
+
+  /* width:fit-content; */
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+
+  margin-left: 75%;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 50%;
+  background-color: #0B9444;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.adminHome-NotifsBtn:hover{
+  /* width:fit-content; */
+  padding-left: 30px;
+  padding-right: 30px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 10px;
+  background-color: #097838;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
 .adminHome-iconLabel-Div{
   /* display: grid; */
   margin-bottom: 20%;

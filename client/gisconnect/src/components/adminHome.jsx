@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import axios from "axios"
 
-import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons"
+import { faHouse, faCheckToSlot, faCartShopping, faBell } from "@fortawesome/free-solid-svg-icons"
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome"
 
 import Logo from "/src/assets/images/GIS_Logo.png";
@@ -77,7 +77,10 @@ export default function AdminHome() {
         if (!email) return;
         // Optional: gate by your known admin list here before calling
         registerAdminPushToken(API, email);
+        console.log("FB projectId =", import.meta.env.VITE_FB_PROJECT_ID);
+
     }, []);
+
     // SEP10
 
     return (
@@ -127,6 +130,17 @@ export default function AdminHome() {
                 </div>
             </div>
             {/* BODY END */}
+            <button
+            className="adminHome-NotifsBtn"
+            onClick={async () => {
+                const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+                const email = raw?.correo || localStorage.getItem("userEmail");
+                if (email) await registerAdminPushToken(API, email);
+            }}
+            >
+            <FontAwesomeIcon icon={faBell} className="footerIcons"/>
+            {/* Habilitar notificaciones */}
+            </button>
 
             {/* FOOTER MENU */}
             <div className="footerMenuDiv">
