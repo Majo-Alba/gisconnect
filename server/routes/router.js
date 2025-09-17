@@ -22,6 +22,11 @@ const Order = require("../models/orderEvidenceModel"); // if used elsewhere
 const ShippingAddress = require("../models/ShippingAddress");
 const BillingAddress = require("../models/BillingAddress");
 const PdfQuote = require("../models/pdfQuoteModel");
+// sep16
+const AdminPushToken = require("../models/AdminPushToken");
+const { notifyStage } = require("../notifications/notify");
+const { STAGES } = require("../notifications/roles");
+// sep16
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
 let sendToTopic;
@@ -430,7 +435,7 @@ router.get('/orders/:orderId', async (req, res) => {
   }
 });
 
-// PUT /orders/:orderId (multipart updates + files)
+// // PUT /orders/:orderId (multipart updates + files)
 router.put(
   "/orders/:orderId",
   upload.fields([
@@ -492,63 +497,65 @@ router.put(
       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
 
-      // Notifications
+      // ---------- Notifications ----------
       const triggeredStages = [];
-      if (paymentEvidenceDoc && !prevOrder?.evidenceFile) triggeredStages.push("EVIDENCIA_PAGO");
 
-      const prevStatus = prevOrder?.orderStatus || "";
-      const nextStatus = updatedOrder?.orderStatus || prevStatus;
-      if (orderStatus && orderStatus !== prevStatus) {
-        const s = orderStatus.toLowerCase();
-        if (s === "pago verificado")   triggeredStages.push("PAGO_VERIFICADO");
-        if (s === "preparando pedido") triggeredStages.push("PREPARANDO_PEDIDO");
-        if (s === "pedido entregado")  triggeredStages.push("PEDIDO_ENTREGADO");
+      // A) Evidence newly uploaded?
+      if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
+        triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // correct canonical constant
       }
 
+      // B) Status changed?
+      const prevStatus = (prevOrder?.orderStatus || "").trim().toLowerCase();
+      const nextStatus = (updatedOrder?.orderStatus || prevStatus || "").trim().toLowerCase();
+      if (orderStatus && nextStatus !== prevStatus) {
+        if (nextStatus === "pago verificado")   triggeredStages.push(STAGES.PAGO_VERIFICADO);
+        if (nextStatus === "preparando pedido") triggeredStages.push(STAGES.PREPARANDO_PEDIDO);
+        if (nextStatus === "pedido entregado")  triggeredStages.push(STAGES.PEDIDO_ENTREGADO);
+      }
+
+      // C) Tracking label added/changed?
       const prevTracking = (prevOrder?.trackingNumber || "").trim();
       const nextTracking = (updatedOrder?.trackingNumber || "").trim();
-      if (nextTracking && nextTracking !== prevTracking) triggeredStages.push("ETIQUETA_GENERADA");
+      if (nextTracking && nextTracking !== prevTracking) {
+        triggeredStages.push(STAGES.ETIQUETA_GENERADA);
+      }
 
+      // D) Send notifications
       if (triggeredStages.length > 0) {
         const shortId = String(updatedOrder._id || "").slice(-5);
         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
 
         const messageForStage = (stage) => {
           switch (stage) {
-            case "EVIDENCIA_PAGO":   return { title: `Evidencia de pago recibida`, body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-            case "PAGO_VERIFICADO":  return { title: `Pago verificado`, body: `Pedido #${shortId} listo para logística/almacén` };
-            case "PREPARANDO_PEDIDO":return { title: `Preparando pedido`, body: `Pedido #${shortId} en empaque` };
-            case "ETIQUETA_GENERADA":return { title: `Etiqueta generada`, body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
-            case "PEDIDO_ENTREGADO": return { title: `Pedido entregado`, body: `Pedido #${shortId} marcado como entregado` };
-            default:                 return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
+            case STAGES.EVIDENCIA_DE_PAGO:
+              return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+            case STAGES.PAGO_VERIFICADO:
+              return { title: "Pago verificado", body: `Pedido #${shortId} listo para logística/almacén` };
+            case STAGES.PREPARANDO_PEDIDO:
+              return { title: "Preparando pedido", body: `Pedido #${shortId} en empaque` };
+            case STAGES.ETIQUETA_GENERADA:
+              return { title: "Etiqueta generada", body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
+            case STAGES.PEDIDO_ENTREGADO:
+              return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
+            default:
+              return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
           }
         };
 
-        (async () => {
-          try {
-            for (const stage of triggeredStages) {
-              const roles = rolesForStage(stage);
-              const msg = messageForStage(stage);
-              for (const role of roles) {
-                const topic = roleTopics[role];
-                if (!topic) continue;
-                await sendToTopic(topic, {
-                  notification: { title: msg.title, body: msg.body },
-                  data: {
-                    orderId: String(updatedOrder._id),
-                    stage,
-                    email: userEmail,
-                    orderStatus: nextStatus || "",
-                    trackingNumber: nextTracking || "",
-                  },
-                });
-              }
-            }
-          } catch (notifyErr) {
-            console.error("FCM notify error:", notifyErr);
-          }
-        })();
+        for (const stage of triggeredStages) {
+          const { title, body } = messageForStage(stage);
+          await notifyStage(stage, title, body, {
+            orderId: String(updatedOrder._id),
+            stage,
+            email: userEmail,
+            orderStatus: updatedOrder.orderStatus || "",
+            trackingNumber: nextTracking || "",
+            deepLink: "https://gisconnect-web.onrender.com/adminHome",
+          });
+        }
       }
+      // ---------- End notifications ----------
 
       res.json(updatedOrder);
     } catch (error) {
@@ -557,6 +564,133 @@ router.put(
     }
   }
 );
+
+// router.put(
+//   "/orders/:orderId",
+//   upload.fields([
+//     { name: "evidenceImage", maxCount: 1 },
+//     { name: "packingImages", maxCount: 3 },
+//     { name: "deliveryImage", maxCount: 1 },
+//   ]),
+//   async (req, res) => {
+//     const { orderId } = req.params;
+//     const {
+//       paymentMethod,
+//       paymentAccount,
+//       orderStatus,
+//       packerName,
+//       insuredAmount,
+//       deliveryDate,
+//       trackingNumber,
+//     } = req.body;
+
+//     const fileToDoc = (file) => {
+//       if (!file) return null;
+//       const buffer = file.buffer || null;
+//       if (!buffer) return null;
+//       return {
+//         filename: file.originalname || file.filename || "evidence",
+//         mimetype: file.mimetype || "application/octet-stream",
+//         data: buffer,
+//         uploadedAt: new Date(),
+//       };
+//     };
+
+//     try {
+//       const prevOrder = await newOrderModel.findById(orderId);
+//       if (!prevOrder) return res.status(404).json({ message: "Order not found" });
+
+//       const paymentEvidenceDoc = fileToDoc((req.files?.evidenceImage || [])[0]);
+//       const packingDocs = (req.files?.packingImages || []).map(fileToDoc).filter(Boolean);
+//       const deliveryDoc = fileToDoc((req.files?.deliveryImage || [])[0]);
+
+//       const numericInsured = insuredAmount ? Number(insuredAmount) : undefined;
+//       const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
+
+//       const $set = {
+//         ...(paymentMethod && { paymentMethod }),
+//         ...(paymentAccount && { paymentAccount }),
+//         ...(orderStatus && { orderStatus }),
+//         ...(packerName && { packerName }),
+//         ...(numericInsured !== undefined && { insuredAmount: numericInsured }),
+//         ...(parsedDeliveryDate && { deliveryDate: parsedDeliveryDate }),
+//         ...(trackingNumber && { trackingNumber }),
+//       };
+
+//       if (paymentEvidenceDoc) $set.evidenceFile = paymentEvidenceDoc;
+//       if (deliveryDoc) $set.deliveryEvidence = deliveryDoc;
+
+//       const update = { $set };
+//       if (packingDocs.length > 0) update.$push = { packingEvidence: { $each: packingDocs } };
+
+//       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
+//       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
+
+//       // Notifications
+//       const triggeredStages = [];
+//       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) triggeredStages.push("EVIDENCIA_PAGO");
+
+//       const prevStatus = prevOrder?.orderStatus || "";
+//       const nextStatus = updatedOrder?.orderStatus || prevStatus;
+//       if (orderStatus && orderStatus !== prevStatus) {
+//         const s = orderStatus.toLowerCase();
+//         if (s === "pago verificado")   triggeredStages.push("PAGO_VERIFICADO");
+//         if (s === "preparando pedido") triggeredStages.push("PREPARANDO_PEDIDO");
+//         if (s === "pedido entregado")  triggeredStages.push("PEDIDO_ENTREGADO");
+//       }
+
+//       const prevTracking = (prevOrder?.trackingNumber || "").trim();
+//       const nextTracking = (updatedOrder?.trackingNumber || "").trim();
+//       if (nextTracking && nextTracking !== prevTracking) triggeredStages.push("ETIQUETA_GENERADA");
+
+//       if (triggeredStages.length > 0) {
+//         const shortId = String(updatedOrder._id || "").slice(-5);
+//         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
+
+//         const messageForStage = (stage) => {
+//           switch (stage) {
+//             case "EVIDENCIA_PAGO":   return { title: `Evidencia de pago recibida`, body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+//             case "PAGO_VERIFICADO":  return { title: `Pago verificado`, body: `Pedido #${shortId} listo para logística/almacén` };
+//             case "PREPARANDO_PEDIDO":return { title: `Preparando pedido`, body: `Pedido #${shortId} en empaque` };
+//             case "ETIQUETA_GENERADA":return { title: `Etiqueta generada`, body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
+//             case "PEDIDO_ENTREGADO": return { title: `Pedido entregado`, body: `Pedido #${shortId} marcado como entregado` };
+//             default:                 return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
+//           }
+//         };
+
+//         (async () => {
+//           try {
+//             for (const stage of triggeredStages) {
+//               const roles = rolesForStage(stage);
+//               const msg = messageForStage(stage);
+//               for (const role of roles) {
+//                 const topic = roleTopics[role];
+//                 if (!topic) continue;
+//                 await sendToTopic(topic, {
+//                   notification: { title: msg.title, body: msg.body },
+//                   data: {
+//                     orderId: String(updatedOrder._id),
+//                     stage,
+//                     email: userEmail,
+//                     orderStatus: nextStatus || "",
+//                     trackingNumber: nextTracking || "",
+//                   },
+//                 });
+//               }
+//             }
+//           } catch (notifyErr) {
+//             console.error("FCM notify error:", notifyErr);
+//           }
+//         })();
+//       }
+
+//       res.json(updatedOrder);
+//     } catch (error) {
+//       console.error("Error updating order:", error);
+//       res.status(500).json({ message: "Failed to update order" });
+//     }
+//   }
+// );
 
 // JSON-only partial updates
 router.patch("/orders/:orderId", async (req, res) => {
@@ -984,6 +1118,26 @@ router.get("/fx/usd-dof", async (req, res) => {
     return res.status(500).json({ error: "Failed to fetch DOF rate." });
   }
 });
+
+// SEP16
+router.post("/admin/push/register", async (req, res) => {
+  try {
+    const { email, token, platform } = req.body || {};
+    if (!email || !token) return res.status(400).json({ error: "email and token are required" });
+
+    await AdminPushToken.updateOne(
+      { token },
+      { $set: { email, token, platform, lastSeenAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
+      { upsert: true }
+    );
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("register token error:", err);
+    res.status(500).json({ error: "Failed to register token" });
+  }
+});
+// SEP16
 
 module.exports = router;
 

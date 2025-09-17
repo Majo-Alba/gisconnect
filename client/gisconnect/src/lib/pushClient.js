@@ -76,7 +76,8 @@ export async function registerAdminPushToken(API_BASE, email) {
     }
 
     // 4) Send token to your API
-    await fetch(`${API_BASE}/push/register`, {
+    await fetch(`${API_BASE}/admin/push/register`, {
+    // await fetch(`${API_BASE}/push/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, token: fcmToken }),
