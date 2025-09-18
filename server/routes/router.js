@@ -26,6 +26,8 @@ const PdfQuote = require("../models/pdfQuoteModel");
 const AdminPushToken = require("../models/AdminPushToken");
 const { notifyStage } = require("./notify");
 const { STAGES } = require("../notifications/roles"); 
+const { admin } = require("../notifications/fcm");
+
 // sep16
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
@@ -1249,6 +1251,60 @@ router.post("/debug/push-to-email", async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
+
+// ---- DIAGNOSTICS: accept GET & POST so you can hit from a browser ----
+
+// Role-based test push: /debug/push?stage=PAGO_VERIFICADO
+async function triggerStagePush(req, res) {
+  try {
+    const stage = String(req.query.stage || req.body?.stage || STAGES.PAGO_VERIFICADO);
+    await notifyStage(stage, "🔔 Test push", `Test for stage ${stage}`, {
+      stage,
+      deepLink: "https://gisconnect-web.onrender.com/adminHome",
+      orderId: "debug",
+    });
+    res.json({ ok: true, stage });
+  } catch (e) {
+    console.error("debug push error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+}
+router.route("/debug/push").get(triggerStagePush).post(triggerStagePush);
+
+// Direct-to-email test: /debug/push-to-email?email=majo_test@gmail.com
+async function pushToEmail(req, res) {
+  try {
+    const email = String(req.query.email || req.body?.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "email query param required" });
+
+    const rows = await AdminPushToken.find({ email }).select("token -_id");
+    // de-dupe tokens to avoid double pings
+    const tokenList = [...new Set(rows.map(r => r.token).filter(Boolean))];
+
+    if (tokenList.length === 0) {
+      return res.status(404).json({ error: `No tokens found for ${email}` });
+    }
+
+    const messaging = admin.messaging();
+    const resp = await messaging.sendEachForMulticast({
+      tokens: tokenList,
+      notification: { title: "🔔 Test (direct)", body: `Hello ${email}` },
+      webpush: {
+        notification: { title: "🔔 Test (direct)", body: `Hello ${email}` },
+        fcmOptions: { link: "https://gisconnect-web.onrender.com/adminHome" },
+      },
+      data: { email },
+    });
+
+    res.json({ ok: true, email, tokens: tokenList.length, success: resp.successCount, fail: resp.failureCount });
+  } catch (e) {
+    console.error("push-to-email error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+}
+router.route("/debug/push-to-email").get(pushToEmail).post(pushToEmail);
+
+// ---- end diagnostics ----
 // SEP16
 
 module.exports = router;
