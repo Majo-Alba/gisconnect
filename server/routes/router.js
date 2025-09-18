@@ -1188,6 +1188,67 @@ router.post("/admin/push/register", async (req, res) => {
     res.status(500).json({ error: "Failed to register token" });
   }
 });
+
+// List registered admin push tokens (DIAGNOSTIC)
+router.get("/admin/push/tokens", async (_req, res) => {
+  try {
+    const rows = await AdminPushToken.find().select("email token lastSeenAt createdAt -_id").lean();
+    res.json({ count: rows.length, rows });
+  } catch (e) {
+    console.error("GET /admin/push/tokens error", e);
+    res.status(500).json({ error: "Failed to list tokens" });
+  }
+});
+
+// Send a test push to the recipients of a given stage (DIAGNOSTIC)
+// Usage: POST /debug/push?stage=PAGO_VERIFICADO
+router.post("/debug/push", async (req, res) => {
+  try {
+    const stage = String(req.query.stage || STAGES.PAGO_VERIFICADO);
+    await notifyStage(stage, "🔔 Test push", `Test for stage ${stage}`, {
+      stage,
+      deepLink: "https://gisconnect-web.onrender.com/adminHome",
+      orderId: "debug"
+    });
+    res.json({ ok: true, stage });
+  } catch (e) {
+    console.error("POST /debug/push error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
+
+// Send a test push directly to tokens of a specific email (DIAGNOSTIC)
+// Usage: POST /debug/push-to-email?email=majo_test@gmail.com
+router.post("/debug/push-to-email", async (req, res) => {
+  try {
+    const email = String(req.query.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "email query param required" });
+
+    const tokens = await AdminPushToken.find({ email }).select("token -_id");
+    const tokenList = tokens.map(t => t.token).filter(Boolean);
+
+    if (tokenList.length === 0) {
+      return res.status(404).json({ error: `No tokens found for ${email}` });
+    }
+
+    const { admin } = require("../notifications/fcm");
+    const messaging = admin.messaging();
+    const resp = await messaging.sendEachForMulticast({
+      tokens: tokenList,
+      notification: { title: "🔔 Test (direct)", body: `Hello ${email}` },
+      webpush: {
+        notification: { title: "🔔 Test (direct)", body: `Hello ${email}` },
+        fcmOptions: { link: "https://gisconnect-web.onrender.com/adminHome" },
+      },
+      data: { email },
+    });
+
+    res.json({ ok: true, success: resp.successCount, fail: resp.failureCount });
+  } catch (e) {
+    console.error("POST /debug/push-to-email error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
 // SEP16
 
 module.exports = router;
