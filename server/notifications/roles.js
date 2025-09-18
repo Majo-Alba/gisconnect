@@ -1,4 +1,4 @@
-// notifications/roles.js
+// server/notifications/roles.js
 const FULL_ACCESS = new Set([
     "majo_test@gmail.com",
     // "ventas@greenimportsol.com",
@@ -23,8 +23,8 @@ const FULL_ACCESS = new Set([
     // "almacen3@greenimportsol.com",
   ]);
   
-  // Define “business stages” you’ll emit from the server
   const STAGES = {
+    PEDIDO_REALIZADO: "PEDIDO_REALIZADO",       // <-- NEW
     EVIDENCIA_DE_PAGO: "EVIDENCIA_DE_PAGO",
     PAGO_VERIFICADO: "PAGO_VERIFICADO",
     PREPARANDO_PEDIDO: "PREPARANDO_PEDIDO",
@@ -32,11 +32,13 @@ const FULL_ACCESS = new Set([
     PEDIDO_ENTREGADO: "PEDIDO_ENTREGADO",
   };
   
-  // Map stage → who should be notified
   function recipientsForStage(stage) {
     const emails = new Set();
-  
     switch (stage) {
+      case STAGES.PEDIDO_REALIZADO:            // <-- NEW
+        FULL_ACCESS.forEach(e => emails.add(e));
+        break;
+  
       case STAGES.EVIDENCIA_DE_PAGO:
         FULL_ACCESS.forEach(e => emails.add(e));
         break;
@@ -59,7 +61,6 @@ const FULL_ACCESS = new Set([
         FULL_ACCESS.forEach(e => emails.add(e));
         break;
     }
-  
     return [...emails];
   }
   

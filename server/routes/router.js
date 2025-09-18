@@ -349,6 +349,7 @@ router.patch('/users/by-email', async (req, res) => {
 // =========================== ORDERS ===========================
 
 // Create order (PDF optional)
+// Create order (PDF optional) + notify PEDIDO_REALIZADO
 router.post('/orderDets', upload.single('pdf'), async (req, res) => {
   try {
     const raw = req.body.order;
@@ -365,12 +366,60 @@ router.post('/orderDets', upload.single('pdf'), async (req, res) => {
     }
 
     const created = await newOrderModel.create(order);
+
+    // ---------- 🚀 Notify PEDIDO_REALIZADO ----------
+    try {
+      const shortId = String(created._id || "").slice(-5);
+      const userEmail = created.userEmail || created.email || "cliente";
+
+      await notifyStage(
+        STAGES.PEDIDO_REALIZADO,
+        "Nuevo pedido recibido",
+        `Pedido #${shortId} — Cliente: ${userEmail}`,
+        {
+          orderId: String(created._id),
+          stage: STAGES.PEDIDO_REALIZADO,
+          email: userEmail,
+          orderStatus: created.orderStatus || "",
+          trackingNumber: created.trackingNumber || "",
+          deepLink: "https://gisconnect-web.onrender.com/adminHome",
+        }
+      );
+    } catch (notifyErr) {
+      // Don't fail the request if push sending has issues
+      console.error("notify PEDIDO_REALIZADO error:", notifyErr);
+    }
+    // ---------- End notify ----------
+
     res.status(201).json({ data: created, message: "Nueva orden registrada exitosamente" });
   } catch (err) {
     console.error("Error creating order:", err);
     res.status(500).json({ error: "Failed to create order" });
   }
 });
+
+// router.post('/orderDets', upload.single('pdf'), async (req, res) => {
+//   try {
+//     const raw = req.body.order;
+//     if (!raw) return res.status(400).json({ error: 'Missing order JSON in "order" field' });
+
+//     const order = JSON.parse(raw);
+//     if (order && order.userEmail) {
+//       order.userEmail = String(order.userEmail).trim().toLowerCase();
+//     }
+
+//     if (req.file) {
+//       const { originalname, mimetype, buffer } = req.file;
+//       order.quotePdf = { filename: originalname, contentType: mimetype, data: buffer };
+//     }
+
+//     const created = await newOrderModel.create(order);
+//     res.status(201).json({ data: created, message: "Nueva orden registrada exitosamente" });
+//   } catch (err) {
+//     console.error("Error creating order:", err);
+//     res.status(500).json({ error: "Failed to create order" });
+//   }
+// });
 
 // Update order status (simple)
 router.patch("/order/:id/status", async (req, res) => {
@@ -496,13 +545,13 @@ router.put(
 
       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
-
       // ---------- Notifications ----------
       const triggeredStages = [];
 
       // A) Evidence newly uploaded?
+      // Place this right after you've computed `paymentEvidenceDoc` and have `prevOrder` available.
       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
-        triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // correct canonical constant
+        triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // <-- THIS IS THE LINE
       }
 
       // B) Status changed?
@@ -538,6 +587,8 @@ router.put(
               return { title: "Etiqueta generada", body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
             case STAGES.PEDIDO_ENTREGADO:
               return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
+            case STAGES.PEDIDO_REALIZADO:
+              return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             default:
               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
           }
