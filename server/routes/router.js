@@ -1437,6 +1437,35 @@ router.post("/debug/push-to-token", async (req, res) => {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 });
+
+// ---- DEBUG: send directly to a single FCM token (GET or POST) ----
+async function pushToToken(req, res) {
+  try {
+    const token = String(req.query.token || req.body?.token || "").trim();
+    if (!token) return res.status(400).json({ error: "token query/body param required" });
+
+    const messaging = admin.messaging();
+    const resp = await messaging.sendEachForMulticast({
+      tokens: [token],
+      notification: { title: "🔔 Test (token)", body: "Direct to this token" },
+      webpush: {
+        notification: { title: "🔔 Test (token)", body: "Direct to this token" },
+        fcmOptions: { link: "https://gisconnect-web.onrender.com/adminHome" },
+      },
+      data: { kind: "direct-token" },
+    });
+
+    res.json({ ok: true, success: resp.successCount, fail: resp.failureCount });
+  } catch (e) {
+    console.error("push-to-token error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+}
+router
+  .route("/debug/push-to-token")
+  .get(pushToToken)
+  .post(pushToToken);
+// ---- end DEBUG ----
 // SEP16
 
 module.exports = router;
