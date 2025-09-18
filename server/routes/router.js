@@ -424,14 +424,52 @@ router.post('/orderDets', upload.single('pdf'), async (req, res) => {
 // });
 
 // Update order status (simple)
+// Update order status (simple) + 🔔 notifications
 router.patch("/order/:id/status", async (req, res) => {
   try {
     const { id } = req.params;
     const { orderStatus } = req.body;
     if (!orderStatus) return res.status(400).json({ message: "orderStatus requerido" });
 
+    const prev = await newOrderModel.findById(id);
+    if (!prev) return res.status(404).json({ message: "Orden no encontrada" });
+
     const updated = await newOrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true });
     if (!updated) return res.status(404).json({ message: "Orden no encontrada" });
+
+    // 🔔 stage mapping
+    try {
+      const s = (orderStatus || "").trim().toLowerCase();
+      const shortId = String(updated._id || "").slice(-5);
+      const userEmail = updated.userEmail || updated.email || "cliente";
+
+      let stageToSend = null;
+      if (s === "pago verificado")   stageToSend = STAGES.PAGO_VERIFICADO;
+      if (s === "preparando pedido") stageToSend = STAGES.PREPARANDO_PEDIDO;
+      if (s === "pedido entregado")  stageToSend = STAGES.PEDIDO_ENTREGADO;
+
+      if (stageToSend) {
+        const titles = {
+          [STAGES.PAGO_VERIFICADO]:   "Pago verificado",
+          [STAGES.PREPARANDO_PEDIDO]: "Preparando pedido",
+          [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
+        };
+        const bodies = {
+          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
+        };
+        await notifyStage(stageToSend, titles[stageToSend], bodies[stageToSend], {
+          orderId: String(updated._id),
+          stage: stageToSend,
+          email: userEmail,
+          orderStatus: updated.orderStatus || "",
+          deepLink: "https://gisconnect-web.onrender.com/adminHome",
+        });
+      }
+    } catch (notifyErr) {
+      console.error("PATCH /order/:id/status notify error:", notifyErr);
+    }
 
     res.json({ message: "Estatus actualizado", order: updated });
   } catch (e) {
@@ -439,6 +477,22 @@ router.patch("/order/:id/status", async (req, res) => {
     res.status(500).json({ message: "Error interno" });
   }
 });
+
+// router.patch("/order/:id/status", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { orderStatus } = req.body;
+//     if (!orderStatus) return res.status(400).json({ message: "orderStatus requerido" });
+
+//     const updated = await newOrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true });
+//     if (!updated) return res.status(404).json({ message: "Orden no encontrada" });
+
+//     res.json({ message: "Estatus actualizado", order: updated });
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).json({ message: "Error interno" });
+//   }
+// });
 
 // User orders list
 router.get('/userOrders', async (req, res) => {
@@ -796,6 +850,7 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 }
 
 // Upload payment evidence (memory)
+// Upload payment evidence (memory)
 router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
   try {
     const { orderId } = req.body;
@@ -806,6 +861,9 @@ router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res)
     const order = await newOrderModel.findById(orderId);
     if (!order) return res.status(404).json({ message: "Order not found" });
 
+    // was there evidence before?
+    const hadEvidence = !!(order.evidenceFile && order.evidenceFile.data);
+
     order.evidenceFile = {
       filename: file.originalname,
       mimetype: file.mimetype,
@@ -814,12 +872,60 @@ router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res)
     };
 
     await order.save();
+
+    // 🔔 Notify on first-time evidence
+    if (!hadEvidence) {
+      try {
+        const shortId = String(order._id || "").slice(-5);
+        const userEmail = order.userEmail || order.email || "cliente";
+        await notifyStage(
+          STAGES.EVIDENCIA_DE_PAGO,
+          "Evidencia de pago recibida",
+          `Pedido #${shortId} — Cliente: ${userEmail}`,
+          {
+            orderId: String(order._id),
+            stage: STAGES.EVIDENCIA_DE_PAGO,
+            email: userEmail,
+            orderStatus: order.orderStatus || "",
+            deepLink: "https://gisconnect-web.onrender.com/adminHome",
+          }
+        );
+      } catch (notifyErr) {
+        console.error("notify EVIDENCIA_DE_PAGO error:", notifyErr);
+      }
+    }
+
     return res.status(200).json({ message: "Evidencia guardada en MongoDB correctamente" });
   } catch (error) {
     console.error("Upload Evidence Error:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 });
+
+// router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
+//   try {
+//     const { orderId } = req.body;
+//     const file = req.file;
+//     if (!orderId) return res.status(400).json({ message: "Order ID not provided" });
+//     if (!file) return res.status(400).json({ message: "No file uploaded" });
+
+//     const order = await newOrderModel.findById(orderId);
+//     if (!order) return res.status(404).json({ message: "Order not found" });
+
+//     order.evidenceFile = {
+//       filename: file.originalname,
+//       mimetype: file.mimetype,
+//       data: file.buffer,
+//       uploadedAt: new Date()
+//     };
+
+//     await order.save();
+//     return res.status(200).json({ message: "Evidencia guardada en MongoDB correctamente" });
+//   } catch (error) {
+//     console.error("Upload Evidence Error:", error);
+//     return res.status(500).json({ message: "Internal Server Error" });
+//   }
+// });
 
 // Stream payment evidence
 router.get("/orders/:orderId/evidence/payment", async (req, res) => {
