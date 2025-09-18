@@ -142,6 +142,22 @@ export default function AdminHome() {
             {/* Habilitar notificaciones */}
             </button>
 
+            {/* test */}
+            <button
+                onClick={() => {
+                    if (Notification.permission !== "granted") {
+                    Notification.requestPermission().then(p => {
+                        if (p === "granted") new Notification("Prueba", { body: "¿Ves esta notificación?" });
+                    });
+                    } else {
+                    new Notification("Prueba", { body: "¿Ves esta notificación?" });
+                    }
+                }}
+                >
+                Probar notificación local
+            </button>
+            {/* test */}
+
             {/* FOOTER MENU */}
             <div className="footerMenuDiv">
                 <div className="footerHolder">

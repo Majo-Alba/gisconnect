@@ -81,20 +81,23 @@ export async function registerAdminPushToken(API_BASE, email) {
     // Foreground messages (when the tab is focused):
     // Show a system notification so admins see it even with the app open.
     onMessage(messaging, (payload) => {
+        console.log("[FCM onMessage]", payload);
+        const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
+        const body  = payload?.notification?.body  || payload?.data?.body  || "";
         try {
-            const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
-            const body  = payload?.notification?.body  || payload?.data?.body  || "";
             if (Notification.permission === "granted") {
                 new Notification(title, {
                     body,
                     icon: "/icons/icon-192.png",
                     badge: "/icons/badge-72.png",
-            });
+                });
             } else {
-                console.log("[onMessage] Notification received (permission not granted):", payload);
+                console.warn("[onMessage] permission is not 'granted'");
             }
-            } catch (e) {
-                console.warn("[onMessage] display error:", e, payload);
+        } catch (err) {
+            console.warn("[onMessage] Notification error:", err);
+            // last-resort: visible in console if OS blocks notifications
+            alert(`${title}\n\n${body}`);
         }
     });
     // sep18
