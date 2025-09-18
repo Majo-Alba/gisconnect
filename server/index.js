@@ -152,8 +152,8 @@ app.use("/", router);
 /* ----------------------------------------------------------------------- */
 
 // SEP08
-const { router: notifyRouter } = require("./routes/notify");
-app.use("/", notifyRouter);
+// const { router: notifyRouter } = require("./routes/notify");
+// app.use("/", notifyRouter);
 // SEP08
 
 /* ------------------------------- MongoDB ------------------------------- */
