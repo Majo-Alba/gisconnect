@@ -2,13 +2,13 @@
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
 
-// ⚠️ SAME config as your web app
+// ⚠️ These MUST EXACTLY MATCH your web app Firebase config (projectId, appId, senderId)
 firebase.initializeApp({
-  apiKey: "…",
-  authDomain: "…",
-  projectId: "…",
-  messagingSenderId: "…",
-  appId: "…",
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+  appId: "YOUR_APP_ID",
 });
 
 const messaging = firebase.messaging();
@@ -16,8 +16,8 @@ const messaging = firebase.messaging();
 // Background handler (FCM)
 messaging.onBackgroundMessage((payload) => {
   console.log("[SW] onBackgroundMessage:", payload);
-  const title = payload?.notification?.title || "GISConnect";
-  const body  = payload?.notification?.body  || "";
+  const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
+  const body  = payload?.notification?.body  || payload?.data?.body  || "";
   const data  = payload?.data || {};
   self.registration.showNotification(title, {
     body,
@@ -27,13 +27,13 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
-// Generic push fallback (in case onBackgroundMessage doesn't fire)
+// Generic push fallback
 self.addEventListener("push", (event) => {
   try {
     const payload = event.data ? event.data.json() : {};
     console.log("[SW] raw push event:", payload);
-    const title = payload?.notification?.title || "GISConnect";
-    const body  = payload?.notification?.body  || "";
+    const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
+    const body  = payload?.notification?.body  || payload?.data?.body  || "";
     const data  = payload?.data || {};
     event.waitUntil(
       self.registration.showNotification(title, {
@@ -53,6 +53,7 @@ self.addEventListener("notificationclick", (event) => {
   const url = event.notification?.data?.deepLink || "https://gisconnect-web.onrender.com/adminHome";
   event.waitUntil(clients.openWindow(url));
 });
+
 
 // /* public/firebase-messaging-sw.js */
 // /* global importScripts, firebase */

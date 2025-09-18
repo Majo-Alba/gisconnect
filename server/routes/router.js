@@ -1466,6 +1466,36 @@ router
   .get(pushToToken)
   .post(pushToToken);
 // ---- end DEBUG ----
+
+// send a DATA-ONLY test to a token (GET or POST)
+router.route("/debug/push-data-to-token").get(pushDataToToken).post(pushDataToToken);
+
+async function pushDataToToken(req, res) {
+  try {
+    const { admin } = require("../notifications/fcm");
+    const token = String(req.query.token || req.body?.token || "").trim();
+    if (!token) return res.status(400).json({ error: "token query/body param required" });
+
+    const messaging = admin.messaging();
+    const resp = await messaging.sendEachForMulticast({
+      tokens: [token],
+      // 🚫 no "notification" here — data-only:
+      data: {
+        title: "🔔 Data-only test",
+        body: "Should be shown by onMessage (foreground) or SW (background)",
+        deepLink: "https://gisconnect-web.onrender.com/adminHome",
+      },
+      webpush: {
+        fcmOptions: { link: "https://gisconnect-web.onrender.com/adminHome" },
+      },
+    });
+
+    res.json({ ok: true, success: resp.successCount, fail: resp.failureCount });
+  } catch (e) {
+    console.error("push-data-to-token error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+}
 // SEP16
 
 module.exports = router;
