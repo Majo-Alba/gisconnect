@@ -57,6 +57,19 @@ async function notifyStage(stage, title, body, data = {}) {
       const resp = await messaging.sendEachForMulticast(message);
       console.log(`[notifyStage] ${stage} sent: success=${resp.successCount}, fail=${resp.failureCount}`);
 
+    // Remove invalid tokens so we don’t keep failing on them
+    const invalidIdx = [];
+    resp.responses.forEach((r, idx) => {
+        if (!r.success && r.error?.code === "messaging/registration-token-not-registered") {
+            invalidIdx.push(idx);
+        }
+    });
+    if (invalidIdx.length) {
+        const badTokens = invalidIdx.map(i => chunk[i]);
+        await AdminPushToken.deleteMany({ token: { $in: badTokens } });
+        console.log(`[notifyStage] pruned ${badTokens.length} invalid tokens`);
+    }
+
       if (resp.failureCount) {
         resp.responses.forEach((r, idx) => {
           if (!r.success) {

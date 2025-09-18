@@ -1,6 +1,8 @@
 // src/lib/pushClient.js
 import { initializeApp } from "firebase/app";
-import { getMessaging, getToken, isSupported } from "firebase/messaging";
+// import { getMessaging, getToken, isSupported } from "firebase/messaging";
+import { getMessaging, getToken, isSupported, onMessage } from "firebase/messaging";
+
 
 const cfg = {
   apiKey: import.meta.env.VITE_FB_API_KEY,
@@ -75,6 +77,28 @@ export async function registerAdminPushToken(API_BASE, email) {
       return null;
     }
 
+    // sep18
+    // Foreground messages (when the tab is focused):
+    // Show a system notification so admins see it even with the app open.
+    onMessage(messaging, (payload) => {
+        try {
+            const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
+            const body  = payload?.notification?.body  || payload?.data?.body  || "";
+            if (Notification.permission === "granted") {
+                new Notification(title, {
+                    body,
+                    icon: "/icons/icon-192.png",
+                    badge: "/icons/badge-72.png",
+            });
+            } else {
+                console.log("[onMessage] Notification received (permission not granted):", payload);
+            }
+            } catch (e) {
+                console.warn("[onMessage] display error:", e, payload);
+        }
+    });
+    // sep18
+
     // 4) Send token to your API
     await fetch(`${API_BASE}/admin/push/register`, {
     // await fetch(`${API_BASE}/push/register`, {
@@ -90,69 +114,3 @@ export async function registerAdminPushToken(API_BASE, email) {
     return null;
   }
 }
-
-// // /src/lib/pushClient.js
-// import { initializeApp } from "firebase/app";
-// import { getMessaging, getToken, isSupported, onMessage } from "firebase/messaging";
-
-// const cfg = {
-//   apiKey: import.meta.env.VITE_FB_API_KEY,
-//   authDomain: import.meta.env.VITE_FB_AUTH_DOMAIN,
-//   projectId: import.meta.env.VITE_FB_PROJECT_ID,
-//   messagingSenderId: import.meta.env.VITE_FB_MESSAGING_SENDER_ID,
-//   appId: import.meta.env.VITE_FB_APP_ID,
-// };
-
-// const VAPID_KEY = import.meta.env.VITE_FB_VAPID_KEY;
-
-// // Guard rail: surface missing config early
-// (function assertFirebaseConfig(c) {
-//   const missing = Object.entries(c)
-//     .filter(([, v]) => !v)
-//     .map(([k]) => k);
-//   if (missing.length) {
-//     // eslint-disable-next-line no-console
-//     console.error("Firebase config missing keys:", missing);
-//     throw new Error(`Missing Firebase env keys: ${missing.join(", ")}`);
-//   }
-// })(cfg);
-
-// const app = initializeApp(cfg);
-
-// export async function registerAdminPushToken(API_BASE, adminEmail) {
-//   try {
-//     const supported = await isSupported();
-//     if (!supported) {
-//       console.warn("FCM not supported in this browser.");
-//       return;
-//     }
-
-//     const messaging = getMessaging(app);
-
-//     if (!VAPID_KEY) {
-//       console.error("Missing VITE_FB_VAPID_KEY.");
-//       return;
-//     }
-
-//     const token = await getToken(messaging, { vapidKey: VAPID_KEY });
-//     if (!token) {
-//       console.warn("No FCM token (permission denied or blocked).");
-//       return;
-//     }
-
-//     // Send token to your backend
-//     await fetch(`${API_BASE}/notifications/register-token`, {
-//       method: "POST",
-//       headers: { "Content-Type": "application/json" },
-//       body: JSON.stringify({ email: adminEmail, token, platform: "web" }),
-//     });
-
-//     // Optional: listen to foreground messages
-//     onMessage(messaging, (payload) => {
-//       console.log("[FCM] foreground message:", payload);
-//       // You can show a toast/notification here
-//     });
-//   } catch (err) {
-//     console.error("registerAdminPushToken failed:", err);
-//   }
-// }
