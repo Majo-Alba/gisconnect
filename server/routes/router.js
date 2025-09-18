@@ -1411,6 +1411,32 @@ async function pushToEmail(req, res) {
 router.route("/debug/push-to-email").get(pushToEmail).post(pushToEmail);
 
 // ---- end diagnostics ----
+
+// Send a test push directly to a single token (bypasses roles/emails)
+router.post("/debug/push-to-token", async (req, res) => {
+  try {
+    const token = String(req.query.token || req.body?.token || "").trim();
+    if (!token) return res.status(400).json({ error: "token query/body param required" });
+
+    const { admin } = require("../notifications/fcm");
+    const messaging = admin.messaging();
+
+    const resp = await messaging.sendEachForMulticast({
+      tokens: [token],
+      notification: { title: "🔔 Test (token)", body: "Direct to this token" },
+      webpush: {
+        notification: { title: "🔔 Test (token)", body: "Direct to this token" },
+        fcmOptions: { link: "https://gisconnect-web.onrender.com/adminHome" },
+      },
+      data: { kind: "direct-token" },
+    });
+
+    res.json({ ok: true, success: resp.successCount, fail: resp.failureCount });
+  } catch (e) {
+    console.error("push-to-token error", e);
+    res.status(500).json({ ok: false, error: e?.message || String(e) });
+  }
+});
 // SEP16
 
 module.exports = router;
