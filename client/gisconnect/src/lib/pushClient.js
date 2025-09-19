@@ -2,6 +2,7 @@
 import { initializeApp } from "firebase/app";
 // import { getMessaging, getToken, isSupported } from "firebase/messaging";
 import { getMessaging, getToken, isSupported, onMessage } from "firebase/messaging";
+import { deleteToken } from "firebase/messaging";
 
 
 const cfg = {
@@ -126,3 +127,41 @@ export async function registerAdminPushToken(API_BASE, email) {
     return null;
   }
 }
+
+
+export async function refreshAdminPushToken(API_BASE, email) {
+    try {
+      const app = initializeApp(cfg);
+      const messaging = getMessaging(app);
+  
+      // use an active SW reg
+      const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+  
+      // 1) delete old token (if any)
+      try {
+        const old = await getToken(messaging, { vapidKey: VAPID, serviceWorkerRegistration: swReg });
+        if (old) {
+          await deleteToken(messaging);
+          console.log("[FCM] deleted old token:", old.slice(0, 12) + "…");
+        }
+      } catch (e) {
+        console.warn("[FCM] deleteToken failed (ok to ignore):", e?.message || e);
+      }
+  
+      // 2) get a new token
+      const fresh = await getToken(messaging, { vapidKey: VAPID, serviceWorkerRegistration: swReg });
+      console.log("[FCM] fresh token:", fresh);
+  
+      // 3) register server-side
+      await fetch(`${API_BASE}/admin/push/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, token: fresh }),
+      });
+  
+      return fresh;
+    } catch (e) {
+      console.error("refreshAdminPushToken failed:", e);
+      return null;
+    }
+  }
