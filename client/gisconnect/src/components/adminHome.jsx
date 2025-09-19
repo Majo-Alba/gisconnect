@@ -134,7 +134,7 @@ const testServiceWorkerNotification = () => {
 
         {/* (NEW) Button to test SW -> notification */}
         <button
-          className="adminHome-NotifsBtn"
+        //   className="adminHome-NotifsBtn"
           onClick={testServiceWorkerNotification}
           title="Probar notificación desde el Service Worker"
         >
