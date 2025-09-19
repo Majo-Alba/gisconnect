@@ -1,19 +1,20 @@
+// /public/firebase-messaging-sw.js
 /* global importScripts, firebase */
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
 
-// ⚠️ These MUST EXACTLY MATCH your web app Firebase config (projectId, appId, senderId)
 firebase.initializeApp({
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  projectId: "YOUR_PROJECT_ID",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
+  apiKey: "AIzaSyByLKSrWPn1_yCLxcPSfzSDnvufcCO7fqs",
+  authDomain: "gisconnect-3e1d3.firebaseapp.com",
+  projectId: "gisconnect-3e1d3",
+  messagingSenderId: "268598065990",
+  appId: "1:268598065990:web:f1aec8a1f47b6cdda74347",
 });
+
+console.log("[SW] Firebase options:", firebase.app().options);
 
 const messaging = firebase.messaging();
 
-// Background handler (FCM)
 messaging.onBackgroundMessage((payload) => {
   console.log("[SW] onBackgroundMessage:", payload);
   const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
@@ -27,7 +28,6 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
-// Generic push fallback
 self.addEventListener("push", (event) => {
   try {
     const payload = event.data ? event.data.json() : {};
