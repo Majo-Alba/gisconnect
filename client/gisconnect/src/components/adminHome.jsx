@@ -34,6 +34,39 @@ export default function AdminHome() {
   function goToDelivered() { navigate("/delivered"); }
   function goToAdminHome() { navigate("/adminHome"); }
 
+// SEP19
+// (NEW) Helper to ping the service worker and show a test notification
+const testServiceWorkerNotification = () => {
+    (async () => {
+      try {
+        if (!("serviceWorker" in navigator)) {
+          alert("Este navegador no soporta Service Workers");
+          return;
+        }
+        // Try to get registration at root; fall back to ready
+        const reg =
+          (await navigator.serviceWorker.getRegistration("/")) ||
+          (await navigator.serviceWorker.ready);
+
+        const active = reg?.active;
+        console.log("[TestSW] registration:", reg, "active:", active);
+
+        if (!active) {
+          alert("El Service Worker aún no está activo. Recarga la página (Ctrl/Cmd+R) un par de veces.");
+          return;
+        }
+
+        // This posts a message the SW listens for and shows a system notification
+        active.postMessage("SW_NOTIFY_TEST");
+        console.log("[TestSW] sent SW_NOTIFY_TEST");
+      } catch (e) {
+        console.error("[TestSW] error", e);
+      }
+    })();
+  };
+
+// SEP19
+
   // Register push token for signed-in admin on mount
   useEffect(() => {
     const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
@@ -99,19 +132,13 @@ export default function AdminHome() {
           <FontAwesomeIcon icon={faBell} className="footerIcons" />
         </button>
 
-        {/* DEV: Refresh token (delete old + get new) */}
+        {/* (NEW) Button to test SW -> notification */}
         <button
           className="adminHome-NotifsBtn"
-          onClick={async () => {
-            const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
-            const email = raw?.correo || localStorage.getItem("userEmail");
-            if (!email) return alert("No admin email found");
-            const tok = await refreshAdminPushToken(API, email);
-            if (tok) alert(`Nuevo token:\n${tok}`);
-          }}
-          title="Refrescar token FCM"
+          onClick={testServiceWorkerNotification}
+          title="Probar notificación desde el Service Worker"
         >
-          Refrescar token FCM
+          Probar SW
         </button>
       </div>
 
@@ -135,6 +162,14 @@ export default function AdminHome() {
     </body>
   );
 }
+
+
+
+
+
+
+// -------> OG <-------
+
 // // im my adminHome.jsx we've added several buttons to test, can I get rid of them now and change for the one youre suggesting in step 2?
 // // import { useState } from "react"
 // import { useState, useEffect } from "react"
