@@ -41,6 +41,9 @@ function loadServiceAccount() {
 }
 
 const serviceAccount = loadServiceAccount();
+// sep19
+const PROJECT_ID = serviceAccount.project_id;
+// sep19
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -80,6 +83,9 @@ async function sendOrderStageNotifications(stage, order) {
 module.exports = {
   admin,
   sendOrderStageNotifications,
+//   sep19
+PROJECT_ID
+// sep19
 };
 
 // // This is my current fcm.js, can you make direct edits

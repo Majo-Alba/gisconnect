@@ -1496,6 +1496,11 @@ async function pushDataToToken(req, res) {
     res.status(500).json({ ok: false, error: e?.message || String(e) });
   }
 }
+
+router.get("/debug/firebase-info", (_req, res) => {
+  const { PROJECT_ID } = require("../notifications/fcm");
+  res.json({ serverProjectId: PROJECT_ID });
+});
 // SEP16
 
 module.exports = router;
