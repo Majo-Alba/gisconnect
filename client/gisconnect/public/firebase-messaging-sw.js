@@ -28,6 +28,21 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
+// sep19
+self.addEventListener("install", () => console.log("[SW] install"));
+self.addEventListener("activate", () => console.log("[SW] activate"));
+
+self.addEventListener("message", (event) => {
+  if (event && event.data === "SW_NOTIFY_TEST") {
+    self.registration.showNotification("SW test", {
+      body: "This came directly from the Service Worker",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/badge-72.png",
+    });
+  }
+});
+// sep19
+
 self.addEventListener("push", (event) => {
   try {
     const payload = event.data ? event.data.json() : {};
