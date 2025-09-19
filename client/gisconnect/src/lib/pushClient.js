@@ -12,14 +12,15 @@ const cfg = {
   appId: import.meta.env.VITE_FB_APP_ID,
 };
 
+const VAPID = import.meta.env.VITE_FB_VAPID_KEY;
+
+
 console.log("[FB web cfg]", {
     projectId: cfg.projectId,
     appId: cfg.appId,
     senderId: cfg.messagingSenderId,
     vapidKeyPrefix: (VAPID || "").slice(0, 16) + "...",
   });
-  
-const VAPID = import.meta.env.VITE_FB_VAPID_KEY;
 
 function assertFirebaseConfig() {
   const missing = Object.entries({
