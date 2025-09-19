@@ -69,11 +69,14 @@ export async function registerAdminPushToken(API_BASE, email) {
       }
     }
 
-    // 2) Register SW from the app origin root
-    const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
-      scope: "/",
-      type: "classic", // Vite builds put SW in /public
-    });
+    // 2) Use the controlling SW at "/" (sw.js). If missing, register it now.
+    const swReg =
+    (await navigator.serviceWorker.getRegistration("/")) ||
+    (await navigator.serviceWorker.register("/sw.js", { scope: "/" }));
+    // const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", {
+    //   scope: "/",
+    //   type: "classic", // Vite builds put SW in /public
+    // });
 
     // 3) Init + get token
     const app = initializeApp(cfg);
@@ -135,7 +138,8 @@ export async function refreshAdminPushToken(API_BASE, email) {
       const messaging = getMessaging(app);
   
       // use an active SW reg
-      const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
+      const swReg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    //   const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js", { scope: "/" });
   
       // 1) delete old token (if any)
       try {
