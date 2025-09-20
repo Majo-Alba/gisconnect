@@ -2320,6 +2320,46 @@ input:checked + .quoterSlider:before {
 
 /* GIS: ADMIN HOME */
 
+.adminHome-ShowTokenBtn{
+  border: none;
+
+  /* width:fit-content; */
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+
+  margin-left: -10%;
+  margin-top: 10%;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 50%;
+  background-color: #0B9444;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
+.adminHome-ShowTokenBtn:hover{
+  border: none;
+
+  /* width:fit-content; */
+  padding-left: 15px;
+  padding-right: 15px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+
+  margin-left: -10%;
+  margin-top: 10%;
+
+  color: white;
+  font-weight: bold;
+
+  border-radius: 50%;
+  background-color: #097838;
+  box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+}
+
 .adminHome-TestBtn{
   border: none;
 

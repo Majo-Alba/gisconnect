@@ -113,6 +113,10 @@ export async function registerAdminPushToken(API_BASE, email) {
             alert(`${title}\n\n${body}`);
         }
     });
+
+    // NEW: log and expose current token for quick copy in DevTools
+    console.log("[FCM] current token =", fcmToken);           
+    window.__FCM_TOKEN__ = fcmToken;                           
     // sep18
 
     // 4) Send token to your API
@@ -166,6 +170,25 @@ export async function refreshAdminPushToken(API_BASE, email) {
       return fresh;
     } catch (e) {
       console.error("refreshAdminPushToken failed:", e);
+      return null;
+    }
+  }
+
+
+// NEW: helper to read the *current* token the app is using
+export async function getCurrentFcmToken() {
+    try {
+      const swReg =
+        (await navigator.serviceWorker.getRegistration("/")) ||
+        (await navigator.serviceWorker.register("/sw.js", { scope: "/" }));
+      const app = initializeApp(cfg);
+      const messaging = getMessaging(app);
+      const tok = await getToken(messaging, { vapidKey: VAPID, serviceWorkerRegistration: swReg });
+      console.log("[FCM] getCurrentFcmToken =", tok);
+      window.__FCM_TOKEN__ = tok;
+      return tok;
+    } catch (e) {
+      console.warn("getCurrentFcmToken failed:", e);
       return null;
     }
   }

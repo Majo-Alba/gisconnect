@@ -140,6 +140,20 @@ const testServiceWorkerNotification = () => {
         >
           Probar SW
         </button>
+
+        {/* // Inside your JSX, near the other dev buttons: */}
+        <button
+        className="adminHome-ShowTokenBtn"
+        onClick={async () => {
+            const tok = await getCurrentFcmToken();
+            if (!tok) return alert("No token yet");
+            await navigator.clipboard.writeText(tok).catch(() => {});
+            alert("Current FCM token copied to clipboard:\n\n" + tok);
+        }}
+        title="Mostrar/copiar token actual"
+        >
+        Token actual
+        </button>
       </div>
 
       {/* FOOTER MENU */}
