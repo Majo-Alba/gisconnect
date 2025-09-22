@@ -76,6 +76,14 @@ const testServiceWorkerNotification = () => {
     console.log("FB projectId =", import.meta.env.VITE_FB_PROJECT_ID);
   }, []);
 
+  useEffect(() => {
+    function onSwMsg(e) {
+      console.log("[PAGE] message from SW:", e.data);
+    }
+    navigator.serviceWorker?.addEventListener?.("message", onSwMsg);
+    return () => navigator.serviceWorker?.removeEventListener?.("message", onSwMsg);
+  }, []);
+
   return (
     <body className="body-BG-Gradient">
       {/* LOGOS DIV */}
