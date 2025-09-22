@@ -126,7 +126,7 @@ const testServiceWorkerNotification = () => {
 
       {/* Enable/refresh notifications */}
       <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 16 }}>
-        {/* <button
+        <button
           className="adminHome-NotifsBtn"
           onClick={async () => {
             const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
@@ -136,7 +136,7 @@ const testServiceWorkerNotification = () => {
           title="Habilitar/registrar notificaciones"
         >
           <FontAwesomeIcon icon={faBell} className="footerIcons" />
-        </button> */}
+        </button>
 
         {/* (NEW) Button to test SW -> notification */}
         <button
