@@ -120,7 +120,7 @@ const testServiceWorkerNotification = () => {
 
       {/* Enable/refresh notifications */}
       <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 16 }}>
-        <button
+        {/* <button
           className="adminHome-NotifsBtn"
           onClick={async () => {
             const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
@@ -130,15 +130,19 @@ const testServiceWorkerNotification = () => {
           title="Habilitar/registrar notificaciones"
         >
           <FontAwesomeIcon icon={faBell} className="footerIcons" />
-        </button>
+        </button> */}
 
         {/* (NEW) Button to test SW -> notification */}
         <button
-          className="adminHome-TestBtn"
-          onClick={testServiceWorkerNotification}
-          title="Probar notificación desde el Service Worker"
-        >
-          Probar SW
+            className="adminHome-TestBtn"
+            onClick={async () => {
+              const reg = await navigator.serviceWorker.ready;
+              console.log("[TestSW] registration:", reg, "active:", reg.active);
+              reg.active?.postMessage("SW_NOTIFY_TEST");
+              console.log("[TestSW] sent SW_NOTIFY_TEST");
+            }}
+          >
+            Probar SW
         </button>
 
         {/* // Inside your JSX, near the other dev buttons: */}
