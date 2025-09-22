@@ -77,11 +77,9 @@ const testServiceWorkerNotification = () => {
   }, []);
 
   useEffect(() => {
-    function onSwMsg(e) {
-      console.log("[PAGE] message from SW:", e.data);
-    }
-    navigator.serviceWorker?.addEventListener?.("message", onSwMsg);
-    return () => navigator.serviceWorker?.removeEventListener?.("message", onSwMsg);
+    const onMsg = (ev) => console.log("[PAGE] message from SW:", ev.data);
+    navigator.serviceWorker.addEventListener("message", onMsg);
+    return () => navigator.serviceWorker.removeEventListener("message", onMsg);
   }, []);
 
   return (
@@ -154,7 +152,7 @@ const testServiceWorkerNotification = () => {
         </button>
 
         {/* // Inside your JSX, near the other dev buttons: */}
-        <button
+        {/* <button
         className="adminHome-ShowTokenBtn"
         onClick={async () => {
             const tok = await getCurrentFcmToken();
@@ -165,7 +163,7 @@ const testServiceWorkerNotification = () => {
         title="Mostrar/copiar token actual"
         >
         Token actual
-        </button>
+        </button> */}
       </div>
 
       {/* FOOTER MENU */}

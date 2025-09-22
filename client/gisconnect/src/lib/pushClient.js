@@ -10,27 +10,10 @@ const cfg = {
 };
 const VAPID = import.meta.env.VITE_FB_VAPID_KEY;
 
-function assertFirebaseConfig() {
-  const missing = Object.entries({
-    apiKey: cfg.apiKey, authDomain: cfg.authDomain, projectId: cfg.projectId,
-    messagingSenderId: cfg.messagingSenderId, appId: cfg.appId,
-  }).filter(([,v]) => !v).map(([k]) => k);
-  if (missing.length) throw new Error(`Missing Firebase env keys: ${missing.join(", ")}`);
-}
-
-async function getRegistration() {
-  return (
-    (await navigator.serviceWorker.getRegistration("/")) ||
-    (await navigator.serviceWorker.register("/sw.js", { scope: "/" }))
-  );
-}
-
 export async function registerAdminPushToken(API_BASE, email) {
   try {
     if (!("Notification" in window)) return null;
     if (!(await isSupported())) return null;
-    assertFirebaseConfig();
-    if (!VAPID) return null;
 
     if (Notification.permission === "default") {
       const res = await Notification.requestPermission();
@@ -38,31 +21,35 @@ export async function registerAdminPushToken(API_BASE, email) {
     }
     if (Notification.permission === "denied") return null;
 
-    const swReg = await getRegistration();
+    // ✅ Register *this* SW
+    const swReg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+    await navigator.serviceWorker.ready; // ensure active
+    console.log("[FCM] SW scope:", swReg.scope);
 
+    // Init Firebase + get token bound to this SW
     const app = initializeApp(cfg);
     const messaging = getMessaging(app);
-
     const fcmToken = await getToken(messaging, {
       vapidKey: VAPID,
       serviceWorkerRegistration: swReg,
     });
-    if (!fcmToken) return null;
+    if (!fcmToken) {
+      console.warn("getToken returned empty token.");
+      return null;
+    }
+    console.log("[FCM] token (prefix):", fcmToken.slice(0, 24) + "…");
 
-    // Foreground handler → show a popup ourselves
+    // Foreground handler (page focused)
     onMessage(messaging, (payload) => {
       console.log("[FCM onMessage]", payload);
       const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
       const body  = payload?.notification?.body  || payload?.data?.body  || "";
       try {
         new Notification(title, { body, icon: "/icons/icon-192.png", badge: "/icons/badge-72.png" });
-      } catch { /* ignore */ }
+      } catch {}
     });
 
-    // Expose token for quick copy in DevTools
-    console.log("[FCM] current token =", fcmToken);
-    window.__FCM_TOKEN__ = fcmToken;
-
+    // Save token server-side
     await fetch(`${API_BASE}/admin/push/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -70,8 +57,8 @@ export async function registerAdminPushToken(API_BASE, email) {
     });
 
     return fcmToken;
-  } catch (e) {
-    console.error("registerAdminPushToken failed:", e);
+  } catch (err) {
+    console.error("registerAdminPushToken failed:", err);
     return null;
   }
 }
