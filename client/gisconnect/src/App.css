@@ -1843,6 +1843,32 @@ input:checked + .quoterSlider:before {
 }
 
 /* ORDER NOW */
+.summary-label.muted,
+.summary-value.muted {
+  font-style: italic;
+  color: #777f8f;      /* medium gray */
+  font-size: 11px;   /* slightly smaller */
+  font-weight: 700;
+}
+
+.summary-label.sectionHeader{
+  color: #097838;      /* medium gray */
+  font-weight: 600;
+}
+
+.summary-section {
+  margin: 6px 0 2px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: #097838; /* near-black */
+  border-top: 1px solid #e5e7eb;
+  padding-top: 6px;
+}
+
+.summary-label.accent {
+  color: #097838;       /* your green */
+}
+
 .orderNowBody-Div{
   position: absolute;
   z-index: 1;
