@@ -1,7 +1,11 @@
 /* client/gisconnect/public/sw.js */
 /* global firebase */
-importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
+// importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js");
+// importScripts("https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js");
+
+/* global importScripts, firebase */
+importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js");
 
 // ⚠️ MUST match your web config (same as .env in the client)
 const FB_CFG = {
@@ -12,7 +16,15 @@ const FB_CFG = {
   appId: "1:268598065990:web:f1aec8a1f47b6cdda74347",
 };
 
-firebase.initializeApp(FB_CFG);
+// firebase.initializeApp(FB_CFG);
+firebase.initializeApp({
+  apiKey: "...",
+  authDomain: "...",
+  projectId: "...",
+  messagingSenderId: "...",
+  appId: "..."
+});
+
 
 self.addEventListener("install", (evt) => {
   console.log("[SW] install");
@@ -27,44 +39,91 @@ self.addEventListener("activate", (evt) => {
 const messaging = firebase.messaging();
 
 // FCM “background” handler (when page isn’t focused)
+// messaging.onBackgroundMessage((payload) => {
+//   console.log("[SW] onBackgroundMessage:", payload);
+//   const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
+//   const body  = payload?.notification?.body  || payload?.data?.body  || "";
+//   const data  = payload?.data || {};
+//   self.registration.showNotification(title, {
+//     body,
+//     data,
+//     icon: "/icons/icon-192.png",
+//     badge: "/icons/badge-72.png",
+//   });
+// });
+
+// 1) FCM background handler (when payload comes via Firebase channel)
 messaging.onBackgroundMessage((payload) => {
-  console.log("[SW] onBackgroundMessage:", payload);
   const title = payload?.notification?.title || payload?.data?.title || "GISConnect";
-  const body  = payload?.notification?.body  || payload?.data?.body  || "";
-  const data  = payload?.data || {};
+  const body  = payload?.notification?.body  || payload?.data?.body  || "Tienes una notificación.";
+  const icon  = "/icons/icon-192.png"; // ensure exists
+
   self.registration.showNotification(title, {
     body,
-    data,
-    icon: "/icons/icon-192.png",
-    badge: "/icons/badge-72.png",
+    icon,
+    data: { url: payload?.data?.click_action || "https://gisconnect-web.onrender.com/adminHome" }
   });
 });
 
-// Generic WebPush fallback (covers data-only & non-FCM pushes)
+// 2) Generic Web Push handler (when browser gets a push event directly)
 self.addEventListener("push", (event) => {
-  let raw = null, json = {};
-  try { raw = event.data ? event.data.text() : null; } catch {}
-  try { json = event.data ? event.data.json() : {}; } catch {}
-  console.log("[SW] push event raw:", raw, "json:", json);
+  const raw = event.data?.text() || "";
+  let data = {};
+  try { data = JSON.parse(raw); } catch (_) {}
+  const title = data?.notification?.title || data?.title || "GISConnect";
+  const body  = data?.notification?.body  || data?.body  || "Tienes una notificación.";
+  const icon  = "/icons/icon-192.png";
 
-  const note = json.notification || {};
-  const data = json.data || json || {};
-  const title = note.title || data.title || "GISConnect";
-  const body  = note.body  || data.body  || "";
-  event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      data,
-      icon: "/icons/icon-192.png",
-      badge: "/icons/badge-72.png",
-    })
-  );
+  event.waitUntil(self.registration.showNotification(title, {
+    body,
+    icon,
+    data: { url: data?.data?.click_action || data?.click_action || "https://gisconnect-web.onrender.com/adminHome" }
+  }));
 });
 
+
+
+// Generic WebPush fallback (covers data-only & non-FCM pushes)
+// self.addEventListener("push", (event) => {
+//   let raw = null, json = {};
+//   try { raw = event.data ? event.data.text() : null; } catch {}
+//   try { json = event.data ? event.data.json() : {}; } catch {}
+//   console.log("[SW] push event raw:", raw, "json:", json);
+
+//   const note = json.notification || {};
+//   const data = json.data || json || {};
+//   const title = note.title || data.title || "GISConnect";
+//   const body  = note.body  || data.body  || "";
+//   event.waitUntil(
+//     self.registration.showNotification(title, {
+//       body,
+//       data,
+//       icon: "/icons/icon-192.png",
+//       badge: "/icons/badge-72.png",
+//     })
+//   );
+// });
+
+// self.addEventListener("notificationclick", (event) => {
+//   event.notification.close();
+//   const url = event.notification?.data?.deepLink || "https://gisconnect-web.onrender.com/adminHome";
+//   event.waitUntil(self.clients.openWindow(url));
+// });
+
+// Focus the app when the user taps the notification
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  const url = event.notification?.data?.deepLink || "https://gisconnect-web.onrender.com/adminHome";
-  event.waitUntil(self.clients.openWindow(url));
+  const target = event.notification.data?.url || "https://gisconnect-web.onrender.com/adminHome";
+  event.waitUntil((async () => {
+    const allClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    const matching = allClients.find((c) => c.url.includes("gisconnect-web.onrender.com"));
+    if (matching) {
+      matching.focus();
+      matching.navigate(target);
+    } else {
+      clients.openWindow(target);
+    }
+  })());
 });
 
 // Tiny ping to prove this SW can show a notification + reply back to the page

@@ -29,32 +29,59 @@ async function notifyStage(stage, title, body, data = {}) {
     for (let i = 0; i < tokenList.length; i += chunkSize) {
       const chunk = tokenList.slice(i, i + chunkSize);
 
+      // const message = {
+      //   tokens: chunk,
+
+      //   // Keep top-level for cross-platform parity
+      //   notification: { title, body },
+
+      //   // Put the actual web push notification here (most reliable for browsers)
+      //   webpush: {
+      //     fcmOptions: {
+      //       link: safeData.deepLink || "https://gisconnect-web.onrender.com/adminHome",
+      //     },
+      //     notification: {
+      //       title,
+      //       body,
+      //       icon: "/icons/icon-192.png",
+      //       badge: "/icons/badge-72.png",
+      //     },
+      //     headers: {
+      //       Urgency: "high",
+      //     },
+      //   },
+
+      //   data: safeData,
+      // };
       const message = {
-        tokens: chunk,
-
-        // Keep top-level for cross-platform parity
-        notification: { title, body },
-
-        // Put the actual web push notification here (most reliable for browsers)
+        tokens, // array of tokens
         webpush: {
-          fcmOptions: {
-            link: safeData.deepLink || "https://gisconnect-web.onrender.com/adminHome",
-          },
           notification: {
-            title,
-            body,
-            icon: "/icons/icon-192.png",
-            badge: "/icons/badge-72.png",
+            title: "🔔 GISConnect (Test)",
+            body: "If you can read this, Web Push is wired correctly.",
+            icon: "/icons/icon-192.png",   // make sure this file exists!
+            // badge: "/icons/badge-72.png", // REMOVE if you don't actually have this file
+            vibrate: [100, 50, 100]
+          },
+          fcmOptions: {
+            link: "https://gisconnect-web.onrender.com/adminHome"
           },
           headers: {
-            Urgency: "high",
-          },
+            TTL: "2419200" // 28 days, optional
+          }
         },
-
-        data: safeData,
+        // Optional extra data for your SW:
+        data: {
+          title: "GISConnect",
+          body: "Nuevo evento en un pedido",
+          click_action: "https://gisconnect-web.onrender.com/adminHome",
+          type: "test"
+        }
       };
+      
+      await admin.messaging().sendEachForMulticast(message);
 
-      const resp = await messaging.sendEachForMulticast(message);
+      // const resp = await messaging.sendEachForMulticast(message);
       console.log(`[notifyStage] ${stage} sent: success=${resp.successCount}, fail=${resp.failureCount}`);
 
     // Remove invalid tokens so we don’t keep failing on them
