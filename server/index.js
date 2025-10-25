@@ -149,6 +149,12 @@ if (evidenceRouter) app.use("/orders", evidenceRouter);
 
 // Main app router last (contains /orderDets, /userOrders, etc.)
 app.use("/", router);
+
+// oct25
+app.use(require("./routes/webpush")); // <-- add this line
+app.use(require("./routes/debug"));
+
+// oct25
 /* ----------------------------------------------------------------------- */
 
 // SEP08

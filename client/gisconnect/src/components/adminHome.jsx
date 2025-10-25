@@ -207,7 +207,7 @@ export default function AdminHome() {
 
       {/* Enable/refresh notifications */}
       <div style={{ display: "flex", gap: 12, justifyContent: "center", marginTop: 16 }}>
-        <button
+        {/* <button
           className="adminHome-NotifsBtn"
           onClick={async () => {
             const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
@@ -217,10 +217,10 @@ export default function AdminHome() {
           title="Habilitar/registrar notificaciones (FCM)"
         >
           <FontAwesomeIcon icon={faBell} className="footerIcons" />
-        </button>
+        </button> */}
 
         {/* (NEW) Button to test SW -> notification */}
-        <button
+        {/* <button
           className="adminHome-TestBtn"
           onClick={async () => {
             const reg = await navigator.serviceWorker.ready;
@@ -230,7 +230,7 @@ export default function AdminHome() {
           }}
         >
           Probar SW
-        </button>
+        </button> */}
 
         {/* (NEW) Dev-only: trigger Web Push subscription */}
         <button

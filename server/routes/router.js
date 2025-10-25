@@ -1520,6 +1520,22 @@ router.post("/admin/webpush/register", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// POST /debug/push-stage?stage=PEDIDO_REALIZADO
+router.post("/debug/push-stage", async (req, res) => {
+  try {
+    const stage = (req.query.stage || "PEDIDO_REALIZADO").toString();
+    const title = req.body.title || `Test: ${stage}`;
+    const body  = req.body.body  || "Esto es una prueba del flujo de etapa.";
+    const data  = req.body.data  || { test: "true" };
+
+    await notifyStage(stage, title, body, data);
+    res.json({ ok: true, stage });
+  } catch (e) {
+    console.error("debug/push-stage error:", e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
 // oct24
 
 module.exports = router;
