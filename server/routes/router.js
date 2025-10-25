@@ -28,6 +28,9 @@ const { notifyStage } = require("./notify");
 const { STAGES } = require("../notifications/roles"); 
 const { admin } = require("../notifications/fcm");
 
+const WebPushSubscription = require("../models/WebPushSubscription");
+
+
 // sep16
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
@@ -1502,6 +1505,22 @@ router.get("/debug/firebase-info", (_req, res) => {
   res.json({ serverProjectId: PROJECT_ID });
 });
 // SEP16
+
+// oct24
+router.post("/admin/webpush/register", async (req, res) => {
+  try {
+    const { email, subscription } = req.body;
+    const userAgent = req.get("user-agent");
+    if (!email || !subscription) return res.status(400).json({ ok: false, error: "missing fields" });
+
+    const doc = await WebPushSubscription.upsertForEmail({ email, subscription, userAgent });
+    res.json({ ok: true, id: doc._id });
+  } catch (e) {
+    console.error("webpush/register error:", e);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+// oct24
 
 module.exports = router;
 

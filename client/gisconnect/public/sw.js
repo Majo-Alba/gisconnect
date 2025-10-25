@@ -1,5 +1,4 @@
 /* client/gisconnect/public/sw.js */
-
 /* global importScripts, firebase */
 importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js");
 importScripts("https://www.gstatic.com/firebasejs/9.22.2/firebase-messaging-compat.js");
