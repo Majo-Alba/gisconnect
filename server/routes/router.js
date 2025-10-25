@@ -1536,6 +1536,12 @@ router.post("/debug/push-stage", async (req, res) => {
     res.status(500).json({ ok: false, error: e.message });
   }
 });
+
+// server/routes/webpush.js (add below your register handler)
+router.get("/admin/webpush/public-key", (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || "" });
+});
+
 // oct24
 
 module.exports = router;

@@ -96,6 +96,47 @@ async function ensureWebPushSubscription(API_BASE, email, vapidPublicKey) {
   }
 }
 
+// oct25
+async function resubscribeWebPush(API_BASE, email, vapidPublicKey) {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+  const reg = (await navigator.serviceWorker.getRegistration("/")) || (await navigator.serviceWorker.ready);
+  if (!reg) return;
+
+  // 1) Unsubscribe old (if any)
+  const existing = await reg.pushManager.getSubscription();
+  if (existing) {
+    try {
+      await existing.unsubscribe();
+      // (optional) tell server to clean it by endpoint:
+      // await fetch(`${API_BASE}/admin/webpush/unsubscribe`, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ endpoint: existing.endpoint }) });
+    } catch (e) {
+      console.warn("[WebPush] Unsubscribe failed (continuing):", e);
+    }
+  }
+
+  // 2) Subscribe with the NEW canonical public key
+  const newSub = await reg.pushManager.subscribe({
+    userVisibleOnly: true,
+    applicationServerKey: (function toUint8(base64) {
+      const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+      const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+      const raw = atob(b64);
+      const out = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+      return out;
+    })(vapidPublicKey),
+  });
+
+  // 3) Register new sub on server
+  await fetch(`${API_BASE}/admin/webpush/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, subscription: newSub }),
+  });
+}
+
+// oct25
+
 /* ------------------ Component ------------------ */
 
 export default function AdminHome() {
@@ -247,6 +288,20 @@ export default function AdminHome() {
         >
           Suscribir Web Push
         </button>
+
+        {/* oct25 */}
+        <button
+          onClick={async () => {
+            const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+            const email = raw?.correo || localStorage.getItem("userEmail");
+            const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY;
+            await resubscribeWebPush(API, email, PUBLIC_VAPID);
+            alert("Web Push resuscrito con la nueva clave.");
+          }}
+        >
+          Re-suscribir Web Push
+        </button>
+        {/* oct25 */}
 
         {/* // Inside your JSX, near the other dev buttons: */}
         {/* <button
