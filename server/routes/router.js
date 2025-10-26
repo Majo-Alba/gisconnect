@@ -1563,6 +1563,17 @@ router.post("/admin/webpush/clear-all", async (req, res) => {
   res.json({ ok: true, deleted: r.deletedCount || 0 });
 });
 
+// GET /admin/webpush/list  (diagnostic)
+router.get("/admin/webpush/list", async (req, res) => {
+  const WebPushSubscription = require("../models/WebPushSubscription");
+  const docs = await WebPushSubscription
+    .find()
+    .select("email subscription.endpoint lastSeenAt -_id")
+    .lean();
+  res.json({ count: docs.length, rows: docs });
+});
+
+
 // POST /debug/webpush-to-email?email=...
 router.post("/debug/webpush-to-email", async (req, res) => {
   try {
