@@ -40,20 +40,58 @@ messaging.onBackgroundMessage((payload) => {
   });
 });
 
-// 2) Generic Web Push handler (when browser gets a push event directly)
-self.addEventListener("push", (event) => {
-  const raw = event.data?.text() || "";
-  let data = {};
-  try { data = JSON.parse(raw); } catch (_) {}
-  const title = data?.notification?.title || data?.title || "GISConnect";
-  const body  = data?.notification?.body  || data?.body  || "Tienes una notificación.";
-  const icon  = "/icons/icon-192.png";
+// // 2) Generic Web Push handler (when browser gets a push event directly)
+// self.addEventListener("push", (event) => {
+//   const raw = event.data?.text() || "";
+//   let data = {};
+//   try { data = JSON.parse(raw); } catch (_) {}
+//   const title = data?.notification?.title || data?.title || "GISConnect";
+//   const body  = data?.notification?.body  || data?.body  || "Tienes una notificación.";
+//   const icon  = "/icons/icon-192.png";
 
-  event.waitUntil(self.registration.showNotification(title, {
-    body,
-    icon,
-    data: { url: data?.data?.click_action || data?.click_action || "https://gisconnect-web.onrender.com/adminHome" }
-  }));
+//   event.waitUntil(self.registration.showNotification(title, {
+//     body,
+//     icon,
+//     data: { url: data?.data?.click_action || data?.click_action || "https://gisconnect-web.onrender.com/adminHome" }
+//   }));
+// });
+
+// --- DEBUG push handler (temporary while we verify iOS path) ---
+self.addEventListener("push", (event) => {
+  const ts = new Date().toISOString();
+  let payloadText = "";
+  let data = {};
+  try {
+    payloadText = event.data ? event.data.text() : "";
+    try { data = JSON.parse(payloadText); } catch { data = {}; }
+  } catch (_) {
+    // some engines throw on accessing event.data when empty
+  }
+
+  const title =
+    data?.notification?.title || data?.title || `🔔 Push @ ${ts}`;
+  const body =
+    data?.notification?.body || data?.body || (payloadText ? payloadText : "Tienes una notificación.");
+  const icon = "https://gisconnect-web.onrender.com/icons/icon-192.png";
+  const clickUrl =
+    data?.data?.click_action || data?.click_action || "https://gisconnect-web.onrender.com/adminHome";
+
+  event.waitUntil((async () => {
+    // Always show a banner
+    await self.registration.showNotification(title, {
+      body,
+      icon,
+      tag: `dbg-${ts}`,        // unique tag so iOS doesn't collapse duplicates
+      renotify: true,
+      data: { url: clickUrl, dbgTs: ts, raw: payloadText.slice(0, 200) }
+    });
+
+    // Tell any open tabs we got a push
+    const clis = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of clis) {
+      try { c.postMessage({ kind: "PUSH_DBG", ts, title, body, payloadText }); } catch {}
+    }
+  })());
 });
 
 // Focus the app when the user taps the notification
