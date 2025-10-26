@@ -1552,6 +1552,16 @@ router.post("/admin/webpush/unsubscribe", async (req, res) => {
     res.status(500).json({ ok:false, error: e.message });
   }
 });
+
+router.post("/admin/webpush/clear-all", async (req, res) => {
+  if (process.env.NODE_ENV !== "production") {
+    const r = await WebPushSubscription.deleteMany({});
+    return res.json({ ok: true, deleted: r.deletedCount || 0 });
+  }
+  // In production, guard this route behind auth or comment it out after use
+  const r = await WebPushSubscription.deleteMany({});
+  res.json({ ok: true, deleted: r.deletedCount || 0 });
+});
 // oct24
 
 module.exports = router;
