@@ -1542,6 +1542,16 @@ router.get("/admin/webpush/public-key", (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY || "" });
 });
 
+router.post("/admin/webpush/unsubscribe", async (req, res) => {
+  try {
+    const { endpoint } = req.body;
+    if (!endpoint) return res.status(400).json({ ok:false, error:"missing endpoint" });
+    const r = await WebPushSubscription.removeByEndpoint(endpoint);
+    res.json({ ok:true, deleted: r.deletedCount || 0 });
+  } catch (e) {
+    res.status(500).json({ ok:false, error: e.message });
+  }
+});
 // oct24
 
 module.exports = router;

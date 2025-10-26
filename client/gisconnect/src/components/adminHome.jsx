@@ -204,6 +204,85 @@ export default function AdminHome() {
     return () => navigator.serviceWorker.removeEventListener("message", onMsg);
   }, []);
 
+  // oct25
+  async function fetchServerVapidKey(API_BASE) {
+    try {
+      const r = await fetch(`${API_BASE}/admin/webpush/public-key`);
+      const { publicKey } = await r.json();
+      return (publicKey || "").trim();
+    } catch (e) {
+      console.warn("[WebPush] Could not fetch server VAPID key:", e);
+      return "";
+    }
+  }
+  
+  function b64urlToUint8(base64) {
+    const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+    const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const raw = atob(b64);
+    const out = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; ++i) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  
+  async function resubscribeWebPush(API_BASE, email) {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    if (!email) return;
+  
+    const reg = (await navigator.serviceWorker.getRegistration("/")) || (await navigator.serviceWorker.ready);
+    if (!reg) return;
+  
+    // 1) Unsubscribe old
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      try {
+        await existing.unsubscribe();
+        // Optional: inform server to prune
+        await fetch(`${API_BASE}/admin/webpush/unsubscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: existing.endpoint }),
+        }).catch(()=>{});
+      } catch (e) {
+        console.warn("[WebPush] Unsubscribe failed (continuing):", e);
+      }
+    }
+  
+    // 2) Fetch canonical key from server
+    const serverKey = await fetchServerVapidKey(API_BASE);
+    if (!serverKey) {
+      alert("No VAPID key from server");
+      return;
+    }
+  
+    // 3) Ensure permission and re-subscribe with server key
+    if (!("Notification" in window)) {
+      alert("Abre desde el ícono en Home Screen (iOS)");
+      return;
+    }
+    if (Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    if (Notification.permission !== "granted") {
+      alert("Permiso de notificaciones no concedido");
+      return;
+    }
+  
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: b64urlToUint8(serverKey),
+    });
+  
+    // 4) Register on server
+    await fetch(`${API_BASE}/admin/webpush/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, subscription: sub }),
+    });
+    alert("Web Push re-suscrito con la clave del servidor");
+  }
+  // oct25
+
   return (
     <body className="body-BG-Gradient">
       {/* LOGOS DIV */}
@@ -290,13 +369,23 @@ export default function AdminHome() {
         </button>
 
         {/* oct25 */}
-        <button
+        {/* <button
           onClick={async () => {
             const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
             const email = raw?.correo || localStorage.getItem("userEmail");
             const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY;
             await resubscribeWebPush(API, email, PUBLIC_VAPID);
             alert("Web Push resuscrito con la nueva clave.");
+          }}
+        >
+          Re-suscribir Web Push
+        </button> */}
+        <button
+          className="adminHome-WebPushResubBtn"
+          onClick={async () => {
+            const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+            const email = raw?.correo || localStorage.getItem("userEmail");
+            await resubscribeWebPush(API, email);
           }}
         >
           Re-suscribir Web Push
