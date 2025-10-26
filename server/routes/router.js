@@ -1562,6 +1562,42 @@ router.post("/admin/webpush/clear-all", async (req, res) => {
   const r = await WebPushSubscription.deleteMany({});
   res.json({ ok: true, deleted: r.deletedCount || 0 });
 });
+
+// POST /debug/webpush-to-email?email=...
+router.post("/debug/webpush-to-email", async (req, res) => {
+  try {
+    const email = String(req.query.email || req.body?.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ ok:false, error:"email required" });
+
+    const WebPushSubscription = require("../models/WebPushSubscription");
+    const { sendWebPush } = require("../notifications/webpush");
+
+    const subs = await WebPushSubscription.find({ email }).lean();
+    if (!subs.length) return res.status(404).json({ ok:false, error:"no subscriptions for email" });
+
+    const payload = {
+      title: "GISConnect (Web Push)",
+      body:  "Prueba directa por Web Push",
+      icon:  "https://gisconnect-web.onrender.com/icons/icon-192.png",
+      data:  { click_action: "https://gisconnect-web.onrender.com/adminHome", debug: "webpush-to-email" }
+    };
+
+    const results = [];
+    for (const s of subs) {
+      try {
+        const resp = await sendWebPush(s.subscription, payload);
+        results.push({ endpoint: s.subscription.endpoint, ok: true, statusCode: resp?.statusCode });
+      } catch (e) {
+        results.push({ endpoint: s.subscription.endpoint, ok: false, statusCode: e?.statusCode, reason: e?.body || e?.message });
+      }
+    }
+    res.json({ ok:true, sent: results.length, results });
+  } catch (e) {
+    console.error("debug/webpush-to-email error:", e);
+    res.status(500).json({ ok:false, error: e.message });
+  }
+});
+
 // oct24
 
 module.exports = router;
