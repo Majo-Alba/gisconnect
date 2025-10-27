@@ -1,4 +1,8 @@
 /* public/sw.js */
+
+import { precacheAndRoute } from 'workbox-precaching';
+precacheAndRoute(self.__WB_MANIFEST || []);
+
 // Increment this to force update on devices
 const SW_VERSION = "v2025-10-26-01";
 
