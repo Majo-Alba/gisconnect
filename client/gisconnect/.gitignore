@@ -31,6 +31,9 @@ client/.env
 client/gisconnect/.env
 server/.env
 
+client/gisconnect/dev-dist
+
+
 # Allow example env files (must come AFTER the ignore rules)
 !client/.env.example
 !client/gisconnect/.env.example
