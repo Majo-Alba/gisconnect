@@ -547,9 +547,11 @@ router.get('/orders/:orderId', async (req, res) => {
 router.put(
   "/orders/:orderId",
   upload.fields([
-    { name: "evidenceImage", maxCount: 1 },
-    { name: "packingImages", maxCount: 3 },
-    { name: "deliveryImage", maxCount: 1 },
+    { name: "evidenceImage",   maxCount: 1 },
+    { name: "paymentEvidence", maxCount: 1 }, // alias
+    { name: "evidenceFile",    maxCount: 1 }, // alias
+    { name: "packingImages",   maxCount: 3 },
+    { name: "deliveryImage",   maxCount: 1 },
   ]),
   async (req, res) => {
     const { orderId } = req.params;
@@ -561,8 +563,9 @@ router.put(
       insuredAmount,
       deliveryDate,
       trackingNumber,
-    } = req.body;
+    } = req.body || {};
 
+    // --- Helpers (declare BEFORE use) ---
     const fileToDoc = (file) => {
       if (!file) return null;
       const buffer = file.buffer || null;
@@ -575,17 +578,30 @@ router.put(
       };
     };
 
+    const files = req.files || {};
+    const firstOf = (k) => (files?.[k]?.[0]) || null;
+
+    // pick an evidence file regardless of which alias the client used
+    const pickEvidenceFile = () =>
+      firstOf("evidenceImage") || firstOf("paymentEvidence") || firstOf("evidenceFile");
+
+    const pickDeliveryFile = () => firstOf("deliveryImage");
+    const pickPackingDocs = () => (files?.packingImages || []).map(fileToDoc).filter(Boolean);
+
     try {
       const prevOrder = await newOrderModel.findById(orderId);
       if (!prevOrder) return res.status(404).json({ message: "Order not found" });
 
-      const paymentEvidenceDoc = fileToDoc((req.files?.evidenceImage || [])[0]);
-      const packingDocs = (req.files?.packingImages || []).map(fileToDoc).filter(Boolean);
-      const deliveryDoc = fileToDoc((req.files?.deliveryImage || [])[0]);
+      // Build docs from uploaded files
+      const paymentEvidenceDoc = fileToDoc(pickEvidenceFile());
+      const packingDocs        = pickPackingDocs();
+      const deliveryDoc        = fileToDoc(pickDeliveryFile());
 
-      const numericInsured = insuredAmount ? Number(insuredAmount) : undefined;
-      const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
+      // Coerce/parse scalar fields
+      const numericInsured      = insuredAmount ? Number(insuredAmount) : undefined;
+      const parsedDeliveryDate  = deliveryDate ? new Date(deliveryDate) : undefined;
 
+      // Build $set update
       const $set = {
         ...(paymentMethod && { paymentMethod }),
         ...(paymentAccount && { paymentAccount }),
@@ -596,21 +612,23 @@ router.put(
         ...(trackingNumber && { trackingNumber }),
       };
 
-      if (paymentEvidenceDoc) $set.evidenceFile = paymentEvidenceDoc;
-      if (deliveryDoc) $set.deliveryEvidence = deliveryDoc;
+      if (paymentEvidenceDoc) $set.evidenceFile   = paymentEvidenceDoc;
+      if (deliveryDoc)        $set.deliveryEvidence = deliveryDoc;
 
       const update = { $set };
-      if (packingDocs.length > 0) update.$push = { packingEvidence: { $each: packingDocs } };
+      if (packingDocs.length > 0) {
+        update.$push = { packingEvidence: { $each: packingDocs } };
+      }
 
       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
+
       // ---------- Notifications ----------
       const triggeredStages = [];
 
-      // A) Evidence newly uploaded?
-      // Place this right after you've computed `paymentEvidenceDoc` and have `prevOrder` available.
+      // A) First-time payment evidence?
       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
-        triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // <-- THIS IS THE LINE
+        triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO);
       }
 
       // B) Status changed?
@@ -631,7 +649,7 @@ router.put(
 
       // D) Send notifications
       if (triggeredStages.length > 0) {
-        const shortId = String(updatedOrder._id || "").slice(-5);
+        const shortId   = String(updatedOrder._id || "").slice(-5);
         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
 
         const messageForStage = (stage) => {
@@ -677,10 +695,17 @@ router.put(
 
 // router.put(
 //   "/orders/:orderId",
+//   // upload.fields([
+//   //   { name: "evidenceImage", maxCount: 1 },
+//   //   { name: "packingImages", maxCount: 3 },
+//   //   { name: "deliveryImage", maxCount: 1 },
+//   // ]),
 //   upload.fields([
-//     { name: "evidenceImage", maxCount: 1 },
-//     { name: "packingImages", maxCount: 3 },
-//     { name: "deliveryImage", maxCount: 1 },
+//     { name: "evidenceImage",  maxCount: 1 },
+//     { name: "paymentEvidence",maxCount: 1 }, // NEW alias
+//     { name: "evidenceFile",   maxCount: 1 }, // NEW alias
+//     { name: "packingImages",  maxCount: 3 },
+//     { name: "deliveryImage",  maxCount: 1 },
 //   ]),
 //   async (req, res) => {
 //     const { orderId } = req.params;
@@ -735,64 +760,68 @@ router.put(
 
 //       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
 //       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
-
-//       // Notifications
+//       // ---------- Notifications ----------
 //       const triggeredStages = [];
-//       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) triggeredStages.push("EVIDENCIA_PAGO");
 
-//       const prevStatus = prevOrder?.orderStatus || "";
-//       const nextStatus = updatedOrder?.orderStatus || prevStatus;
-//       if (orderStatus && orderStatus !== prevStatus) {
-//         const s = orderStatus.toLowerCase();
-//         if (s === "pago verificado")   triggeredStages.push("PAGO_VERIFICADO");
-//         if (s === "preparando pedido") triggeredStages.push("PREPARANDO_PEDIDO");
-//         if (s === "pedido entregado")  triggeredStages.push("PEDIDO_ENTREGADO");
+//       // A) Evidence newly uploaded?
+//       // Place this right after you've computed `paymentEvidenceDoc` and have `prevOrder` available.
+//       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
+//         triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // <-- THIS IS THE LINE
 //       }
 
+//       // B) Status changed?
+//       const prevStatus = (prevOrder?.orderStatus || "").trim().toLowerCase();
+//       const nextStatus = (updatedOrder?.orderStatus || prevStatus || "").trim().toLowerCase();
+//       if (orderStatus && nextStatus !== prevStatus) {
+//         if (nextStatus === "pago verificado")   triggeredStages.push(STAGES.PAGO_VERIFICADO);
+//         if (nextStatus === "preparando pedido") triggeredStages.push(STAGES.PREPARANDO_PEDIDO);
+//         if (nextStatus === "pedido entregado")  triggeredStages.push(STAGES.PEDIDO_ENTREGADO);
+//       }
+
+//       // C) Tracking label added/changed?
 //       const prevTracking = (prevOrder?.trackingNumber || "").trim();
 //       const nextTracking = (updatedOrder?.trackingNumber || "").trim();
-//       if (nextTracking && nextTracking !== prevTracking) triggeredStages.push("ETIQUETA_GENERADA");
+//       if (nextTracking && nextTracking !== prevTracking) {
+//         triggeredStages.push(STAGES.ETIQUETA_GENERADA);
+//       }
 
+//       // D) Send notifications
 //       if (triggeredStages.length > 0) {
 //         const shortId = String(updatedOrder._id || "").slice(-5);
 //         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
 
 //         const messageForStage = (stage) => {
 //           switch (stage) {
-//             case "EVIDENCIA_PAGO":   return { title: `Evidencia de pago recibida`, body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-//             case "PAGO_VERIFICADO":  return { title: `Pago verificado`, body: `Pedido #${shortId} listo para logística/almacén` };
-//             case "PREPARANDO_PEDIDO":return { title: `Preparando pedido`, body: `Pedido #${shortId} en empaque` };
-//             case "ETIQUETA_GENERADA":return { title: `Etiqueta generada`, body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
-//             case "PEDIDO_ENTREGADO": return { title: `Pedido entregado`, body: `Pedido #${shortId} marcado como entregado` };
-//             default:                 return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
+//             case STAGES.EVIDENCIA_DE_PAGO:
+//               return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+//             case STAGES.PAGO_VERIFICADO:
+//               return { title: "Pago verificado", body: `Pedido #${shortId} listo para logística/almacén` };
+//             case STAGES.PREPARANDO_PEDIDO:
+//               return { title: "Preparando pedido", body: `Pedido #${shortId} en empaque` };
+//             case STAGES.ETIQUETA_GENERADA:
+//               return { title: "Etiqueta generada", body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
+//             case STAGES.PEDIDO_ENTREGADO:
+//               return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
+//             case STAGES.PEDIDO_REALIZADO:
+//               return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+//             default:
+//               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
 //           }
 //         };
 
-//         (async () => {
-//           try {
-//             for (const stage of triggeredStages) {
-//               const roles = rolesForStage(stage);
-//               const msg = messageForStage(stage);
-//               for (const role of roles) {
-//                 const topic = roleTopics[role];
-//                 if (!topic) continue;
-//                 await sendToTopic(topic, {
-//                   notification: { title: msg.title, body: msg.body },
-//                   data: {
-//                     orderId: String(updatedOrder._id),
-//                     stage,
-//                     email: userEmail,
-//                     orderStatus: nextStatus || "",
-//                     trackingNumber: nextTracking || "",
-//                   },
-//                 });
-//               }
-//             }
-//           } catch (notifyErr) {
-//             console.error("FCM notify error:", notifyErr);
-//           }
-//         })();
+//         for (const stage of triggeredStages) {
+//           const { title, body } = messageForStage(stage);
+//           await notifyStage(stage, title, body, {
+//             orderId: String(updatedOrder._id),
+//             stage,
+//             email: userEmail,
+//             orderStatus: updatedOrder.orderStatus || "",
+//             trackingNumber: nextTracking || "",
+//             deepLink: "https://gisconnect-web.onrender.com/adminHome",
+//           });
+//         }
 //       }
+//       // ---------- End notifications ----------
 
 //       res.json(updatedOrder);
 //     } catch (error) {
@@ -816,6 +845,9 @@ router.patch("/orders/:orderId", async (req, res) => {
       trackingNumber,
     } = req.body || {};
 
+    const prev = await newOrderModel.findById(orderId);
+    if (!prev) return res.status(404).json({ error: "Order not found" });
+
     const numericInsured =
       insuredAmount !== undefined && insuredAmount !== null ? Number(insuredAmount) : undefined;
     const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
@@ -833,7 +865,59 @@ router.patch("/orders/:orderId", async (req, res) => {
     if (Object.keys($set).length === 0) return res.status(400).json({ error: "No fields to update" });
 
     const updated = await newOrderModel.findByIdAndUpdate(orderId, { $set }, { new: true });
-    if (!updated) return res.status(404).json({ error: "Order not found" });
+    if (!updated) return res.status(404).json({ error: "Order not found after update" });
+
+    // ---------- Notifications (JSON patch) ----------
+    try {
+      const triggeredStages = [];
+      const shortId = String(updated._id || "").slice(-5);
+      const userEmail = updated.userEmail || updated.email || "cliente";
+
+      // Status change?
+      const prevStatus = (prev.orderStatus || "").trim().toLowerCase();
+      const nextStatus = (updated.orderStatus || prevStatus).trim().toLowerCase();
+      if ($set.orderStatus && nextStatus !== prevStatus) {
+        if (nextStatus === "pago verificado")   triggeredStages.push(STAGES.PAGO_VERIFICADO);
+        if (nextStatus === "preparando pedido") triggeredStages.push(STAGES.PREPARANDO_PEDIDO);
+        if (nextStatus === "pedido entregado")  triggeredStages.push(STAGES.PEDIDO_ENTREGADO);
+      }
+
+      // Tracking added/changed?
+      const prevTracking = (prev.trackingNumber || "").trim();
+      const nextTracking = (updated.trackingNumber || "").trim();
+      if ($set.trackingNumber && nextTracking && nextTracking !== prevTracking) {
+        triggeredStages.push(STAGES.ETIQUETA_GENERADA);
+      }
+
+      if (triggeredStages.length) {
+        const titles = {
+          [STAGES.PAGO_VERIFICADO]:   "Pago verificado",
+          [STAGES.PREPARANDO_PEDIDO]: "Preparando pedido",
+          [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
+          [STAGES.ETIQUETA_GENERADA]: "Etiqueta generada",
+        };
+        const bodies = {
+          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
+          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} — Tracking: ${nextTracking}`,
+        };
+
+        for (const stage of triggeredStages) {
+          await notifyStage(stage, titles[stage], bodies[stage], {
+            orderId: String(updated._id),
+            stage,
+            email: userEmail,
+            orderStatus: updated.orderStatus || "",
+            trackingNumber: updated.trackingNumber || "",
+            deepLink: "https://gisconnect-web.onrender.com/adminHome",
+          });
+        }
+      }
+    } catch (notifyErr) {
+      console.error("PATCH /orders/:orderId notify error:", notifyErr);
+    }
+    // ---------- End notifications ----------
 
     res.json({ data: updated, message: "Order updated" });
   } catch (err) {
@@ -841,6 +925,45 @@ router.patch("/orders/:orderId", async (req, res) => {
     res.status(500).json({ error: "Failed to update order" });
   }
 });
+
+// router.patch("/orders/:orderId", async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+//     const {
+//       paymentMethod,
+//       paymentAccount,
+//       orderStatus,
+//       packerName,
+//       insuredAmount,
+//       deliveryDate,
+//       trackingNumber,
+//     } = req.body || {};
+
+//     const numericInsured =
+//       insuredAmount !== undefined && insuredAmount !== null ? Number(insuredAmount) : undefined;
+//     const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
+
+//     const $set = {
+//       ...(typeof paymentMethod === "string" && paymentMethod.trim() && { paymentMethod: paymentMethod.trim() }),
+//       ...(typeof paymentAccount === "string" && paymentAccount.trim() && { paymentAccount: paymentAccount.trim() }),
+//       ...(typeof orderStatus === "string" && orderStatus.trim() && { orderStatus: orderStatus.trim() }),
+//       ...(typeof packerName === "string" && packerName.trim() && { packerName: packerName.trim() }),
+//       ...(numericInsured !== undefined && Number.isFinite(numericInsured) && { insuredAmount: numericInsured }),
+//       ...(parsedDeliveryDate instanceof Date && !isNaN(parsedDeliveryDate) && { deliveryDate: parsedDeliveryDate }),
+//       ...(typeof trackingNumber === "string" && trackingNumber.trim() && { trackingNumber: trackingNumber.trim() }),
+//     };
+
+//     if (Object.keys($set).length === 0) return res.status(400).json({ error: "No fields to update" });
+
+//     const updated = await newOrderModel.findByIdAndUpdate(orderId, { $set }, { new: true });
+//     if (!updated) return res.status(404).json({ error: "Order not found" });
+
+//     res.json({ data: updated, message: "Order updated" });
+//   } catch (err) {
+//     console.error("PATCH /orders/:orderId error:", err);
+//     res.status(500).json({ error: "Failed to update order" });
+//   }
+// });
 
 // =========================== EVIDENCE (FILES) ===========================
 
@@ -854,12 +977,18 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 
 // Upload payment evidence (memory)
 // Upload payment evidence (memory)
-router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
+// router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
+router.post("/upload-evidence", upload.any(), async (req, res) => {
+  const pickFile = () =>
+    (req.files || []).find(f => ["evidenceImage","paymentEvidence","evidenceFile"].includes(f.fieldname));
+    const file = pickFile();
+  
   console.log("[ENTER] /upload-evidence", {
-    orderId: req.body?.orderId,
-    fields: Object.keys(req.body || {}),
-    file: req.file?.originalname,
-    mimetype: req.file?.mimetype,
+      orderId: req.body?.orderId,
+      fields: Object.keys(req.body || {}),
+      file: file?.originalname,
+      fieldname: file?.fieldname,
+      mimetype: file?.mimetype,
   });
   try {
     const { orderId } = req.body;
