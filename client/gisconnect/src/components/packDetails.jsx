@@ -1,5 +1,5 @@
 // Hey chatgpt, in my packDetails.jsx file, the person packing the order is prompted to upload an image. When uploading using an iphone, everything works smoothly, but when trying to upload through android, it allows me to take a picture and correctly handles it but doesnt allow me to open photo gallery to select a photo from there. Keep in mind that person packing can upload up to 3 pictures from gallery 
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useState } from "react-router-dom";
 import axios from "axios";
 
 import { API } from "/src/lib/api";
