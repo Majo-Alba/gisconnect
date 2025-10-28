@@ -1,4 +1,5 @@
 // Hey chatgpt, in my packDetails.jsx file, the person packing the order is prompted to upload an image. When uploading using an iphone, everything works smoothly, but when trying to upload through android, it allows me to take a picture and correctly handles it but doesnt allow me to open photo gallery to select a photo from there. Keep in mind that person packing can upload up to 3 pictures from gallery 
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -82,30 +83,61 @@ export default function PackDetails() {
   //   e.target.value = "";
   // };
 
-  const handleFilesSelected = (e) => {
-    const files = Array.from(e.target.files || []);
-    const trimmed = files.slice(0, 3);
+  // MULTIPLE file input (max 3) — supports camera or gallery
+const handleFilesSelected = (e, { source } = {}) => {
+  const incoming = Array.from(e.target.files || []);
+  if (incoming.length === 0) return;
 
-    // Basic validation (images only, <= 25MB each)
-    const bad = trimmed.find(
-      (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
-    );
-    if (bad) {
-      alert("Solo imágenes y máximo 25MB por archivo.");
-      return;
-    }
+  // Validate images and size
+  const bad = incoming.find(
+    (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
+  );
+  if (bad) {
+    alert("Solo imágenes y máximo 25MB por archivo.");
+    return;
+  }
 
-    setEvidenceImages(trimmed);
-    setErrMsg("");
-    setOkMsg("");
+  // Merge with existing (camera adds 1, gallery can add many)
+  const merged = [...evidenceImages, ...incoming].slice(0, 3);
 
-    // Thumbnails
-    const urls = trimmed.map((f) => URL.createObjectURL(f));
-    setPreviewUrls((old) => {
-      old.forEach((u) => URL.revokeObjectURL(u));
-      return urls;
-    });
-  };
+  setEvidenceImages(merged);
+  setErrMsg("");
+  setOkMsg("");
+
+  // Build fresh previews
+  setPreviewUrls((old) => {
+    old.forEach((u) => URL.revokeObjectURL(u));
+    return merged.map((f) => URL.createObjectURL(f));
+  });
+
+  // Reset the input so same file can be reselected later if needed
+  e.target.value = "";
+};
+
+  // const handleFilesSelected = (e) => {
+  //   const files = Array.from(e.target.files || []);
+  //   const trimmed = files.slice(0, 3);
+
+  //   // Basic validation (images only, <= 25MB each)
+  //   const bad = trimmed.find(
+  //     (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
+  //   );
+  //   if (bad) {
+  //     alert("Solo imágenes y máximo 25MB por archivo.");
+  //     return;
+  //   }
+
+  //   setEvidenceImages(trimmed);
+  //   setErrMsg("");
+  //   setOkMsg("");
+
+  //   // Thumbnails
+  //   const urls = trimmed.map((f) => URL.createObjectURL(f));
+  //   setPreviewUrls((old) => {
+  //     old.forEach((u) => URL.revokeObjectURL(u));
+  //     return urls;
+  //   });
+  // };
 
   // Upload packing images to S3-backed endpoint, then mark status
   const handleMarkAsReady = async () => {
@@ -244,7 +276,7 @@ export default function PackDetails() {
 
         {/* MULTIPLE file input */}
         {/* CAMERA (single, capture) */}
-        <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
+        {/* <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
           <label htmlFor="packingImages" className="custom-file-upload">
             Elegir archivos
           </label>
@@ -264,7 +296,40 @@ export default function PackDetails() {
               ? evidenceImages.map((f) => f.name).join(", ")
               : "Ningún archivo seleccionado"}
           </span>
+        </div> */}
+        <div className="packDetails-ImageDiv" style={{ marginTop: 12 }}>
+          <label htmlFor="cameraInput" className="custom-file-upload" style={{ marginRight: 8 }}>
+            Tomar foto (cámara)
+          </label>
+          <input
+            id="cameraInput"
+            type="file"
+            accept="image/*"
+            capture="environment"          // forces camera on mobile
+            onChange={(e) => handleFilesSelected(e, { source: "camera" })}
+            style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+          />
+
+          {/* GALLERY (multiple, NO capture) */}
+          <label htmlFor="galleryInput" className="custom-file-upload">
+            Elegir desde galería (máx 3)
+          </label>
+          <input
+            id="galleryInput"
+            type="file"
+            accept="image/*"
+            multiple                        // allow selecting multiple images
+            onChange={(e) => handleFilesSelected(e, { source: "gallery" })}
+            style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+          />
         </div>
+
+        {/* Selected files summary */}
+        <span className="file-selected-text" style={{ display: "block", marginTop: 8 }}>
+          {evidenceImages.length > 0
+            ? evidenceImages.map((f) => f.name).join(", ")
+            : "Ningún archivo seleccionado"}
+        </span>
 
         {/* Thumbnails preview */}
         {previewUrls.length > 0 && (
