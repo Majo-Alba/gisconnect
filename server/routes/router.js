@@ -855,6 +855,12 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 // Upload payment evidence (memory)
 // Upload payment evidence (memory)
 router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
+  console.log("[ENTER] /upload-evidence", {
+    orderId: req.body?.orderId,
+    fields: Object.keys(req.body || {}),
+    file: req.file?.originalname,
+    mimetype: req.file?.mimetype,
+  });
   try {
     const { orderId } = req.body;
     const file = req.file;
@@ -932,6 +938,13 @@ router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res)
 
 // Stream payment evidence
 router.get("/orders/:orderId/evidence/payment", async (req, res) => {
+  console.log("[ENTER] PUT /orders/:orderId", {
+    orderId: req.params.orderId,
+    fields: Object.keys(req.body || {}),
+    hasEvidence: !!(req.files?.evidenceImage?.length)
+      || !!(req.files?.paymentEvidence?.length)
+      || !!(req.files?.evidenceFile?.length),
+  });
   try {
     const order = await newOrderModel.findById(req.params.orderId).lean();
     if (!order) return res.status(404).send("Order not found");
