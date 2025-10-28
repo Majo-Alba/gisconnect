@@ -1,3 +1,4 @@
+// Hey chatgpt, in my packDetails.jsx file, the person packing the order is prompted to upload an image. When uploading using an iphone, everything works smoothly, but when trying to upload through android, it allows me to select a photo but it doesnt actually attach it (as if i hadnt selected anything)
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -220,9 +221,17 @@ export default function PackDetails() {
             id="packingImages"
             type="file"
             accept="image/*"
+            capture="environment"
             multiple
             onChange={handleFilesSelected}
-            style={{ display: "none" }}
+            style={{
+              position: "absolute",
+              opacity: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: -1,  
+              // display: "none" 
+            }}
           />
           <span className="file-selected-text">
             {evidenceImages.length > 0
