@@ -85,7 +85,8 @@ export default function PackDetails() {
 
   // MULTIPLE file input (max 3) — supports camera or gallery
 const handleFilesSelected = (e, { source } = {}) => {
-  const incoming = Array.from(e.target.files || []);
+  const incoming = Array.from(input.files || []);
+  // const incoming = Array.from(e.target.files || []);
   if (incoming.length === 0) return;
 
   // Validate images and size
@@ -111,7 +112,11 @@ const handleFilesSelected = (e, { source } = {}) => {
   });
 
   // Reset the input so same file can be reselected later if needed
-  e.target.value = "";
+  // e.target.value = "";
+  setTimeout(() => {
+    // extra guard in case the input was unmounted
+    if (input && input.type === "file") input.value = "";
+  }, 250);
 };
 
   // const handleFilesSelected = (e) => {
@@ -304,9 +309,11 @@ const handleFilesSelected = (e, { source } = {}) => {
           <input
             id="cameraInput"
             type="file"
+            name="packingImages"
             accept="image/*"
             capture="environment"          // forces camera on mobile
             onChange={(e) => handleFilesSelected(e, { source: "camera" })}
+            onInput={(e) => handleFilesSelected(e, { source: "camera" })}
             style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
           />
 
@@ -317,9 +324,11 @@ const handleFilesSelected = (e, { source } = {}) => {
           <input
             id="galleryInput"
             type="file"
+            name="packingImages"
             accept="image/*"
             multiple                        // allow selecting multiple images
             onChange={(e) => handleFilesSelected(e, { source: "gallery" })}
+            onInput={(e) => handleFilesSelected(e, { source: "gallery" })}
             style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
           />
         </div>
