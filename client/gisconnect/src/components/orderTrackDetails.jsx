@@ -304,31 +304,52 @@ export default function OrderTrackDetails() {
     }
   
     const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
-    if (!isAllowed) return alert("Formato no permitido. Sube imagen o PDF.");
-    if (evidenceFile.size > 25 * 1024 * 1024) return alert("Archivo excede 25MB.");
+    if (!isAllowed) {
+      alert("Formato no permitido. Sube imagen o PDF.");
+      return;
+    }
+    if (evidenceFile.size > 25 * 1024 * 1024) {
+      alert("Archivo excede 25MB.");
+      return;
+    }
   
-    setUploadErr(""); setUploadOk(""); setUploadBusy(true); setUploadProgress(0);
+    setUploadErr("");
+    setUploadOk("");
+    setUploadBusy(true);
+    setUploadProgress(0);
   
     try {
-      // 👉 send to the route that triggers notifications
+      // 1) Upload to your existing S3-backed endpoint (unchanged)
       const form = new FormData();
-      form.append("orderId", order._id);
-      // any of these names are accepted server-side; pick one:
-      form.append("evidenceImage", evidenceFile);
-      // form.append("paymentEvidence", evidenceFile);
-      // form.append("evidenceFile", evidenceFile);
+      form.append("file", evidenceFile);
   
-      await axios.post(`${API}/upload-evidence`, form, {
+      const s3Resp = await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
         onUploadProgress: (pe) => {
           if (!pe.total) return;
           setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
         },
-        // do NOT set Content-Type yourself; let the browser set multipart boundary
       });
   
-      // (Optional) keep your cosmetic status if you like, but it won't trigger pushes:
-      setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
+      // If your S3 route returns the file URL/filename, pluck them here
+      const s3Url    = s3Resp?.data?.url || s3Resp?.data?.Location || "";
+      const filename = s3Resp?.data?.filename || evidenceFile.name || "";
   
+      // 2) Tell the API to trigger the evidence-stage push (no re-upload)
+      await fetch(`${API}/orders/${order._id}/evidence/mark-payment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ s3Url, filename }),
+      });
+  
+      // 3) Keep your original status update so the progress bar & lists move
+      await fetch(`${API}/order/${order._id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
+      });
+  
+      // 4) Local optimistics + refresh
+      setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
       setUploadOk("¡Evidencia subida con éxito!");
       setEvidenceFile(null);
       await loadOrder();

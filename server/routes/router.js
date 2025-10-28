@@ -1114,6 +1114,53 @@ router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
   }
 });
 
+// POST /orders/:orderId/evidence/mark-payment
+// Purpose: trigger EVIDENCIA_DE_PAGO push (optionally store a pointer / timestamp)
+// Body: { s3Url?: string, filename?: string }
+router.post("/orders/:orderId/evidence/mark-payment", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { s3Url, filename } = req.body || {};
+    const order = await newOrderModel.findById(orderId);
+    if (!order) return res.status(404).json({ ok:false, error: "Order not found" });
+
+    // Optional: store lightweight evidence metadata (won’t affect your existing evidenceFile buffer usage)
+    const meta = {
+      url: s3Url || "",
+      filename: filename || "",
+      markedAt: new Date()
+    };
+    // keep a simple field to check first-time notify without needing the buffer route
+    if (!order.paymentEvidenceMeta?.markedAt) {
+      order.paymentEvidenceMeta = meta;
+      await order.save();
+
+      const shortId = String(order._id || "").slice(-5);
+      const userEmail = order.userEmail || order.email || "cliente";
+      await notifyStage(
+        STAGES.EVIDENCIA_DE_PAGO,
+        "Evidencia de pago recibida",
+        `Pedido #${shortId} — Cliente: ${userEmail}`,
+        {
+          orderId: String(order._id),
+          stage: STAGES.EVIDENCIA_DE_PAGO,
+          email: userEmail,
+          orderStatus: order.orderStatus || "",
+          deepLink: "https://gisconnect-web.onrender.com/adminHome",
+        }
+      );
+      return res.json({ ok: true, notified: true, firstTime: true });
+    }
+
+    // Already marked once; no extra ping (idempotent behavior)
+    return res.json({ ok: true, notified: false, firstTime: false });
+  } catch (e) {
+    console.error("mark-payment error:", e);
+    res.status(500).json({ ok:false, error: e.message });
+  }
+});
+
+
 // =========================== SHIPPING & BILLING ADDRESSES ===========================
 
 // Create shipping address
