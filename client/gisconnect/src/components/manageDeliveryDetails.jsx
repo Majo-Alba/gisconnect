@@ -1,3 +1,4 @@
+// Ok! EVIDENCIA_DE_PAGO is now up and running perfectly. Now the only stage we're missing is ETIQUETA_GENERADA. Here is my current manageDeliveryDetails.jsx file, where through "generateShippingLabel" we 1) create a PDF label, 2) update order status. Take a look and tell me if maybe there's something off here that's blocking push notifications for ETIQUETA_GENERADA. Please keep all basic functionalities the same
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -134,12 +135,12 @@ export default function ManageDeliveryDetails() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
-
+  
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
     doc.text(`Pedido #: ${String(order._id).slice(-5)}`, 65, 7);
     doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX")}`, 65, 12);
-
+  
     doc.setFont("helvetica", "bold");
     doc.text("Remitente:", 10, 20);
     doc.setFont("helvetica", "normal");
@@ -149,49 +150,63 @@ export default function ManageDeliveryDetails() {
     doc.text("Guadalajara, Jalisco", 10, 40);
     doc.text("C.P. 44300", 10, 45);
     doc.text("Tel. 01 (33) 2016 8274", 10, 52);
-
+  
     doc.setFont("helvetica", "bold");
     doc.text("Destinatario:", 10, 62);
     doc.setFont("helvetica", "normal");
-
-    // Recipient name from Mongo; address from order shippingInfo
+  
     const recName = displayName || "";
     const recStreet = `${sCalle} #${sExt}${sInt ? ` Int. ${sInt}` : ""}`;
     const recCol = sCol;
     const recCityState = `${sCiudad}${sCiudad && sEstado ? ", " : ""}${sEstado}`;
     const recCP = sCP;
-
+  
     doc.text(recName, 10, 67);
     doc.text(recStreet, 10, 72);
     if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
     if (recCityState) doc.text(recCityState, 10, 82);
     if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
-
+  
     doc.setFont("helvetica", "bold");
     doc.text("Transportista:", 10, 104);
     doc.setFont("helvetica", "normal");
     doc.text(`${preferredCarrier || ""}`, 10, 109);
-
+  
     if (insureShipmentLabel === "Sí") {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 0, 0);
       doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
       doc.setTextColor(0, 0, 0);
     }
-
+  
+    // Gray box for tracking
     doc.setDrawColor(0);
     doc.setFillColor(200, 200, 200);
     doc.rect(10, 115, 80, 20, "F");
     doc.setFontSize(8);
-    doc.text("Código de rastreo", 30, 128);
-
-    // doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
-
-    // sep10
+    doc.text("Código de rastreo", 30, 122);
+  
+    // ✅ Ensure we have /change/ set a tracking number to trigger ETIQUETA_GENERADA
+    // Reuse existing if present; otherwise generate one
+    const existing = (order.trackingNumber || "").trim();
+    const generated = `GIS-${String(order._id).slice(-5)}-${Date.now().toString().slice(-6)}`;
+    const trackingToUse = existing || generated;
+  
+    // Print the tracking code inside the gray box
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(trackingToUse, 20, 130); // centered-ish visually in your box
+  
+    // ---- Server update FIRST (this triggers the push) ----
     try {
       await axios.patch(
         `${API}/orders/${order._id}`,
-        { orderStatus: "Etiqueta Generada" },
+        {
+          // ⬇️ This is the key: sending trackingNumber so the backend triggers ETIQUETA_GENERADA
+          trackingNumber: trackingToUse,
+          // keep your cosmetic status for UI/filters
+          orderStatus: "Etiqueta Generada",
+        },
         {
           headers: { "Content-Type": "application/json" },
           timeout: 15000,
@@ -203,24 +218,106 @@ export default function ManageDeliveryDetails() {
       alert("Error al actualizar el estado del pedido.");
       return; // stop if we couldn't update on the server
     }
-    
-    // 2) Then save the PDF (after server success)
+  
+    // ---- Then save the PDF locally ----
     doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
-    
+  
     alert("Etiqueta generada y estado actualizado.");
     navigate("/deliverReady");
-    // try {
-    //   await axios.put(`${API}/orders/${order._id}`, {
-    //     orderStatus: "Etiqueta Generada",
-    //   });
-    //   alert("Etiqueta generada y estado actualizado.");
-    //   navigate("/deliverReady");
-    // } catch (error) {
-    //   console.error("Error updating order status:", error);
-    //   alert("Error al actualizar el estado del pedido.");
-    // }
-    // sep10
   };
+  
+  // const generateShippingLabel = async (order) => {
+  //   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] });
+  //   const pageWidth = doc.internal.pageSize.getWidth();
+  //   const pageHeight = doc.internal.pageSize.getHeight();
+  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+
+  //   doc.setFontSize(9);
+  //   doc.setFont("helvetica", "normal");
+  //   doc.text(`Pedido #: ${String(order._id).slice(-5)}`, 65, 7);
+  //   doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX")}`, 65, 12);
+
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text("Remitente:", 10, 20);
+  //   doc.setFont("helvetica", "normal");
+  //   doc.text("GREEN IMPORT SOLUTIONS", 10, 25);
+  //   doc.text("Monte Everest #2428", 10, 30);
+  //   doc.text("Col. La Federacha", 10, 35);
+  //   doc.text("Guadalajara, Jalisco", 10, 40);
+  //   doc.text("C.P. 44300", 10, 45);
+  //   doc.text("Tel. 01 (33) 2016 8274", 10, 52);
+
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text("Destinatario:", 10, 62);
+  //   doc.setFont("helvetica", "normal");
+
+  //   // Recipient name from Mongo; address from order shippingInfo
+  //   const recName = displayName || "";
+  //   const recStreet = `${sCalle} #${sExt}${sInt ? ` Int. ${sInt}` : ""}`;
+  //   const recCol = sCol;
+  //   const recCityState = `${sCiudad}${sCiudad && sEstado ? ", " : ""}${sEstado}`;
+  //   const recCP = sCP;
+
+  //   doc.text(recName, 10, 67);
+  //   doc.text(recStreet, 10, 72);
+  //   if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
+  //   if (recCityState) doc.text(recCityState, 10, 82);
+  //   if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
+
+  //   doc.setFont("helvetica", "bold");
+  //   doc.text("Transportista:", 10, 104);
+  //   doc.setFont("helvetica", "normal");
+  //   doc.text(`${preferredCarrier || ""}`, 10, 109);
+
+  //   if (insureShipmentLabel === "Sí") {
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setTextColor(255, 0, 0);
+  //     doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
+  //     doc.setTextColor(0, 0, 0);
+  //   }
+
+  //   doc.setDrawColor(0);
+  //   doc.setFillColor(200, 200, 200);
+  //   doc.rect(10, 115, 80, 20, "F");
+  //   doc.setFontSize(8);
+  //   doc.text("Código de rastreo", 30, 128);
+
+  //   // doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
+
+  //   // sep10
+  //   try {
+  //     await axios.patch(
+  //       `${API}/orders/${order._id}`,
+  //       { orderStatus: "Etiqueta Generada" },
+  //       {
+  //         headers: { "Content-Type": "application/json" },
+  //         timeout: 15000,
+  //         withCredentials: false,
+  //       }
+  //     );
+  //   } catch (error) {
+  //     console.error("PATCH /orders/:orderId failed:", error?.response?.data || error.message);
+  //     alert("Error al actualizar el estado del pedido.");
+  //     return; // stop if we couldn't update on the server
+  //   }
+    
+  //   // 2) Then save the PDF (after server success)
+  //   doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
+    
+  //   alert("Etiqueta generada y estado actualizado.");
+  //   navigate("/deliverReady");
+  //   // try {
+  //   //   await axios.put(`${API}/orders/${order._id}`, {
+  //   //     orderStatus: "Etiqueta Generada",
+  //   //   });
+  //   //   alert("Etiqueta generada y estado actualizado.");
+  //   //   navigate("/deliverReady");
+  //   // } catch (error) {
+  //   //   console.error("Error updating order status:", error);
+  //   //   alert("Error al actualizar el estado del pedido.");
+  //   // }
+  //   // sep10
+  // };
 
   return (
     <body className="body-BG-Gradient">
