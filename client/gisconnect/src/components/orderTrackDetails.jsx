@@ -302,44 +302,33 @@ export default function OrderTrackDetails() {
       alert("Seleccione una imagen válida.");
       return;
     }
-
-    // allow images or PDF; 25MB cap
+  
     const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
-    if (!isAllowed) {
-      alert("Formato no permitido. Sube imagen o PDF.");
-      return;
-    }
-    if (evidenceFile.size > 25 * 1024 * 1024) {
-      alert("Archivo excede 25MB.");
-      return;
-    }
-
-    setUploadErr("");
-    setUploadOk("");
-    setUploadBusy(true);
-    setUploadProgress(0);
-
+    if (!isAllowed) return alert("Formato no permitido. Sube imagen o PDF.");
+    if (evidenceFile.size > 25 * 1024 * 1024) return alert("Archivo excede 25MB.");
+  
+    setUploadErr(""); setUploadOk(""); setUploadBusy(true); setUploadProgress(0);
+  
     try {
-      // 1) Upload to new S3-backed endpoint (field name: "file")
+      // 👉 send to the route that triggers notifications
       const form = new FormData();
-      form.append("file", evidenceFile);
-
-      await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
+      form.append("orderId", order._id);
+      // any of these names are accepted server-side; pick one:
+      form.append("evidenceImage", evidenceFile);
+      // form.append("paymentEvidence", evidenceFile);
+      // form.append("evidenceFile", evidenceFile);
+  
+      await axios.post(`${API}/upload-evidence`, form, {
         onUploadProgress: (pe) => {
           if (!pe.total) return;
           setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
         },
+        // do NOT set Content-Type yourself; let the browser set multipart boundary
       });
-
-      // 2) Update status so timeline moves & admin sees it
-      await fetch(`${API}/order/${order._id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
-      });
-
-      // 3) Optimistic local update + reload order to refresh evidence fields
-      setOrder((prev) => (prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev));
+  
+      // (Optional) keep your cosmetic status if you like, but it won't trigger pushes:
+      setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
+  
       setUploadOk("¡Evidencia subida con éxito!");
       setEvidenceFile(null);
       await loadOrder();
@@ -351,6 +340,61 @@ export default function OrderTrackDetails() {
       setTimeout(() => setUploadProgress(0), 800);
     }
   }
+  
+  // async function uploadEvidence() {
+  //   if (!evidenceFile || !order?._id) {
+  //     alert("Seleccione una imagen válida.");
+  //     return;
+  //   }
+
+  //   // allow images or PDF; 25MB cap
+  //   const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
+  //   if (!isAllowed) {
+  //     alert("Formato no permitido. Sube imagen o PDF.");
+  //     return;
+  //   }
+  //   if (evidenceFile.size > 25 * 1024 * 1024) {
+  //     alert("Archivo excede 25MB.");
+  //     return;
+  //   }
+
+  //   setUploadErr("");
+  //   setUploadOk("");
+  //   setUploadBusy(true);
+  //   setUploadProgress(0);
+
+  //   try {
+  //     // 1) Upload to new S3-backed endpoint (field name: "file")
+  //     const form = new FormData();
+  //     form.append("file", evidenceFile);
+
+  //     await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
+  //       onUploadProgress: (pe) => {
+  //         if (!pe.total) return;
+  //         setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
+  //       },
+  //     });
+
+  //     // 2) Update status so timeline moves & admin sees it
+  //     await fetch(`${API}/order/${order._id}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
+  //     });
+
+  //     // 3) Optimistic local update + reload order to refresh evidence fields
+  //     setOrder((prev) => (prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev));
+  //     setUploadOk("¡Evidencia subida con éxito!");
+  //     setEvidenceFile(null);
+  //     await loadOrder();
+  //   } catch (e) {
+  //     console.error("Error al subir evidencia:", e);
+  //     setUploadErr(e?.response?.data?.error || e.message || "No se pudo subir la evidencia.");
+  //   } finally {
+  //     setUploadBusy(false);
+  //     setTimeout(() => setUploadProgress(0), 800);
+  //   }
+  // }
 
   if (!order) return <p>Cargando detalles del pedido...</p>;
 
