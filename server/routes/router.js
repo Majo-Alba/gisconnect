@@ -978,67 +978,69 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 // Upload payment evidence (memory)
 // Upload payment evidence (memory)
 // router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
-router.post("/upload-evidence", upload.any(), async (req, res) => {
-  const pickFile = () =>
-    (req.files || []).find(f => ["evidenceImage","paymentEvidence","evidenceFile"].includes(f.fieldname));
+  router.post("/upload-evidence", upload.any(), async (req, res) => {
+    const pickFile = () =>
+      (req.files || []).find(f =>
+        ["evidenceImage","paymentEvidence","evidenceFile"].includes(f.fieldname)
+      );
+  
     const file = pickFile();
   
-  console.log("[ENTER] /upload-evidence", {
+    console.log("[ENTER] /upload-evidence", {
       orderId: req.body?.orderId,
       fields: Object.keys(req.body || {}),
       file: file?.originalname,
       fieldname: file?.fieldname,
       mimetype: file?.mimetype,
-  });
-  try {
-    const { orderId } = req.body;
-    const file = req.file;
-    if (!orderId) return res.status(400).json({ message: "Order ID not provided" });
-    if (!file) return res.status(400).json({ message: "No file uploaded" });
-
-    const order = await newOrderModel.findById(orderId);
-    if (!order) return res.status(404).json({ message: "Order not found" });
-
-    // was there evidence before?
-    const hadEvidence = !!(order.evidenceFile && order.evidenceFile.data);
-
-    order.evidenceFile = {
-      filename: file.originalname,
-      mimetype: file.mimetype,
-      data: file.buffer,
-      uploadedAt: new Date()
-    };
-
-    await order.save();
-
-    // 🔔 Notify on first-time evidence
-    if (!hadEvidence) {
-      try {
-        const shortId = String(order._id || "").slice(-5);
-        const userEmail = order.userEmail || order.email || "cliente";
-        await notifyStage(
-          STAGES.EVIDENCIA_DE_PAGO,
-          "Evidencia de pago recibida",
-          `Pedido #${shortId} — Cliente: ${userEmail}`,
-          {
-            orderId: String(order._id),
-            stage: STAGES.EVIDENCIA_DE_PAGO,
-            email: userEmail,
-            orderStatus: order.orderStatus || "",
-            deepLink: "https://gisconnect-web.onrender.com/adminHome",
-          }
-        );
-      } catch (notifyErr) {
-        console.error("notify EVIDENCIA_DE_PAGO error:", notifyErr);
+    });
+  
+    try {
+      const { orderId } = req.body;
+      if (!orderId) return res.status(400).json({ message: "Order ID not provided" });
+      if (!file) return res.status(400).json({ message: "No file uploaded" });
+  
+      const order = await newOrderModel.findById(orderId);
+      if (!order) return res.status(404).json({ message: "Order not found" });
+  
+      const hadEvidence = !!(order.evidenceFile && order.evidenceFile.data);
+  
+      order.evidenceFile = {
+        filename: file.originalname,
+        mimetype: file.mimetype,
+        data: file.buffer,
+        uploadedAt: new Date()
+      };
+  
+      await order.save();
+  
+      if (!hadEvidence) {
+        try {
+          const shortId = String(order._id || "").slice(-5);
+          const userEmail = order.userEmail || order.email || "cliente";
+          await notifyStage(
+            STAGES.EVIDENCIA_DE_PAGO,
+            "Evidencia de pago recibida",
+            `Pedido #${shortId} — Cliente: ${userEmail}`,
+            {
+              orderId: String(order._id),
+              stage: STAGES.EVIDENCIA_DE_PAGO,
+              email: userEmail,
+              orderStatus: order.orderStatus || "",
+              deepLink: "https://gisconnect-web.onrender.com/adminHome",
+            }
+          );
+        } catch (notifyErr) {
+          console.error("notify EVIDENCIA_DE_PAGO error:", notifyErr);
+        }
       }
+  
+      return res.status(200).json({ message: "Evidencia guardada en MongoDB correctamente" });
+    } catch (error) {
+      console.error("Upload Evidence Error:", error);
+      return res.status(500).json({ message: "Internal Server Error" });
     }
-
-    return res.status(200).json({ message: "Evidencia guardada en MongoDB correctamente" });
-  } catch (error) {
-    console.error("Upload Evidence Error:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
-  }
-});
+  });
+  
 
 // router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
 //   try {
