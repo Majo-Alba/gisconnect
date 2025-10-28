@@ -6,7 +6,7 @@ import { API } from "/src/lib/api";
 import Logo from "/src/assets/images/GIS_Logo.png";
 import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-p
+
 export default function PackDetails() {
   const { orderId } = useParams();
   const navigate = useNavigate();
