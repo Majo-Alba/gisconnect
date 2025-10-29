@@ -218,7 +218,8 @@ export default function PackDetails() {
 
       setOkMsg("Evidencia subida. Estado actualizado a 'Preparando Pedido'.");
       // Optional: refresh order or jump to next screen
-      navigate("/deliverReady");
+      // navigate("/deliverReady");
+      navigate("/adminHome");
     } catch (error) {
       console.error("Error during packing upload/status:", error);
       setErrMsg(error?.response?.data?.error || error.message || "Ocurrió un error al procesar el pedido.");

@@ -193,9 +193,9 @@ export default function ManageDeliveryDetails() {
     const trackingToUse = existing || generated;
   
     // Print the tracking code inside the gray box
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(trackingToUse, 20, 130); // centered-ish visually in your box
+    // doc.setFont("helvetica", "bold");
+    // doc.setFontSize(11);
+    // doc.text(trackingToUse, 20, 130); // centered-ish visually in your box
   
     // ---- Server update FIRST (this triggers the push) ----
     try {
@@ -223,7 +223,9 @@ export default function ManageDeliveryDetails() {
     doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
   
     alert("Etiqueta generada y estado actualizado.");
-    navigate("/deliverReady");
+    // navigate("/deliverReady");
+    navigate("/adminHome");
+
   };
   
   // const generateShippingLabel = async (order) => {

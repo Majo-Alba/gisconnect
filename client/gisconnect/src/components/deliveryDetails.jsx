@@ -43,8 +43,8 @@ export default function DeliveryDetails() {
       const { data } = await axios.get(`${API}/orders/${orderId}`);
       setOrder(data);
       // Pre-fill existing meta (if any)
-      setInsuredAmount(data?.insuredAmount ?? "");
-      setTrackingNumber(data?.trackingNumber ?? "");
+      // setInsuredAmount(data?.insuredAmount ?? "");
+      // setTrackingNumber(data?.trackingNumber ?? "");
       // normalize deliveryDate to yyyy-mm-dd for input[type=date]
       if (data?.deliveryDate) {
         const d = new Date(data.deliveryDate);
@@ -149,7 +149,8 @@ export default function DeliveryDetails() {
       });
 
       setOkMsg("Evidencia subida y pedido marcado como entregado.");
-      navigate("/delivered");
+      // navigate("/delivered");
+      navigate("/adminHome");
     } catch (error) {
       console.error("Error marking delivered:", error);
       setErrMsg(error?.response?.data?.error || error.message || "Error al procesar la entrega.");

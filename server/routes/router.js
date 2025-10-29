@@ -661,13 +661,11 @@ router.put(
             case STAGES.PREPARANDO_PEDIDO:
               return { title: "Preparando pedido", body: `Pedido #${shortId} empacado` };
             case STAGES.ETIQUETA_GENERADA:
-              return { title: "Etiqueta generada", body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
+              return { title: "Etiqueta generada", body: `Pedido #${shortId} etiquetado` };
             case STAGES.PEDIDO_ENTREGADO:
               return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
             case STAGES.PEDIDO_REALIZADO:
-              return { title: "Nuevo pedido recibido - Cliente: " +  `${userEmail}`, body: `Pedido #${shortId}` };
-
-              // return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             default:
               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
           }

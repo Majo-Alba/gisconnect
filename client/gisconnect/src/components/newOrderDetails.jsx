@@ -252,7 +252,8 @@ export default function NewOrderDetails() {
       await axios.put(`${API}/orders/${orderId}`, updatedData);
       setIsValidated(true);
       alert("Pago validado exitosamente.");
-      navigate("/newOrders");
+      // navigate("/newOrders");
+      navigate("/adminHome");
     } catch (error) {
       console.error("Error updating order:", error);
       alert("Error al validar el pago.");
