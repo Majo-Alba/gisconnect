@@ -907,7 +907,7 @@ router.patch("/orders/:orderId", async (req, res) => {
           [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para almacén`,
           [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} empacado`,
           [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
-          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} etiquetadosss`,
+          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} etiquetado`,
         };
 
         for (const stage of triggeredStages) {

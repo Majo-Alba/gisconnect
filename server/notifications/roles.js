@@ -57,14 +57,17 @@ function recipientsForStage(stage) {
       addAll(emails, ADMIN_FACTURAS_Y_LOGISTICA);
       addAll(emails, LOGISTICA_Y_ALMACEN);
       addAll(emails, ALMACEN_LIMITADO);
+      addAll(emails, FULL_ACCESS);
       break;
 
     case STAGES.PREPARANDO_PEDIDO:
       addAll(emails, ADMIN_FACTURAS_Y_LOGISTICA);
+      addAll(emails, FULL_ACCESS);
       break;
 
     case STAGES.ETIQUETA_GENERADA:
       addAll(emails, LOGISTICA_Y_ALMACEN);
+      addAll(emails, FULL_ACCESS);
       break;
 
     case STAGES.PEDIDO_ENTREGADO:
