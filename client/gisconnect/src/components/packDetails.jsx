@@ -281,14 +281,15 @@ const handleFilesSelected = (e, { source } = {}) => {
 
         {/* MULTIPLE file input */}
         {/* CAMERA (single, capture) */}
-        {/* <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
+        <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
           <label htmlFor="packingImages" className="custom-file-upload">
             Elegir archivos
           </label>
           <input
             id="packingImages"
             type="file"
-            accept="image/*"
+            accept="image/*, application/pdf"
+            // accept="image/*"
             // capture="environment"
             multiple
             onChange={handleFilesSelected}
@@ -301,8 +302,8 @@ const handleFilesSelected = (e, { source } = {}) => {
               ? evidenceImages.map((f) => f.name).join(", ")
               : "Ningún archivo seleccionado"}
           </span>
-        </div> */}
-        <div className="packDetails-ImageDiv" style={{ marginTop: 12 }}>
+        </div>
+        {/* <div className="packDetails-ImageDiv" style={{ marginTop: 12 }}>
           <label htmlFor="cameraInput" className="custom-file-upload" style={{ marginRight: 8 }}>
             Tomar foto (cámara)
           </label>
@@ -315,10 +316,10 @@ const handleFilesSelected = (e, { source } = {}) => {
             onChange={(e) => handleFilesSelected(e, { source: "camera" })}
             onInput={(e) => handleFilesSelected(e, { source: "camera" })}
             style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
-          />
+          /> */}
 
           {/* GALLERY (multiple, NO capture) */}
-          <label htmlFor="galleryInput" className="custom-file-upload">
+          {/* <label htmlFor="galleryInput" className="custom-file-upload">
             Elegir desde galería (máx 3)
           </label>
           <input
@@ -331,14 +332,14 @@ const handleFilesSelected = (e, { source } = {}) => {
             onInput={(e) => handleFilesSelected(e, { source: "gallery" })}
             style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
           />
-        </div>
+        </div> */}
 
         {/* Selected files summary */}
-        <span className="file-selected-text" style={{ display: "block", marginTop: 8 }}>
+        {/* <span className="file-selected-text" style={{ display: "block", marginTop: 8 }}>
           {evidenceImages.length > 0
             ? evidenceImages.map((f) => f.name).join(", ")
             : "Ningún archivo seleccionado"}
-        </span>
+        </span> */}
 
         {/* Thumbnails preview */}
         {previewUrls.length > 0 && (
