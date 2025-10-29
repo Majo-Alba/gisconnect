@@ -458,8 +458,11 @@ router.patch("/order/:id/status", async (req, res) => {
           [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
         };
         const bodies = {
-          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
-          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          // [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
+          // [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          // [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
+          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para almacén`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} empacado`,
           [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
         };
         await notifyStage(stageToSend, titles[stageToSend], bodies[stageToSend], {
@@ -657,7 +660,7 @@ router.put(
             case STAGES.EVIDENCIA_DE_PAGO:
               return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.PAGO_VERIFICADO:
-              return { title: "Pago verificado — Cliente:" + `${userEmail}`, body: `Pedido #${shortId} listo para almacen` };
+              return { title: "Pago verificado — Cliente:" + `${userEmail}`, body: `Pedido #${shortId} listo para almacén` };
             case STAGES.PREPARANDO_PEDIDO:
               return { title: "Preparando pedido", body: `Pedido #${shortId} empacado` };
             case STAGES.ETIQUETA_GENERADA:
@@ -897,10 +900,14 @@ router.patch("/orders/:orderId", async (req, res) => {
           [STAGES.ETIQUETA_GENERADA]: "Etiqueta generada",
         };
         const bodies = {
-          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
-          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          // [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
+          // [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} en empaque`,
+          // [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
+          // [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} — Tracking: ${nextTracking}`,
+          [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para almacén`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} empacado`,
           [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
-          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} — Tracking: ${nextTracking}`,
+          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} etiquetado`,
         };
 
         for (const stage of triggeredStages) {
