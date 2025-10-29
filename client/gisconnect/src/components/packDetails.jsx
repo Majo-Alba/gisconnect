@@ -84,40 +84,72 @@ export default function PackDetails() {
   // };
 
   // MULTIPLE file input (max 3) — supports camera or gallery
-const handleFilesSelected = (e, { source } = {}) => {
-  const incoming = Array.from(input.files || []);
-  // const incoming = Array.from(e.target.files || []);
-  if (incoming.length === 0) return;
+  const handleFilesSelected = (e, { source } = {}) => {
+    const inputEl = e.target;
+    const list = inputEl?.files ? Array.from(inputEl.files) : [];
+    if (list.length === 0) return;
+  
+    // Some Android/Google Photos picks may have empty type; allow those if they look like images by name.
+    const looksImage = (f) =>
+      (f.type && f.type.startsWith("image/")) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name || "");
+  
+    const bad = list.find((f) => !looksImage(f) || f.size > 25 * 1024 * 1024);
+    if (bad) {
+      alert("Solo imágenes y máximo 25MB por archivo.");
+      return;
+    }
+  
+    const merged = [...evidenceImages, ...list].slice(0, 3);
+    setEvidenceImages(merged);
+    setErrMsg("");
+    setOkMsg("");
+  
+    setPreviewUrls((old) => {
+      old.forEach((u) => URL.revokeObjectURL(u));
+      return merged.map((f) => URL.createObjectURL(f));
+    });
+  
+    // Android quirk: defer clearing the input so it commits the chosen files.
+    setTimeout(() => {
+      if (inputEl && inputEl.type === "file") inputEl.value = "";
+    }, 200);
+  };
+  
+  // const handleFilesSelected = (e, { source } = {}) => {
+//   const incoming = Array.from(input.files || []);
+//   // const incoming = Array.from(e.target.files || []);
+//   if (incoming.length === 0) return;
 
-  // Validate images and size
-  const bad = incoming.find(
-    (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
-  );
-  if (bad) {
-    alert("Solo imágenes y máximo 25MB por archivo.");
-    return;
-  }
+//   // Validate images and size
+//   const bad = incoming.find(
+//     (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
+//   );
+//   if (bad) {
+//     alert("Solo imágenes y máximo 25MB por archivo.");
+//     return;
+//   }
 
-  // Merge with existing (camera adds 1, gallery can add many)
-  const merged = [...evidenceImages, ...incoming].slice(0, 3);
+//   // Merge with existing (camera adds 1, gallery can add many)
+//   const merged = [...evidenceImages, ...incoming].slice(0, 3);
 
-  setEvidenceImages(merged);
-  setErrMsg("");
-  setOkMsg("");
+//   setEvidenceImages(merged);
+//   setErrMsg("");
+//   setOkMsg("");
 
-  // Build fresh previews
-  setPreviewUrls((old) => {
-    old.forEach((u) => URL.revokeObjectURL(u));
-    return merged.map((f) => URL.createObjectURL(f));
-  });
+//   // Build fresh previews
+//   setPreviewUrls((old) => {
+//     old.forEach((u) => URL.revokeObjectURL(u));
+//     return merged.map((f) => URL.createObjectURL(f));
+//   });
 
-  // Reset the input so same file can be reselected later if needed
-  // e.target.value = "";
-  setTimeout(() => {
-    // extra guard in case the input was unmounted
-    if (input && input.type === "file") input.value = "";
-  }, 250);
-};
+//   // Reset the input so same file can be reselected later if needed
+//   // e.target.value = "";
+//   setTimeout(() => {
+//     // extra guard in case the input was unmounted
+//     if (input && input.type === "file") input.value = "";
+//   }, 250);
+// };
+
 
   // const handleFilesSelected = (e) => {
   //   const files = Array.from(e.target.files || []);
@@ -288,7 +320,7 @@ const handleFilesSelected = (e, { source } = {}) => {
           <input
             id="packingImages"
             type="file"
-            accept="image/*, application/pdf"
+            accept="image/*"
             // accept="image/*"
             // capture="environment"
             multiple
