@@ -379,7 +379,8 @@ router.post('/orderDets', upload.single('pdf'), async (req, res) => {
 
       await notifyStage(
         STAGES.PEDIDO_REALIZADO,
-        "Nuevo pedido recibido",
+        // "Nuevo pedido recibido",
+        "Nuevo pedido realizado - Pendiente de pago",
         `Pedido #${shortId} — Cliente: ${userEmail}`,
         {
           orderId: String(created._id),
@@ -660,15 +661,20 @@ router.put(
             case STAGES.EVIDENCIA_DE_PAGO:
               return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.PAGO_VERIFICADO:
-              return { title: "Pago verificado — Cliente:" + `${userEmail}`, body: `Pedido #${shortId} listo para almacén` };
+              // return { title: "Pago verificado — Cliente:" + `${userEmail}`, body: `Pedido #${shortId} listo para almacén` };
+              return { title: "Atención Almacen: Pedido listo para empaquetarse", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.PREPARANDO_PEDIDO:
-              return { title: "Preparando pedido", body: `Pedido #${shortId} empacado` };
+              // return { title: "Preparando pedido", body: `Pedido #${shortId} empacado` };
+              return { title: "Atención Admin: Pedido listo para ser etiquetado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.ETIQUETA_GENERADA:
-              return { title: "Etiqueta generada", body: `Pedido #${shortId} etiquetado` };
+              // return { title: "Etiqueta generada", body: `Pedido #${shortId} etiquetado` };
+              return { title: "Atención Entregas: Pedido listo para ser entregado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.PEDIDO_ENTREGADO:
-              return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
+              // return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
+              return { title: "Pedido entregado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             case STAGES.PEDIDO_REALIZADO:
-              return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              // return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              return { title: "Nuevo pedido realizado - Pendiente de pago", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
             default:
               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
           }

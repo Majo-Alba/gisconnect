@@ -17,11 +17,12 @@ const LOGISTICA_Y_ALMACEN = new Set([
   "logistica@greenimportsol.com",
   "almacen@greenimportsol.com",
   "almacen2@greenimportsol.com",
+  "almacen3@greenimportsol.com",
 ]);
 
 const ALMACEN_LIMITADO = new Set([
   "majo_test@gmail.com",
-  "almacen3@greenimportsol.com",
+  // "almacen3@greenimportsol.com",
 ]);
 
 // Keep the enum exactly as used across the codebase
