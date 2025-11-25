@@ -1,5 +1,4 @@
-// Hey chatgpt, in my packDetails.jsx file, the person packing the order is prompted to upload an image. When uploading using an iphone, everything works smoothly, but when trying to upload through android, it allows me to take a picture and correctly handles it but doesnt allow me to open photo gallery to select a photo from there. Keep in mind that person packing can upload up to 3 pictures from gallery 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -26,11 +25,23 @@ export default function PackDetails() {
   const [errMsg, setErrMsg] = useState("");
   const [okMsg, setOkMsg] = useState("");
 
+  // Claim state
+  const [claimState, setClaimState] = useState({
+    inProgress: false,
+    claimedBy: "",
+    status: "idle", // "idle" | "claiming" | "claimed" | "blocked"
+    message: "",
+  });
+  const finishedRef = useRef(false); // set true when marking ready (to avoid releasing on leave)
+  const claimedByMe = claimState.inProgress && claimState.claimedBy === packer;
+  const actionsDisabled = !claimedByMe || busy;
+
   const goToAdminHome = () => navigate("/adminHome");
   const goToNewOrders = () => navigate("/newOrders");
   const goToPackageReady = () => navigate("/deliverReady");
   const goHomeLogo = () => navigate("/adminHome");
 
+  // Load order
   useEffect(() => {
     if (!orderId) return;
     axios
@@ -39,11 +50,87 @@ export default function PackDetails() {
         const o = res.data;
         setOrder(o);
         setCheckedItems(new Array((o?.items || []).length).fill(false));
+        // Show quick info if already taken
+        if (o?.packing?.status === "in_progress" && o?.packing?.claimedBy) {
+          setClaimState((s) => ({
+            ...s,
+            inProgress: true,
+            claimedBy: o.packing.claimedBy,
+            status: "idle",
+            message: "",
+          }));
+        }
       })
       .catch((err) => console.error("Error loading order:", err));
   }, [orderId]);
 
+  // ---- Claim helpers ----
+  const claimOrder = useCallback(async (packerName) => {
+    if (!packerName || packerName === "Encargado") return;
+    setErrMsg("");
+    setClaimState((s) => ({ ...s, status: "claiming", message: "" }));
+    try {
+      const { data } = await axios.post(`${API}/orders/${orderId}/claim-pack`, { packer: packerName });
+      const c = data?.order?.packing || {};
+      setClaimState({
+        inProgress: c.status === "in_progress",
+        claimedBy: c.claimedBy || packerName,
+        status: "claimed",
+        message: "",
+      });
+    } catch (e) {
+      // 409 → someone else holds it
+      const msg = e?.response?.data?.error || "No se pudo tomar el pedido.";
+      setClaimState({
+        inProgress: false,
+        claimedBy: "",
+        status: "blocked",
+        message: msg,
+      });
+    }
+  }, [orderId]);
+
+  const releaseOrder = useCallback(async (reason = "leave") => {
+    if (!orderId || !packer || !claimedByMe) return;
+    try {
+      // Use sendBeacon when available to avoid losing the request on unload
+      const url = `${API}/orders/${orderId}/release-pack`;
+      const payload = JSON.stringify({ packer, reason });
+      if (navigator.sendBeacon) {
+        const blob = new Blob([payload], { type: "application/json" });
+        navigator.sendBeacon(url, blob);
+      } else {
+        await axios.post(url, { packer, reason });
+      }
+    } catch {
+      // ignore release errors
+    }
+  }, [orderId, packer, claimedByMe]);
+
+  // When packer is chosen the first time → claim the order
+  useEffect(() => {
+    if (!packer || packer === "Encargado") return;
+    // If already claimed by me, skip
+    if (claimedByMe) return;
+    claimOrder(packer);
+  }, [packer, claimedByMe, claimOrder]);
+
+  // Release on unmount / navigation / refresh if not finished
+  useEffect(() => {
+    const beforeUnload = () => {
+      if (!finishedRef.current) releaseOrder("unload");
+    };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", beforeUnload);
+      if (!finishedRef.current) releaseOrder("unmount");
+      // cleanup blob URLs on unmount
+      previewUrls.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, [releaseOrder, previewUrls]);
+
   const handleCheckboxToggle = (index) => {
+    if (actionsDisabled) return;
     setCheckedItems((prev) => {
       const updated = [...prev];
       updated[index] = !updated[index];
@@ -51,133 +138,43 @@ export default function PackDetails() {
     });
   };
 
-  // MULTIPLE file input (max 3)
   // MULTIPLE file input (max 3) — supports camera or gallery
-  // const handleFilesSelected = (e, { source } = {}) => {
-  //   const incoming = Array.from(e.target.files || []);
-  //   if (incoming.length === 0) return;
+  const handleFilesSelected = (e) => {
+    if (actionsDisabled) return;
 
-  //   // Validate images and size
-  //   const bad = incoming.find(
-  //     (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
-  //   );
-  //   if (bad) {
-  //     alert("Solo imágenes y máximo 25MB por archivo.");
-  //     return;
-  //   }
-
-  //   // Merge with existing (camera adds 1, gallery can add many)
-  //   const merged = [...evidenceImages, ...incoming].slice(0, 3);
-
-  //   setEvidenceImages(merged);
-  //   setErrMsg("");
-  //   setOkMsg("");
-
-  //   // Build fresh previews
-  //   setPreviewUrls((old) => {
-  //     old.forEach((u) => URL.revokeObjectURL(u));
-  //     return merged.map((f) => URL.createObjectURL(f));
-  //   });
-
-  //   // Reset the input so same file can be reselected later if needed
-  //   e.target.value = "";
-  // };
-
-  // MULTIPLE file input (max 3) — supports camera or gallery
-  const handleFilesSelected = (e, { source } = {}) => {
     const inputEl = e.target;
     const list = inputEl?.files ? Array.from(inputEl.files) : [];
     if (list.length === 0) return;
-  
-    // Some Android/Google Photos picks may have empty type; allow those if they look like images by name.
+
     const looksImage = (f) =>
       (f.type && f.type.startsWith("image/")) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name || "");
-  
     const bad = list.find((f) => !looksImage(f) || f.size > 25 * 1024 * 1024);
     if (bad) {
       alert("Solo imágenes y máximo 25MB por archivo.");
       return;
     }
-  
+
     const merged = [...evidenceImages, ...list].slice(0, 3);
     setEvidenceImages(merged);
     setErrMsg("");
     setOkMsg("");
-  
+
     setPreviewUrls((old) => {
       old.forEach((u) => URL.revokeObjectURL(u));
       return merged.map((f) => URL.createObjectURL(f));
     });
-  
-    // Android quirk: defer clearing the input so it commits the chosen files.
+
     setTimeout(() => {
       if (inputEl && inputEl.type === "file") inputEl.value = "";
     }, 200);
   };
-  
-  // const handleFilesSelected = (e, { source } = {}) => {
-//   const incoming = Array.from(input.files || []);
-//   // const incoming = Array.from(e.target.files || []);
-//   if (incoming.length === 0) return;
 
-//   // Validate images and size
-//   const bad = incoming.find(
-//     (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
-//   );
-//   if (bad) {
-//     alert("Solo imágenes y máximo 25MB por archivo.");
-//     return;
-//   }
-
-//   // Merge with existing (camera adds 1, gallery can add many)
-//   const merged = [...evidenceImages, ...incoming].slice(0, 3);
-
-//   setEvidenceImages(merged);
-//   setErrMsg("");
-//   setOkMsg("");
-
-//   // Build fresh previews
-//   setPreviewUrls((old) => {
-//     old.forEach((u) => URL.revokeObjectURL(u));
-//     return merged.map((f) => URL.createObjectURL(f));
-//   });
-
-//   // Reset the input so same file can be reselected later if needed
-//   // e.target.value = "";
-//   setTimeout(() => {
-//     // extra guard in case the input was unmounted
-//     if (input && input.type === "file") input.value = "";
-//   }, 250);
-// };
-
-
-  // const handleFilesSelected = (e) => {
-  //   const files = Array.from(e.target.files || []);
-  //   const trimmed = files.slice(0, 3);
-
-  //   // Basic validation (images only, <= 25MB each)
-  //   const bad = trimmed.find(
-  //     (f) => !f.type.startsWith("image/") || f.size > 25 * 1024 * 1024
-  //   );
-  //   if (bad) {
-  //     alert("Solo imágenes y máximo 25MB por archivo.");
-  //     return;
-  //   }
-
-  //   setEvidenceImages(trimmed);
-  //   setErrMsg("");
-  //   setOkMsg("");
-
-  //   // Thumbnails
-  //   const urls = trimmed.map((f) => URL.createObjectURL(f));
-  //   setPreviewUrls((old) => {
-  //     old.forEach((u) => URL.revokeObjectURL(u));
-  //     return urls;
-  //   });
-  // };
-
-  // Upload packing images to S3-backed endpoint, then mark status
+  // Upload packing images, update status, mark-ready, then finish (don’t release)
   const handleMarkAsReady = async () => {
+    if (!claimedByMe) {
+      alert("Debes tomar el pedido antes de continuar (selecciona tu nombre).");
+      return;
+    }
     if (!evidenceImages || evidenceImages.length === 0) {
       alert("Selecciona al menos una imagen (hasta 3).");
       return;
@@ -195,10 +192,6 @@ export default function PackDetails() {
     try {
       // 1) Upload evidence (multiple). Backend: upload.array('files', 3)
       const form = new FormData();
-      // evidenceImages.forEach((file) => {
-      //   form.append("files", file);           // preferred new field
-      //   form.append("packingImages", file);   // backward-compat if your route still expects this
-      // });
       evidenceImages.forEach((file) => form.append("packingImages", file));
       form.append("packerName", packer);
 
@@ -216,9 +209,15 @@ export default function PackDetails() {
         body: JSON.stringify({ orderStatus: "Preparando Pedido" }),
       });
 
+      // 3) Mark as ready (persists packing.status = "ready")
+      try {
+        await axios.post(`${API}/orders/${orderId}/mark-ready`, { packer });
+      } catch (_) {
+        // non-fatal if this fails; status already advanced
+      }
+
+      finishedRef.current = true; // avoid releasing on leave
       setOkMsg("Evidencia subida. Estado actualizado a 'Preparando Pedido'.");
-      // Optional: refresh order or jump to next screen
-      // navigate("/deliverReady");
       navigate("/adminHome");
     } catch (error) {
       console.error("Error during packing upload/status:", error);
@@ -229,14 +228,12 @@ export default function PackDetails() {
     }
   };
 
-  useEffect(() => {
-    return () => {
-      // cleanup blob URLs on unmount
-      previewUrls.forEach((u) => URL.revokeObjectURL(u));
-    };
-  }, [previewUrls]);
-
   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
+
+  // Simple banner logic
+  const showBlocked =
+    claimState.status === "blocked" ||
+    (claimState.inProgress && claimState.claimedBy && claimState.claimedBy !== packer);
 
   return (
     <body className="body-BG-Gradient">
@@ -253,20 +250,23 @@ export default function PackDetails() {
 
       <label className="sectionHeader-Label">Detalle de Paquete</label>
 
-      {/* <div className="packingManager-Div">
-        <label className="packer-Label">Empacado por:</label>
-        <select
-          className="packManager-Dropdown"
-          value={packer}
-          onChange={(e) => setPacker(e.target.value)}
-        >
-          <option value="Encargado">Encargado...</option>
-          <option value="Osvaldo">Osvaldo</option>
-          <option value="Santiago">Santiago</option>
-          <option value="Mauro">Mauro</option>
-        </select>
-      </div> */}
-      {/* sep07 */}
+      {/* Claim status banner */}
+      {showBlocked && (
+        <div style={{ background: "#fde047", color: "#1f2937", padding: "10px 12px", borderRadius: 8, margin: "8px 16px" }}>
+          {claimState.status === "blocked"
+            ? (claimState.message || "Este pedido ya fue tomado por otro encargado.")
+            : `Este pedido está en proceso por: ${claimState.claimedBy}.`}
+          <div style={{ marginTop: 8, display: "flex", gap: 8 }}>
+            <button onClick={() => navigate(-1)} style={{ padding: "6px 10px", borderRadius: 6 }}>
+              Volver
+            </button>
+            <button onClick={() => navigate("/adminHome")} style={{ padding: "6px 10px", borderRadius: 6 }}>
+              Ir a Principal
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="packingManager-Div">
         <label className="packer-Label">Empacado por:</label>
         <select
@@ -282,9 +282,7 @@ export default function PackDetails() {
         </select>
       </div>
 
-      {/* sep07 */}
-
-      <div className="newQuotesScroll-Div">
+      <div className="newQuotesScroll-Div" style={{ opacity: actionsDisabled ? 0.55 : 1, pointerEvents: actionsDisabled ? "none" : "auto" }}>
         {(order.items || []).map((item, index) => (
           <div key={index} className="productToggle-Div">
             <div className="quoteAndFile-Div">
@@ -313,7 +311,6 @@ export default function PackDetails() {
         ))}
 
         {/* MULTIPLE file input */}
-        {/* CAMERA (single, capture) */}
         <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
           <label htmlFor="packingImages" className="custom-file-upload">
             Elegir archivos
@@ -322,13 +319,10 @@ export default function PackDetails() {
             id="packingImages"
             type="file"
             accept="image/*"
-            // accept="image/*"
-            // capture="environment"
             multiple
             onChange={handleFilesSelected}
-            style={{ 
-              display: "none" 
-            }}
+            style={{ display: "none" }}
+            disabled={actionsDisabled}
           />
           <span className="file-selected-text">
             {evidenceImages.length > 0
@@ -336,43 +330,6 @@ export default function PackDetails() {
               : "Ningún archivo seleccionado"}
           </span>
         </div>
-        {/* <div className="packDetails-ImageDiv" style={{ marginTop: 12 }}>
-          <label htmlFor="cameraInput" className="custom-file-upload" style={{ marginRight: 8 }}>
-            Tomar foto (cámara)
-          </label>
-          <input
-            id="cameraInput"
-            type="file"
-            name="packingImages"
-            accept="image/*"
-            capture="environment"          // forces camera on mobile
-            onChange={(e) => handleFilesSelected(e, { source: "camera" })}
-            onInput={(e) => handleFilesSelected(e, { source: "camera" })}
-            style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
-          /> */}
-
-          {/* GALLERY (multiple, NO capture) */}
-          {/* <label htmlFor="galleryInput" className="custom-file-upload">
-            Elegir desde galería (máx 3)
-          </label>
-          <input
-            id="galleryInput"
-            type="file"
-            name="packingImages"
-            accept="image/*"
-            multiple                        // allow selecting multiple images
-            onChange={(e) => handleFilesSelected(e, { source: "gallery" })}
-            onInput={(e) => handleFilesSelected(e, { source: "gallery" })}
-            style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
-          />
-        </div> */}
-
-        {/* Selected files summary */}
-        {/* <span className="file-selected-text" style={{ display: "block", marginTop: 8 }}>
-          {evidenceImages.length > 0
-            ? evidenceImages.map((f) => f.name).join(", ")
-            : "Ningún archivo seleccionado"}
-        </span> */}
 
         {/* Thumbnails preview */}
         {previewUrls.length > 0 && (
@@ -403,13 +360,11 @@ export default function PackDetails() {
           <button
             className="packDetails-Btn"
             onClick={handleMarkAsReady}
-            disabled={busy || evidenceImages.length === 0 || !packer || packer === "Encargado"}
+            disabled={actionsDisabled || evidenceImages.length === 0 || !packer || packer === "Encargado"}
             title={
-              !evidenceImages.length
-                ? "Selecciona al menos una imagen"
-                : !packer || packer === "Encargado"
-                ? "Selecciona el encargado"
-                : ""
+              !claimedByMe ? "Toma el pedido para continuar" :
+              !evidenceImages.length ? "Selecciona al menos una imagen" :
+              !packer || packer === "Encargado" ? "Selecciona el encargado" : ""
             }
           >
             {busy ? `Subiendo... ${progress || 0}%` : <>Pedido<br />Listo</>}
@@ -443,13 +398,13 @@ export default function PackDetails() {
   );
 }
 
-// import EvidenceUploader from "/src/components/EvidenceUploader";
-// import EvidenceGallery from "/src/components/EvidenceGallery";
-// import axios from "axios";
-// import { API } from "/src/lib/api";
+// // Hey chatgpt, going back to pendingPack.jsx and packDetails.jsx, when the packing team gets new orders to pack, they get displayed on pendingPack, where then a packer clicks on any specific order and is sent to this screen (packDetails.jsx), where he (Oswaldo, Santiago, or Mauro) is in charge of getting the order ready. Now we are having the following situation: for some reason, if any of the packers select an order to process, even though he is already working on that order, the order isnstill available for the other packers on pendingPack screen, hence more than one packer could be working on the same order at the same time. How can we avoid having this happening?  
+// // For step 5) Respect the claim in PackDetails (guard + release), this is my current packDetails.jsx. Can you direct edit please?
+// import { useState, useEffect } from "react";
 // import { useParams, useNavigate } from "react-router-dom";
-// import { useEffect, useState } from "react";
+// import axios from "axios";
 
+// import { API } from "/src/lib/api";
 // import Logo from "/src/assets/images/GIS_Logo.png";
 // import { faHouse, faCheckToSlot, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 // import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -462,9 +417,15 @@ export default function PackDetails() {
 //   const [packer, setPacker] = useState("");
 //   const [checkedItems, setCheckedItems] = useState([]);
 
-//   // NEW: allow up to 3 images
+//   // Allow up to 3 images
 //   const [evidenceImages, setEvidenceImages] = useState([]); // File[]
-//   const [previewUrls, setPreviewUrls] = useState([]);       // for thumbnails
+//   const [previewUrls, setPreviewUrls] = useState([]);       // blob URLs
+
+//   // UI feedback
+//   const [busy, setBusy] = useState(false);
+//   const [progress, setProgress] = useState(0);
+//   const [errMsg, setErrMsg] = useState("");
+//   const [okMsg, setOkMsg] = useState("");
 
 //   const goToAdminHome = () => navigate("/adminHome");
 //   const goToNewOrders = () => navigate("/newOrders");
@@ -474,6 +435,7 @@ export default function PackDetails() {
 //   useEffect(() => {
 //     if (!orderId) return;
 //     axios
+//       .get(`${API}/orders/${orderId}`)
 //       .then((res) => {
 //         const o = res.data;
 //         setOrder(o);
@@ -481,17 +443,6 @@ export default function PackDetails() {
 //       })
 //       .catch((err) => console.error("Error loading order:", err));
 //   }, [orderId]);
-
-//   useEffect(() => { load(); }, [orderId]);
-
-//   async function load() {
-//     try {
-//       const res = await axios.get(`${API}/orders/${orderId}`); // your existing order detail endpoint
-//       setOrder(res.data);
-//     } catch (e) {
-//       console.error("Load order error:", e);
-//     }
-//   }
 
 //   const handleCheckboxToggle = (index) => {
 //     setCheckedItems((prev) => {
@@ -501,41 +452,93 @@ export default function PackDetails() {
 //     });
 //   };
 
-//   // Custom multiple-file input handler (max 3)
-//   const handleFilesSelected = (e) => {
-//     const files = Array.from(e.target.files || []);
-//     const trimmed = files.slice(0, 3);
-//     setEvidenceImages(trimmed);
-
-//     // Thumbnails
-//     const urls = trimmed.map((f) => URL.createObjectURL(f));
-//     setPreviewUrls(urls);
+//   // MULTIPLE file input (max 3) — supports camera or gallery
+//   const handleFilesSelected = (e, { source } = {}) => {
+//     const inputEl = e.target;
+//     const list = inputEl?.files ? Array.from(inputEl.files) : [];
+//     if (list.length === 0) return;
+  
+//     // Some Android/Google Photos picks may have empty type; allow those if they look like images by name.
+//     const looksImage = (f) =>
+//       (f.type && f.type.startsWith("image/")) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name || "");
+  
+//     const bad = list.find((f) => !looksImage(f) || f.size > 25 * 1024 * 1024);
+//     if (bad) {
+//       alert("Solo imágenes y máximo 25MB por archivo.");
+//       return;
+//     }
+  
+//     const merged = [...evidenceImages, ...list].slice(0, 3);
+//     setEvidenceImages(merged);
+//     setErrMsg("");
+//     setOkMsg("");
+  
+//     setPreviewUrls((old) => {
+//       old.forEach((u) => URL.revokeObjectURL(u));
+//       return merged.map((f) => URL.createObjectURL(f));
+//     });
+  
+//     // Android quirk: defer clearing the input so it commits the chosen files.
+//     setTimeout(() => {
+//       if (inputEl && inputEl.type === "file") inputEl.value = "";
+//     }, 200);
 //   };
 
+//   // Upload packing images to S3-backed endpoint, then mark status
 //   const handleMarkAsReady = async () => {
 //     if (!evidenceImages || evidenceImages.length === 0) {
 //       alert("Selecciona al menos una imagen (hasta 3).");
 //       return;
 //     }
+//     if (!packer || packer === "Encargado") {
+//       alert("Selecciona el encargado de empaque.");
+//       return;
+//     }
+
+//     setBusy(true);
+//     setProgress(0);
+//     setErrMsg("");
+//     setOkMsg("");
 
 //     try {
-//       const formData = new FormData();
-//       // Append multiple files under the SAME field name
-//       evidenceImages.forEach((file) => formData.append("packingImages", file)); // <-- backend: upload.array('packingImages', 3)
+//       // 1) Upload evidence (multiple). Backend: upload.array('files', 3)
+//       const form = new FormData();
+//       evidenceImages.forEach((file) => form.append("packingImages", file));
+//       form.append("packerName", packer);
 
-//       formData.append("orderStatus", "Pedido Listo");
-//       formData.append("packerName", packer);
-
-//         headers: { "Content-Type": "multipart/form-data" },
+//       await axios.post(`${API}/orders/${orderId}/evidence/packing`, form, {
+//         onUploadProgress: (pe) => {
+//           if (!pe.total) return;
+//           setProgress(Math.round((pe.loaded / pe.total) * 100));
+//         },
 //       });
 
-//       alert("Evidencia subida y pedido marcado como listo.");
-//       navigate("/deliverReady");
+//       // 2) Update status to "Preparando Pedido"
+//       await fetch(`${API}/order/${orderId}/status`, {
+//         method: "PATCH",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ orderStatus: "Preparando Pedido" }),
+//       });
+
+//       setOkMsg("Evidencia subida. Estado actualizado a 'Preparando Pedido'.");
+//       // Optional: refresh order or jump to next screen
+//       // navigate("/deliverReady");
+//       navigate("/adminHome");
 //     } catch (error) {
-//       console.error("Error during order processing:", error);
-//       alert("Ocurrió un error al procesar el pedido.");
+//       console.error("Error during packing upload/status:", error);
+//       setErrMsg(error?.response?.data?.error || error.message || "Ocurrió un error al procesar el pedido.");
+//     } finally {
+//       setBusy(false);
+//       setTimeout(() => setProgress(0), 800);
 //     }
 //   };
+
+//   useEffect(() => {
+//     return () => {
+//       // cleanup blob URLs on unmount
+//       previewUrls.forEach((u) => URL.revokeObjectURL(u));
+//     };
+//   }, [previewUrls]);
 
 //   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
 
@@ -560,9 +563,10 @@ export default function PackDetails() {
 //           className="packManager-Dropdown"
 //           value={packer}
 //           onChange={(e) => setPacker(e.target.value)}
+//           disabled={packer && packer !== "Encargado"}   // 🔒 lock once selected
 //         >
 //           <option value="Encargado">Encargado...</option>
-//           <option value="Osvaldo">Osvaldo</option>
+//           <option value="Osvaldo">Oswaldo</option>
 //           <option value="Santiago">Santiago</option>
 //           <option value="Mauro">Mauro</option>
 //         </select>
@@ -574,7 +578,7 @@ export default function PackDetails() {
 //             <div className="quoteAndFile-Div">
 //               <label className="productDetail-Label">{item.product}</label>
 //               <label className="productDetail-Label">
-//                 <b>SKU:</b> {item.sku || "N/A"}
+//                 <b>Presentación:</b> {item.presentation || "N/A"}
 //               </label>
 //               <label className="productDetail-Label">
 //                 <b>Cantidad:</b> {item.amount}
@@ -596,20 +600,8 @@ export default function PackDetails() {
 //           </div>
 //         ))}
 
-//         {/* aug22 */}
-//         <h3 className="newUserData-Label">Evidencia de Empaque</h3>
-//         <EvidenceUploader
-//           orderId={orderId}
-//           kind="packing"
-//           multiple
-//           max={3}
-//           buttonLabel="Subir fotos de empaque"
-//           onUploaded={() => load()}
-//         />
-//         {order && <EvidenceGallery orderId={orderId} packingEvidenceExt={order.packingEvidenceExt} />}
-//         {/* aug22 */}
-
-//         {/* Custom MULTIPLE file input (Spanish) */}
+//         {/* MULTIPLE file input */}
+//         {/* CAMERA (single, capture) */}
 //         <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>
 //           <label htmlFor="packingImages" className="custom-file-upload">
 //             Elegir archivos
@@ -618,9 +610,13 @@ export default function PackDetails() {
 //             id="packingImages"
 //             type="file"
 //             accept="image/*"
+//             // accept="image/*"
+//             // capture="environment"
 //             multiple
 //             onChange={handleFilesSelected}
-//             style={{ display: "none" }}
+//             style={{ 
+//               display: "none" 
+//             }}
 //           />
 //           <span className="file-selected-text">
 //             {evidenceImages.length > 0
@@ -628,7 +624,6 @@ export default function PackDetails() {
 //               : "Ningún archivo seleccionado"}
 //           </span>
 //         </div>
-
 //         {/* Thumbnails preview */}
 //         {previewUrls.length > 0 && (
 //           <div
@@ -653,10 +648,24 @@ export default function PackDetails() {
 //           </div>
 //         )}
 
+//         {/* Action */}
 //         <div className="packingDetails-ButtonDiv">
-//           <button className="packDetails-Btn" onClick={handleMarkAsReady}>
-//             Pedido<br />Listo
+//           <button
+//             className="packDetails-Btn"
+//             onClick={handleMarkAsReady}
+//             disabled={busy || evidenceImages.length === 0 || !packer || packer === "Encargado"}
+//             title={
+//               !evidenceImages.length
+//                 ? "Selecciona al menos una imagen"
+//                 : !packer || packer === "Encargado"
+//                 ? "Selecciona el encargado"
+//                 : ""
+//             }
+//           >
+//             {busy ? `Subiendo... ${progress || 0}%` : <>Pedido<br />Listo</>}
 //           </button>
+//           {errMsg && <div style={{ color: "#b00", marginTop: 8, fontSize: 12 }}>{errMsg}</div>}
+//           {okMsg && <div style={{ color: "#2a7a2a", marginTop: 8, fontSize: 12 }}>{okMsg}</div>}
 //         </div>
 //       </div>
 
