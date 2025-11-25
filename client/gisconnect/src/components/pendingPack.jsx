@@ -86,11 +86,13 @@ export default function PendingPack() {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get(`${API}/orders`);
+      // const response = await axios.get(`${API}/orders`);
+      const response = await axios.get(`${API}/orders`, { params: { packable: true } });
       const pagoVerificado = (response.data || []).filter(
         (order) => order.orderStatus === "Pago Verificado"
       );
-      setOrders(pagoVerificado);
+      // setOrders(pagoVerificado);
+      setOrders(response.data || []);
     } catch (error) {
       console.error("Error fetching orders:", error);
       setOrders([]);

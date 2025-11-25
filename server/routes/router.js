@@ -519,18 +519,53 @@ router.get('/userOrders', async (req, res) => {
   }
 });
 
-// Admin list orders
+// nov25
+// --- Helper: build a query that returns only packable orders (status=Pago Verificado
+//     and not currently claimed, OR previous claim lease expired)
+function buildPackableFilter() {
+  const leaseMs = 30 * 60 * 1000; // keep in sync with schema default if you change it
+  const cutoff = new Date(Date.now() - leaseMs);
+  return {
+    orderStatus: "Pago Verificado",
+    $or: [
+      { "packing.status": { $ne: "in_progress" } },
+      { "packing.claimedAt": { $exists: false } },
+      { "packing.claimedAt": { $lt: cutoff } }
+    ]
+  };
+}
+
+// Admin list orders (enhanced with packing filters)
 router.get('/orders', async (req, res) => {
   try {
     const email = (req.query.email || "").trim();
+    const packable = String(req.query.packable || "").toLowerCase() === "true";
+    const packingStatus = (req.query.packingStatus || "").trim(); // e.g. "in_progress"
+    const claimedBy = (req.query.claimedBy || "").trim();         // e.g. "Oswaldo"
+    const status = (req.query.status || "").trim();               // e.g. "Pago Verificado"
 
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
     res.setHeader("Surrogate-Control", "no-store");
 
-    const findQuery = email ? { userEmail: email } : {};
-    const orders = await newOrderModel.find(findQuery).sort({ orderDate: -1, _id: -1 });
+    // Base find
+    const findQuery = {};
+    if (email) findQuery.userEmail = email;
+    if (status) findQuery.orderStatus = status;
+
+    // packable takes precedence (used by PendingPack list)
+    if (packable) {
+      Object.assign(findQuery, buildPackableFilter());
+    } else {
+      // explicit packing status / claimedBy filters if provided
+      if (packingStatus) findQuery["packing.status"] = packingStatus;
+      if (claimedBy)     findQuery["packing.claimedBy"] = claimedBy;
+    }
+
+    const orders = await newOrderModel
+      .find(findQuery)
+      .sort({ orderDate: -1, _id: -1 });
 
     return res.json(orders);
   } catch (err) {
@@ -538,6 +573,42 @@ router.get('/orders', async (req, res) => {
     return res.status(500).json({ error: "Error fetching orders" });
   }
 });
+
+// Convenience: explicit endpoint for "orders available to pack"
+router.get("/orders/packable", async (_req, res) => {
+  try {
+    const orders = await newOrderModel
+      .find(buildPackableFilter())
+      .sort({ orderDate: -1, _id: -1 });
+    res.json(orders);
+  } catch (e) {
+    console.error("GET /orders/packable error:", e);
+    res.status(500).json({ error: "Error fetching packable orders" });
+  }
+});
+
+// nov25
+
+// OFF NOV25: Admin list orders
+// router.get('/orders', async (req, res) => {
+//   try {
+//     const email = (req.query.email || "").trim();
+
+//     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+//     res.setHeader("Pragma", "no-cache");
+//     res.setHeader("Expires", "0");
+//     res.setHeader("Surrogate-Control", "no-store");
+
+//     const findQuery = email ? { userEmail: email } : {};
+//     const orders = await newOrderModel.find(findQuery).sort({ orderDate: -1, _id: -1 });
+
+//     return res.json(orders);
+//   } catch (err) {
+//     console.error("Error fetching orders:", err);
+//     return res.status(500).json({ error: "Error fetching orders" });
+//   }
+// });
+// OFF NOV25
 
 // Get order by id (single, canonical)
 router.get('/orders/:orderId', async (req, res) => {
@@ -1824,8 +1895,122 @@ router.post("/debug/webpush-to-email", async (req, res) => {
     res.status(500).json({ ok:false, error: e.message });
   }
 });
+// Nov24
+// helper to decide if a claim is expired
+function isExpired(doc) {
+  if (!doc?.packing?.claimedAt || !doc?.packing?.leaseMs) return true;
+  return (Date.now() - new Date(doc.packing.claimedAt).getTime()) > doc.packing.leaseMs;
+}
 
-// oct24
+// POST /orders/:id/claim-pack  { packer: "Oswaldo" }
+router.post("/orders/:id/claim-pack", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const packer = String(req.body?.packer || "").trim();
+    if (!packer) return res.status(400).json({ ok:false, error: "packer is required" });
+
+    // Load the current order first
+    // const order = await NewOrder.findById(id).lean();
+    const order = await newOrderModel.findById(id).lean();
+
+    if (!order) return res.status(404).json({ ok:false, error: "Order not found" });
+    if ((order.orderStatus || "").toLowerCase() !== "pago verificado") {
+      return res.status(409).json({ ok:false, error: "Order is not in 'Pago Verificado' state" });
+    }
+
+    // If already in progress & not expired → deny
+    if (order.packing?.status === "in_progress" && !isExpired(order)) {
+      return res.status(409).json({ 
+        ok:false, 
+        error: `Order already taken by ${order.packing?.claimedBy || "another packer"}` 
+      });
+    }
+
+    // Build conditional filter that only succeeds if:
+    //  - packing.status != 'in_progress' OR the previous claim is expired (or absent)
+    const expiryCutoff = new Date(Date.now() - (order.packing?.leaseMs || 30*60*1000));
+    const filter = {
+      _id: id,
+      $or: [
+        { "packing.status": { $ne: "in_progress" } },
+        { "packing.claimedAt": { $exists: false } },
+        { "packing.claimedAt": { $lt: expiryCutoff } }
+      ]
+    };
+
+    const update = {
+      $set: { 
+        "packing.status": "in_progress",
+        "packing.claimedBy": packer,
+        "packing.claimedAt": new Date(),
+        // keep leaseMs as default or allow override per request
+      }
+    };
+
+    // const claimed = await NewOrder.findOneAndUpdate(filter, update, { new: true });
+    const claimed = await newOrderModel.findOneAndUpdate(filter, update, { new: true });
+    if (!claimed) {
+      return res.status(409).json({ ok:false, error: "Another packer just took this order. Refresh." });
+    }
+
+    res.json({ ok:true, order: claimed });
+  } catch (e) {
+    console.error("claim-pack error:", e);
+    res.status(500).json({ ok:false, error: "Failed to claim order" });
+  }
+});
+
+// POST /orders/:id/release-pack  { packer: "Oswaldo", reason?: "cancel" }
+router.post("/orders/:id/release-pack", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const packer = String(req.body?.packer || "").trim();
+    if (!packer) return res.status(400).json({ ok:false, error: "packer is required" });
+
+    const filter = { 
+      _id: id, 
+      "packing.status": "in_progress", 
+      "packing.claimedBy": packer 
+    };
+    const update = {
+      $set: { "packing.status": "waiting" },
+      $unset: { "packing.claimedBy": "", "packing.claimedAt": "" }
+    };
+    // const released = await NewOrder.findOneAndUpdate(filter, update, { new: true });
+    const released = await newOrderModel.findOneAndUpdate(filter, update, { new: true });
+    if (!released) {
+      return res.status(409).json({ ok:false, error: "Not holder or order not in progress" });
+    }
+    res.json({ ok:true, order: released });
+  } catch (e) {
+    console.error("release-pack error:", e);
+    res.status(500).json({ ok:false, error: "Failed to release order" });
+  }
+});
+
+// POST /orders/:id/mark-ready  { packer: "Oswaldo" }
+// when they finish (your existing handleMarkAsReady can call this at the end)
+router.post("/orders/:id/mark-ready", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const packer = String(req.body?.packer || "").trim();
+
+    const filter = { _id: id };
+    const update = { 
+      $set: { 
+        "packing.status": "ready",
+        ...(packer ? { "packing.claimedBy": packer } : {})
+      }
+    };
+    // const doc = await NewOrder.findOneAndUpdate(filter, update, { new: true });
+    const doc = await newOrderModel.findOneAndUpdate(filter, update, { new: true });
+    res.json({ ok:true, order: doc });
+  } catch (e) {
+    console.error("mark-ready error:", e);
+    res.status(500).json({ ok:false, error: "Failed to mark ready" });
+  }
+});
+// Nov24
 
 module.exports = router;
 
