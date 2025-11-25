@@ -1922,7 +1922,7 @@ router.post("/orders/:id/claim-pack", async (req, res) => {
     if (order.packing?.status === "in_progress" && !isExpired(order)) {
       return res.status(409).json({ 
         ok:false, 
-        error: `Order already taken by ${order.packing?.claimedBy || "another packer"}` 
+        error: `Order siendo preparada por ${order.packing?.claimedBy || "another packer"}` 
       });
     }
 

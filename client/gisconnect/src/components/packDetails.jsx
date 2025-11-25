@@ -276,7 +276,7 @@ export default function PackDetails() {
           disabled={packer && packer !== "Encargado"}   // 🔒 lock once selected
         >
           <option value="Encargado">Encargado...</option>
-          <option value="Osvaldo">Oswaldo</option>
+          <option value="Oswaldo">Oswaldo</option>
           <option value="Santiago">Santiago</option>
           <option value="Mauro">Mauro</option>
         </select>
