@@ -1,4 +1,4 @@
-// Ok! EVIDENCIA_DE_PAGO is now up and running perfectly. Now the only stage we're missing is ETIQUETA_GENERADA. Here is my current manageDeliveryDetails.jsx file, where through "generateShippingLabel" we 1) create a PDF label, 2) update order status. Take a look and tell me if maybe there's something off here that's blocking push notifications for ETIQUETA_GENERADA. Please keep all basic functionalities the same
+// ok so continuing with cleanups, in my manageDeliveryDetails.jsx, when generating label and order is being shipped insured (insureShipmentLabel === "Sí"), I'd like to add the amount insured as well. This amount should be the same as the total worth of the order, expressed in MXN (hence, if order was made in USD, translate to MXN). Here is my current manageDeliveryDetails.jsx, please direct edit
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -135,6 +135,43 @@ export default function ManageDeliveryDetails() {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
     doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+
+    // dec21
+    const fmtMXN = (v) =>
+      `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+    // Compute insured amount in MXN (order total expressed in MXN)
+    const rate = Number(order?.totals?.dofRate) || 0; // DOF rate if available
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+    const isUSD = (it) => normCur(it.currency) === "USD";
+    const isMXN = (it) => normCur(it.currency) === "MXN";
+    
+    // Prefer server-computed combined MXN if available
+    let insuredAmountMXN = Number.isFinite(order?.totals?.totalAllMXN)
+    ? Number(order.totals.totalAllMXN)
+    : null;
+    
+    if (insuredAmountMXN == null) {
+    // Recompute per currency from line items (natural sums)
+    const subtotalUSD = items.reduce(
+      (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
+      0
+    );
+    const subtotalMXN = items.reduce(
+      (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
+      0
+    );
+    if (subtotalMXN && !subtotalUSD) {
+      insuredAmountMXN = subtotalMXN;
+    } else if (!subtotalMXN && subtotalUSD && rate) {
+      insuredAmountMXN = subtotalUSD * rate;
+    } else if (subtotalMXN && subtotalUSD && rate) {
+      insuredAmountMXN = subtotalMXN + subtotalUSD * rate;
+    } else {
+      insuredAmountMXN = null; // can't compute without rate for USD-only / mixed
+    }
+    }
   
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
@@ -228,99 +265,6 @@ export default function ManageDeliveryDetails() {
 
   };
   
-  // const generateShippingLabel = async (order) => {
-  //   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] });
-  //   const pageWidth = doc.internal.pageSize.getWidth();
-  //   const pageHeight = doc.internal.pageSize.getHeight();
-  //   doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
-
-  //   doc.setFontSize(9);
-  //   doc.setFont("helvetica", "normal");
-  //   doc.text(`Pedido #: ${String(order._id).slice(-5)}`, 65, 7);
-  //   doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX")}`, 65, 12);
-
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text("Remitente:", 10, 20);
-  //   doc.setFont("helvetica", "normal");
-  //   doc.text("GREEN IMPORT SOLUTIONS", 10, 25);
-  //   doc.text("Monte Everest #2428", 10, 30);
-  //   doc.text("Col. La Federacha", 10, 35);
-  //   doc.text("Guadalajara, Jalisco", 10, 40);
-  //   doc.text("C.P. 44300", 10, 45);
-  //   doc.text("Tel. 01 (33) 2016 8274", 10, 52);
-
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text("Destinatario:", 10, 62);
-  //   doc.setFont("helvetica", "normal");
-
-  //   // Recipient name from Mongo; address from order shippingInfo
-  //   const recName = displayName || "";
-  //   const recStreet = `${sCalle} #${sExt}${sInt ? ` Int. ${sInt}` : ""}`;
-  //   const recCol = sCol;
-  //   const recCityState = `${sCiudad}${sCiudad && sEstado ? ", " : ""}${sEstado}`;
-  //   const recCP = sCP;
-
-  //   doc.text(recName, 10, 67);
-  //   doc.text(recStreet, 10, 72);
-  //   if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
-  //   if (recCityState) doc.text(recCityState, 10, 82);
-  //   if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
-
-  //   doc.setFont("helvetica", "bold");
-  //   doc.text("Transportista:", 10, 104);
-  //   doc.setFont("helvetica", "normal");
-  //   doc.text(`${preferredCarrier || ""}`, 10, 109);
-
-  //   if (insureShipmentLabel === "Sí") {
-  //     doc.setFont("helvetica", "bold");
-  //     doc.setTextColor(255, 0, 0);
-  //     doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
-  //     doc.setTextColor(0, 0, 0);
-  //   }
-
-  //   doc.setDrawColor(0);
-  //   doc.setFillColor(200, 200, 200);
-  //   doc.rect(10, 115, 80, 20, "F");
-  //   doc.setFontSize(8);
-  //   doc.text("Código de rastreo", 30, 128);
-
-  //   // doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
-
-  //   // sep10
-  //   try {
-  //     await axios.patch(
-  //       `${API}/orders/${order._id}`,
-  //       { orderStatus: "Etiqueta Generada" },
-  //       {
-  //         headers: { "Content-Type": "application/json" },
-  //         timeout: 15000,
-  //         withCredentials: false,
-  //       }
-  //     );
-  //   } catch (error) {
-  //     console.error("PATCH /orders/:orderId failed:", error?.response?.data || error.message);
-  //     alert("Error al actualizar el estado del pedido.");
-  //     return; // stop if we couldn't update on the server
-  //   }
-    
-  //   // 2) Then save the PDF (after server success)
-  //   doc.save(`Etiqueta_Pedido_${String(order._id).slice(-5)}.pdf`);
-    
-  //   alert("Etiqueta generada y estado actualizado.");
-  //   navigate("/deliverReady");
-  //   // try {
-  //   //   await axios.put(`${API}/orders/${order._id}`, {
-  //   //     orderStatus: "Etiqueta Generada",
-  //   //   });
-  //   //   alert("Etiqueta generada y estado actualizado.");
-  //   //   navigate("/deliverReady");
-  //   // } catch (error) {
-  //   //   console.error("Error updating order status:", error);
-  //   //   alert("Error al actualizar el estado del pedido.");
-  //   // }
-  //   // sep10
-  // };
-
   return (
     <body className="body-BG-Gradient">
       {/* LOGOS DIV */}

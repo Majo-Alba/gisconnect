@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
 
@@ -16,7 +16,7 @@ export default function DeliveryDetails() {
   const [order, setOrder] = useState(null);
 
   // delivery meta
-  const [insuredAmount, setInsuredAmount] = useState("");
+  const [insuredAmount, setInsuredAmount] = useState(null); // number | null
   const [deliveryDate, setDeliveryDate] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
 
@@ -33,6 +33,44 @@ export default function DeliveryDetails() {
   const [mongoUser, setMongoUser] = useState(null);
   const [userLoading, setUserLoading] = useState(false);
 
+  // Helpers
+  const fmtMXN = (v) =>
+    v == null
+      ? ""
+      : `$${Number(v).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+  const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+  const isUSD = (it) => normCur(it.currency) === "USD";
+  const isMXN = (it) => normCur(it.currency) === "MXN";
+
+  const calcInsuredAmountMXN = (ord) => {
+    if (!ord) return null;
+
+    // 1) Prefer server-provided combined MXN total if available
+    const totalAllMXN = ord?.totals?.totalAllMXN;
+    if (Number.isFinite(totalAllMXN)) return Number(totalAllMXN);
+
+    // 2) Recompute from line items (natural sums)
+    const items = Array.isArray(ord?.items) ? ord.items : [];
+    const rate = Number(ord?.totals?.dofRate) || 0;
+
+    const subtotalUSD = items.reduce(
+      (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
+      0
+    );
+    const subtotalMXN = items.reduce(
+      (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
+      0
+    );
+
+    if (subtotalMXN && !subtotalUSD) return subtotalMXN;
+    if (!subtotalMXN && subtotalUSD && rate) return subtotalUSD * rate;
+    if (subtotalMXN && subtotalUSD && rate) return subtotalMXN + subtotalUSD * rate;
+
+    // If we can't convert (missing rate for USD-only/mixed), return null to avoid wrong amounts
+    return null;
+  };
+
   useEffect(() => {
     fetchOrderDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -42,10 +80,10 @@ export default function DeliveryDetails() {
     try {
       const { data } = await axios.get(`${API}/orders/${orderId}`);
       setOrder(data);
+
       // Pre-fill existing meta (if any)
-      // setInsuredAmount(data?.insuredAmount ?? "");
-      // setTrackingNumber(data?.trackingNumber ?? "");
-      // normalize deliveryDate to yyyy-mm-dd for input[type=date]
+      if (data?.trackingNumber) setTrackingNumber(String(data.trackingNumber));
+
       if (data?.deliveryDate) {
         const d = new Date(data.deliveryDate);
         const iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
@@ -81,6 +119,20 @@ export default function DeliveryDetails() {
       cancelled = true;
     };
   }, [order?.userEmail]);
+
+  // Auto-set insuredAmount based on order + insure flag
+  useEffect(() => {
+    const insureShipment =
+      mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment ?? null;
+
+    if (insureShipment === true && order) {
+      const amt = calcInsuredAmountMXN(order);
+      setInsuredAmount(amt);
+    } else {
+      setInsuredAmount(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mongoUser, order]);
 
   // UI helpers
   const goToAdminHome = () => navigate("/adminHome");
@@ -119,9 +171,9 @@ export default function DeliveryDetails() {
     setOkMsg("");
 
     try {
-      // 1) Upload delivery evidence to S3-backed endpoint
+      // 1) Upload delivery evidence
       const form = new FormData();
-      form.append("deliveryImage", deliveryImage); // <-- backend must accept 'deliveryImage'
+      form.append("deliveryImage", deliveryImage);
 
       await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
         onUploadProgress: (pe) => {
@@ -130,13 +182,13 @@ export default function DeliveryDetails() {
         },
       });
 
-      // 2) Update delivery meta on the order
+      // 2) Update delivery meta on the order (send numeric insuredAmount if available)
       await fetch(`${API}/orders/${order._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          insuredAmount,
-          deliveryDate,     // yyyy-mm-dd string; backend should Date() it
+          insuredAmount: insuredAmount != null ? Number(insuredAmount) : undefined,
+          deliveryDate, // yyyy-mm-dd
           trackingNumber,
         }),
       });
@@ -149,7 +201,6 @@ export default function DeliveryDetails() {
       });
 
       setOkMsg("Evidencia subida y pedido marcado como entregado.");
-      // navigate("/delivered");
       navigate("/adminHome");
     } catch (error) {
       console.error("Error marking delivered:", error);
@@ -178,7 +229,7 @@ export default function DeliveryDetails() {
   const insureShipment =
     mongoUser?.shippingPreferences?.insureShipment ??
     mongoUser?.insureShipment ??
-    null; // boolean or null if not set
+    null;
 
   // Shipping object (new structure)
   const s = order.shippingInfo || {};
@@ -218,7 +269,7 @@ export default function DeliveryDetails() {
 
         <div className="deliveryDetails-Div">
           <div className="paymentDetails-Div">
-            {/* Dirección de envío (desde objeto) */}
+            {/* Dirección de envío */}
             <div className="deliveryDets-AddressDiv">
               <div className="headerEditIcon-Div">
                 <label className="newUserData-Label">Dirección de Envío</label>
@@ -226,18 +277,18 @@ export default function DeliveryDetails() {
               <div className="existingQuote-Div">
                 <div className="quoteAndFile-Div">
                   <label className="productDetail-Label">
-                    {sCalle} #{sExt} Int. {sInt}
+                    {sCalle} #{sExt} {sInt ? `Int. ${sInt}` : ""}
                   </label>
-                  <label className="productDetail-Label">Col. {sCol}</label>
+                  {sCol && <label className="productDetail-Label">Col. {sCol}</label>}
                   <label className="productDetail-Label">
-                    {sCiudad}, {sEstado}
+                    {sCiudad}{sCiudad && sEstado ? ", " : ""}{sEstado}
                   </label>
-                  <label className="productDetail-Label">C.P.: {sCP}</label>
+                  {sCP && <label className="productDetail-Label">C.P.: {sCP}</label>}
                 </div>
               </div>
             </div>
 
-            {/* Monto asegurado — only if insureShipment === true */}
+            {/* Monto asegurado — auto, read-only (solo si insureShipment === true) */}
             {insureShipment === true && (
               <>
                 <div className="headerEditIcon-Div">
@@ -246,9 +297,13 @@ export default function DeliveryDetails() {
                 <input
                   className="deliveryDets-Input"
                   type="text"
-                  placeholder="Ingresar monto"
-                  value={insuredAmount}
-                  onChange={(e) => setInsuredAmount(e.target.value)}
+                  readOnly
+                  value={insuredAmount != null ? fmtMXN(insuredAmount) : "No disponible (falta tipo de cambio)"}
+                  title={
+                    insuredAmount != null
+                      ? "Basado en el total del pedido en MXN"
+                      : "No se pudo calcular automáticamente (no hay tipo de cambio para convertir USD→MXN)."
+                  }
                 />
               </>
             )}
@@ -351,9 +406,8 @@ export default function DeliveryDetails() {
   );
 }
 
-// // this is my deliverDetails.jsx file. Can you add same logic of withdrawing username from mongoDB rather than using userEmail like we are currently doing. In this case, for field "Enviado Por" use preferredCarrier from mongodb and if insureShipment is "false", the dont show "Monto Asegurado" field. Please make direct edit 
-
-// import { useState, useEffect, useMemo } from "react";
+// // Following on the same concept, I'd like for the "Monto Asegurado" field to be automatically based on the information from manageDeliveryDetails.jsx. Here is my current deliveryDetails.jsx, please direct edit
+// import { useState, useEffect } from "react";
 // import { useParams, useNavigate } from "react-router-dom";
 // import axios from "axios";
 
@@ -384,12 +438,12 @@ export default function DeliveryDetails() {
 //   const [errMsg, setErrMsg] = useState("");
 //   const [okMsg, setOkMsg] = useState("");
 
-//   // ===== Google Sheets client DB (email → name/company) =====
-//   const [csvData, setCsvData] = useState([]);
+//   // ===== NEW: Mongo user (by email) =====
+//   const [mongoUser, setMongoUser] = useState(null);
+//   const [userLoading, setUserLoading] = useState(false);
 
 //   useEffect(() => {
 //     fetchOrderDetails();
-//     fetchClientCSV();
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [orderId]);
 
@@ -398,8 +452,8 @@ export default function DeliveryDetails() {
 //       const { data } = await axios.get(`${API}/orders/${orderId}`);
 //       setOrder(data);
 //       // Pre-fill existing meta (if any)
-//       setInsuredAmount(data?.insuredAmount ?? "");
-//       setTrackingNumber(data?.trackingNumber ?? "");
+//       // setInsuredAmount(data?.insuredAmount ?? "");
+//       // setTrackingNumber(data?.trackingNumber ?? "");
 //       // normalize deliveryDate to yyyy-mm-dd for input[type=date]
 //       if (data?.deliveryDate) {
 //         const d = new Date(data.deliveryDate);
@@ -414,42 +468,28 @@ export default function DeliveryDetails() {
 //     }
 //   };
 
-//   // Pull from your Google Sheets DB (same sheet used elsewhere)
-//   const fetchClientCSV = () => {
-//     const csvUrl =
-//       "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
+//   // Fetch user from Mongo using order.userEmail
+//   useEffect(() => {
+//     const email = (order?.userEmail || "").trim().toLowerCase();
+//     if (!email) return;
+
+//     let cancelled = false;
+//     setUserLoading(true);
+
 //     axios
-//       .get(csvUrl)
-//       .then((response) => setCsvData(parseCSV(response.data)))
-//       .catch((error) => console.error("Error fetching CSV data:", error));
-//   };
+//       .get(`${API}/users/by-email`, { params: { email } })
+//       .then((res) => {
+//         if (!cancelled) setMongoUser(res.data || null);
+//       })
+//       .catch(() => {
+//         if (!cancelled) setMongoUser(null);
+//       })
+//       .finally(() => !cancelled && setUserLoading(false));
 
-//   function parseCSV(csvText) {
-//     const rows = csvText.split(/\r?\n/).filter(Boolean);
-//     const headers = (rows[0] || "").split(",");
-//     const data = [];
-//     for (let i = 1; i < rows.length; i++) {
-//       const cols = rows[i].split(",");
-//       const row = {};
-//       headers.forEach((h, idx) => (row[h] = cols[idx]));
-//       data.push(row);
-//     }
-//     return data;
-//   }
-
-//   // Build a quick lookup: email → { name, company }
-//   const clientLookup = useMemo(() => {
-//     const map = new Map();
-//     csvData.forEach((r) => {
-//       const email = (r.CORREO_EMPRESA || "").trim().toLowerCase();
-//       if (!email) return;
-//       map.set(email, {
-//         name: (r.NOMBRE_APELLIDO || "").trim(),
-//         company: (r.NOMBRE_EMPRESA || "").trim(),
-//       });
-//     });
-//     return map;
-//   }, [csvData]);
+//     return () => {
+//       cancelled = true;
+//     };
+//   }, [order?.userEmail]);
 
 //   // UI helpers
 //   const goToAdminHome = () => navigate("/adminHome");
@@ -518,7 +558,8 @@ export default function DeliveryDetails() {
 //       });
 
 //       setOkMsg("Evidencia subida y pedido marcado como entregado.");
-//       navigate("/delivered");
+//       // navigate("/delivered");
+//       navigate("/adminHome");
 //     } catch (error) {
 //       console.error("Error marking delivered:", error);
 //       setErrMsg(error?.response?.data?.error || error.message || "Error al procesar la entrega.");
@@ -530,11 +571,23 @@ export default function DeliveryDetails() {
 
 //   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
 
-//   // Map email → friendly name & company
-//   const email = (order.userEmail || "").trim().toLowerCase();
-//   const meta = clientLookup.get(email);
-//   const displayName = meta?.name || order.userEmail || "Cliente";
-//   const companyName = meta?.company || "";
+//   // ===== Derived fields from Mongo user =====
+//   const nombre = (mongoUser?.nombre || "").trim();
+//   const apellido = (mongoUser?.apellido || "").trim();
+//   const displayName = [nombre, apellido].filter(Boolean).join(" ") || order.userEmail || "Cliente";
+
+//   const companyName = (mongoUser?.empresa || "").trim();
+
+//   // Shipping preferences from Mongo (preferred carrier + insure flag)
+//   const carrier =
+//     (mongoUser?.shippingPreferences?.preferredCarrier ||
+//       mongoUser?.preferredCarrier ||
+//       "")?.toString().trim() || "";
+
+//   const insureShipment =
+//     mongoUser?.shippingPreferences?.insureShipment ??
+//     mongoUser?.insureShipment ??
+//     null; // boolean or null if not set
 
 //   // Shipping object (new structure)
 //   const s = order.shippingInfo || {};
@@ -569,7 +622,8 @@ export default function DeliveryDetails() {
 //         <label>{companyName || "—"}</label>
 //         <br />
 //         <label>Pedido #{String(order._id).slice(-5)}</label>
-//         <label>Enviado por: {order.shippingPreference || "Sin especificar"}</label>
+//         {/* Enviado por -> preferredCarrier from Mongo */}
+//         <label>Enviado por: {carrier || "Sin especificar"}</label>
 
 //         <div className="deliveryDetails-Div">
 //           <div className="paymentDetails-Div">
@@ -592,18 +646,21 @@ export default function DeliveryDetails() {
 //               </div>
 //             </div>
 
-//             {/* Monto asegurado */}
-//             <div className="headerEditIcon-Div">
-//               <label className="newUserData-Label">Monto Asegurado</label>
-//             </div>
-//             <input
-//               className="deliveryDets-Input"
-//               type="text"
-//               required
-//               placeholder="Ingresar monto"
-//               value={insuredAmount}
-//               onChange={(e) => setInsuredAmount(e.target.value)}
-//             />
+//             {/* Monto asegurado — only if insureShipment === true */}
+//             {insureShipment === true && (
+//               <>
+//                 <div className="headerEditIcon-Div">
+//                   <label className="newUserData-Label">Monto Asegurado</label>
+//                 </div>
+//                 <input
+//                   className="deliveryDets-Input"
+//                   type="text"
+//                   placeholder="Ingresar monto"
+//                   value={insuredAmount}
+//                   onChange={(e) => setInsuredAmount(e.target.value)}
+//                 />
+//               </>
+//             )}
 
 //             {/* Fecha de entrega */}
 //             <div className="headerEditIcon-Div">
