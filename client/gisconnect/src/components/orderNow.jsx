@@ -678,8 +678,10 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
           it.product,
           `${it.presentation || ""}${pack}`,
           String(qty),
-          `$${unit.toFixed(2)} USD`,
-          `$${(qty * unit).toFixed(2)} USD`,
+          `$${fmtNum(unit, "en-US")} USD`,
+          `$${fmtNum(qty * unit, "en-US")} USD`,
+          // `$${unit.toFixed(2)} USD`,
+          // `$${(qty * unit).toFixed(2)} USD`,
         ];
       });
 
@@ -733,7 +735,8 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
       );
       doc.setFontSize(11);
       doc.setFont("helvetica", "bold");
-      doc.text(`Subtotal USD: $${subtotalUSD_pdf.toFixed(2)} USD`, 140, cursorY);
+      // doc.text(`Subtotal USD: $${subtotalUSD_pdf.toFixed(2)} USD`, 140, cursorY);
+      doc.text(`Subtotal USD: $${fmtNum(subtotalUSD_pdf, "en-US")} USD`, 140, cursorY);
       doc.setFont("helvetica", "normal");
       cursorY += 12;
     }
@@ -778,7 +781,10 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
 
     // ========= Resumen Financiero (NATURAL sums + optional desglose) =========
 
-    const fmtUSD_pdf = (v) => `$${(Number(v) || 0).toFixed(2)} USD`;
+    // const fmtUSD_pdf = (v) => `$${(Number(v) || 0).toFixed(2)} USD`;
+    const fmtNum = (v, locale = "en-US") =>
+      (Number(v) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtUSD_pdf = (v) => `$${fmtNum(v, "en-US")} USD`;
     const fmtMXN_pdf = (v) =>
       `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
     const rate = Number.isFinite(dof2) ? dof2 : 0;
