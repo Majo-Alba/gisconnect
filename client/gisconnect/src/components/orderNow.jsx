@@ -794,7 +794,7 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
     // const fmtUSD_pdf = (v) => `$${fmtNum(v, "en-US")} USD`;
     // const fmtMXN_pdf = (v) =>
     //   `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-    // const rate = Number.isFinite(dof2) ? dof2 : 0;
+    const rate = Number.isFinite(dof2) ? dof2 : 0;
     const fmtUSD_pdf = (v) => `$${fmtNum(v, "en-US")} USD`;
     const fmtMXN_pdf = (v) =>
       `$${(Number(v) || 0).toLocaleString("es-MX", {
