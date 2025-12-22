@@ -3046,13 +3046,19 @@ input:checked + .slider:before {
 }
 
 .packingDetails-ButtonDiv{
+  display: grid;
+  grid-template-columns: 60% 40%;
+
+  margin-top: 7%;
+  margin-left: 8%;
+  margin-bottom: 20%;
+
   /* display: grid;
-  grid-template-columns: 60% 40%; */
+  grid-template-columns: 60% 40%;
 
   margin-top: 7%;
   margin-left: 63%;
-  /* margin-right: auto; */
-  margin-bottom: 20%;
+  margin-bottom: 20%; */
 }
 
 /* SHIPPING DETS */

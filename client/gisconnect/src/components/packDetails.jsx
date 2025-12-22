@@ -1,3 +1,4 @@
+// hey chatgpt, in my packDetails.jsx, I'd like to add a "Cancelar" button that - when pressed - "liberates" the order that is being processed by a specific packer and returns the order to the pendingPack.jsx screen. (Example: say packer Santiago has claimed order #1234 but suddenly has to attend something urgent. He hits "Cancelar" button to allow order #1234 to become visible and available again for the other packers). Here is my current packDetails.jsx, please direct edit 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -40,6 +41,7 @@ export default function PackDetails() {
   const goToNewOrders = () => navigate("/newOrders");
   const goToPackageReady = () => navigate("/deliverReady");
   const goHomeLogo = () => navigate("/adminHome");
+  const goToPendingPack = () => navigate("/toPack");
 
   // Load order
   useEffect(() => {
@@ -106,6 +108,28 @@ export default function PackDetails() {
       // ignore release errors
     }
   }, [orderId, packer, claimedByMe]);
+
+  // Cancel button: liberate the order and return to pendingPack screen
+  const handleCancel = async () => {
+    if (!claimedByMe) {
+      // If not claimed by me, just go back to pending
+      goToPendingPack();
+      return;
+    }
+    const ok = window.confirm(
+      "¿Deseas liberar este pedido para que otros encargados puedan tomarlo?"
+    );
+    if (!ok) return;
+    try {
+      setBusy(true);
+      await releaseOrder("cancel");
+    } finally {
+    // prevent double-release on unmount
+    finishedRef.current = true;
+    setBusy(false);
+    goToPendingPack();
+    }
+  };
 
   // When packer is chosen the first time → claim the order
   useEffect(() => {
@@ -357,6 +381,23 @@ export default function PackDetails() {
 
         {/* Action */}
         <div className="packingDetails-ButtonDiv">
+        <button
+            type="button"
+            onClick={handleCancel}
+            disabled={busy || !claimedByMe}
+            className="packDetails-Btn"
+            // style={{
+            //   marginTop: 8,
+            //   padding: "10px 14px",
+            //   borderRadius: 8,
+            //   background: "#eee",
+            //   border: "1px solid #ccc",
+            //   cursor: busy || !claimedByMe ? "not-allowed" : "pointer",
+            // }}
+            title={!claimedByMe ? "Toma el pedido para poder cancelarlo" : "Cancelar y liberar pedido"}
+          >
+          Cancelar
+          </button>
           <button
             className="packDetails-Btn"
             onClick={handleMarkAsReady}
