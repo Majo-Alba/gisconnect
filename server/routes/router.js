@@ -65,6 +65,54 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
 });
 
+// dec21
+// --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
+const CLIENT_DB_URL = process.env.CLIENT_DB_URL || ""; // optional published CSV
+
+async function resolveDisplayNameByEmail(email) {
+  try {
+    const e = String(email || "").trim().toLowerCase();
+    if (!e) return "cliente";
+    // 1) MongoDB (preferred)
+    const u = await newUserModel.findOne({ correo: e }).lean();
+    if (u) {
+      const nombre = (u.nombre || "").toString().trim();
+      const apellido = (u.apellido || "").toString().trim();
+      const full = [nombre, apellido].filter(Boolean).join(" ").trim();
+      if (full) return full;
+      if (nombre) return nombre;
+    }
+    // 2) Google Sheets (optional, if env configured)
+    if (CLIENT_DB_URL) {
+      try {
+        const { data: csv } = await axios.get(CLIENT_DB_URL);
+        // minimal CSV parse
+        const rows = String(csv).split(/\r?\n/).filter(Boolean);
+        if (rows.length > 1) {
+          const headers = rows[0].split(",");
+          const idxCorreo = headers.findIndex(h => /correo/i.test(h));
+          const idxNombre = headers.findIndex(h => /nombre.*apellido/i.test(h));
+          for (let i = 1; i < rows.length; i++) {
+            const cols = rows[i].split(",");
+            const correo = (cols[idxCorreo] || "").trim().toLowerCase();
+            if (correo === e) {
+              const name = (idxNombre >= 0 ? cols[idxNombre] : "").trim();
+              if (name) return name;
+            }
+          }
+        }
+      } catch (_csvErr) {
+        // ignore CSV failures; fallback to email below
+      }
+    }
+    // 3) Fallback
+    return email || "cliente";
+  } catch {
+    return email || "cliente";
+  }
+}
+// dec21
+
 // =========================== USER AUTH ===========================
 
 // Register
@@ -376,16 +424,18 @@ router.post('/orderDets', upload.single('pdf'), async (req, res) => {
     try {
       const shortId = String(created._id || "").slice(-5);
       const userEmail = created.userEmail || created.email || "cliente";
+      const displayName = await resolveDisplayNameByEmail(userEmail);
 
       await notifyStage(
         STAGES.PEDIDO_REALIZADO,
-        // "Nuevo pedido recibido",
         "Nuevo pedido realizado - Pendiente de pago",
-        `Pedido #${shortId} — Cliente: ${userEmail}`,
+        // `Pedido #${shortId} — Cliente: ${userEmail}`,
+        `Pedido #${shortId} — Cliente: ${displayName}`,
         {
           orderId: String(created._id),
           stage: STAGES.PEDIDO_REALIZADO,
           email: userEmail,
+          clientName: displayName,            // NEW: include name in data payload
           orderStatus: created.orderStatus || "",
           trackingNumber: created.trackingNumber || "",
           deepLink: "https://gisconnect-web.onrender.com/adminHome",
@@ -446,6 +496,7 @@ router.patch("/order/:id/status", async (req, res) => {
       const s = (orderStatus || "").trim().toLowerCase();
       const shortId = String(updated._id || "").slice(-5);
       const userEmail = updated.userEmail || updated.email || "cliente";
+      const displayName = await resolveDisplayNameByEmail(userEmail);
 
       let stageToSend = null;
       if (s === "pago verificado")   stageToSend = STAGES.PAGO_VERIFICADO;
@@ -455,9 +506,10 @@ router.patch("/order/:id/status", async (req, res) => {
       if (stageToSend) {
         const titles = {
           [STAGES.PAGO_VERIFICADO]:   "Pago verificado",
-          // [STAGES.PREPARANDO_PEDIDO]: "Preparando pedido",
-          [STAGES.PREPARANDO_PEDIDO]: "Atención Admin: Pedido listo para ser etiquetado",
-          [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
+          // [STAGES.PREPARANDO_PEDIDO]: "Atención Admin: Pedido listo para ser etiquetado",
+          [STAGES.PREPARANDO_PEDIDO]: "Orden en: Gestionar Entrega",
+          // [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
+          [STAGES.PEDIDO_ENTREGADO]:  "Orden en: Pedidos Entregados",
         };
         const bodies = {
           // [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
@@ -466,14 +518,15 @@ router.patch("/order/:id/status", async (req, res) => {
           
           [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para almacén`,
           // [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} empacado`,
-          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} - Cliente: ${userEmail}`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} - Cliente: ${displayName}`,
           // [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
-          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} - Cliente: ${userEmail}`,
+          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} - Cliente: ${displayName}`,
         };
         await notifyStage(stageToSend, titles[stageToSend], bodies[stageToSend], {
           orderId: String(updated._id),
           stage: stageToSend,
           email: userEmail,
+          clientName: displayName,             // NEW
           orderStatus: updated.orderStatus || "",
           deepLink: "https://gisconnect-web.onrender.com/adminHome",
         });
@@ -730,26 +783,27 @@ router.put(
       if (triggeredStages.length > 0) {
         const shortId   = String(updatedOrder._id || "").slice(-5);
         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
+        const displayName = await resolveDisplayNameByEmail(userEmail);
 
         const messageForStage = (stage) => {
           switch (stage) {
             case STAGES.EVIDENCIA_DE_PAGO:
-              return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              // return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+              return { title: "Orden en: Pedidos Nuevos", body: `Pedido #${shortId} — Cliente: ${displayName}` };
             case STAGES.PAGO_VERIFICADO:
-              // return { title: "Pago verificado — Cliente:" + `${userEmail}`, body: `Pedido #${shortId} listo para almacén` };
-              return { title: "Atención Almacen: Pedido listo para empaquetarse", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              // return { title: "Atención Almacen: Pedido listo para empaquetarse", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+              return { title: "Orden en: Por Empacar", body: `Pedido #${shortId} — Cliente: ${displayName}` };
             case STAGES.PREPARANDO_PEDIDO:
-              // return { title: "Preparando pedido", body: `Pedido #${shortId} empacado` };
-              return { title: "Atención Admin: Pedido listo para ser etiquetado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-            case STAGES.ETIQUETA_GENERADA:
-              // return { title: "Etiqueta generada", body: `Pedido #${shortId} etiquetado` };
-              return { title: "Atención Entregas: Pedido listo para ser entregado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              // return { title: "Atención Admin: Pedido listo para ser etiquetado", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+              return { title: "Orden en: Gestionar Entrega", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+              case STAGES.ETIQUETA_GENERADA:
+                // return { title: "Atención Entregas: Pedido listo para ser entregado", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+                return { title: "Orden en: Por Entregar", body: `Pedido #${shortId} — Cliente: ${displayName}` };
             case STAGES.PEDIDO_ENTREGADO:
-              // return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
-              return { title: "Pedido entregado", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              // return { title: "Pedido entregado", body: `Pedido #${shortId} — Cliente: ${displayName}` };
+              return { title: "Orden en: Pedidos Entregados", body: `Pedido #${shortId} — Cliente: ${displayName}` };
             case STAGES.PEDIDO_REALIZADO:
-              // return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-              return { title: "Nuevo pedido realizado - Pendiente de pago", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
+              return { title: "Nuevo pedido realizado - Pendiente de pago", body: `Pedido #${shortId} — Cliente: ${displayName}` };
             default:
               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
           }
@@ -761,6 +815,7 @@ router.put(
             orderId: String(updatedOrder._id),
             stage,
             email: userEmail,
+            clientName: displayName,           // NEW
             orderStatus: updatedOrder.orderStatus || "",
             trackingNumber: nextTracking || "",
             deepLink: "https://gisconnect-web.onrender.com/adminHome",
@@ -956,6 +1011,7 @@ router.patch("/orders/:orderId", async (req, res) => {
       const triggeredStages = [];
       const shortId = String(updated._id || "").slice(-5);
       const userEmail = updated.userEmail || updated.email || "cliente";
+      const displayName = await resolveDisplayNameByEmail(userEmail);
 
       // Status change?
       const prevStatus = (prev.orderStatus || "").trim().toLowerCase();
@@ -976,12 +1032,12 @@ router.patch("/orders/:orderId", async (req, res) => {
       if (triggeredStages.length) {
         const titles = {
           [STAGES.PAGO_VERIFICADO]:   "Pago verificado",
-          // [STAGES.PREPARANDO_PEDIDO]: "Preparando pedido",
-          [STAGES.PREPARANDO_PEDIDO]: "Atención Admin: Pedido listo para ser etiquetado",
-          [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
-          // [STAGES.ETIQUETA_GENERADA]: "Etiqueta generada",
-          [STAGES.ETIQUETA_GENERADA]: "Atención Entregas: Pedido listo para ser entregado",
-
+          // [STAGES.PREPARANDO_PEDIDO]: "Atención Admin: Pedido listo para ser etiquetado",
+          [STAGES.PREPARANDO_PEDIDO]: "Orden en: Gestionar Entrega",
+          // [STAGES.PEDIDO_ENTREGADO]:  "Pedido entregado",
+          [STAGES.PEDIDO_ENTREGADO]:  "Orden en: Pedidos Entregados",
+          // [STAGES.ETIQUETA_GENERADA]: "Atención Entregas: Pedido listo para ser entregado",
+          [STAGES.ETIQUETA_GENERADA]: "Orden en: Por Entregar",
         };
         const bodies = {
           // [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para logística/almacén`,
@@ -991,11 +1047,11 @@ router.patch("/orders/:orderId", async (req, res) => {
           
           [STAGES.PAGO_VERIFICADO]:   `Pedido #${shortId} listo para almacén`,
           // [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} empacado`,
-          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} - Cliente ${userEmail}`,
+          [STAGES.PREPARANDO_PEDIDO]: `Pedido #${shortId} - Cliente ${displayName}`,
           // [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} marcado como entregado`,
-          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} - Cliente ${userEmail}`,
+          [STAGES.PEDIDO_ENTREGADO]:  `Pedido #${shortId} - Cliente ${displayName}`,
           // [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} etiquetado`,
-          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} - Cliente ${userEmail}`,
+          [STAGES.ETIQUETA_GENERADA]: `Pedido #${shortId} - Cliente ${displayName}`,
 
         };
 
@@ -1004,6 +1060,7 @@ router.patch("/orders/:orderId", async (req, res) => {
             orderId: String(updated._id),
             stage,
             email: userEmail,
+            clientName: displayName,           // NEW
             orderStatus: updated.orderStatus || "",
             trackingNumber: updated.trackingNumber || "",
             deepLink: "https://gisconnect-web.onrender.com/adminHome",
@@ -1113,14 +1170,18 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
         try {
           const shortId = String(order._id || "").slice(-5);
           const userEmail = order.userEmail || order.email || "cliente";
+          const displayName = await resolveDisplayNameByEmail(userEmail);
+
           await notifyStage(
             STAGES.EVIDENCIA_DE_PAGO,
-            "Evidencia de pago recibida",
-            `Pedido #${shortId} — Cliente: ${userEmail}`,
+            // "Evidencia de pago recibida",
+            "Orden en: Pedidos Nuevos",
+            `Pedido #${shortId} — Cliente: ${displayName}`,
             {
               orderId: String(order._id),
               stage: STAGES.EVIDENCIA_DE_PAGO,
               email: userEmail,
+              clientName: displayName,         // NEW
               orderStatus: order.orderStatus || "",
               deepLink: "https://gisconnect-web.onrender.com/adminHome",
             }
@@ -1233,14 +1294,18 @@ router.post("/orders/:orderId/evidence/mark-payment", async (req, res) => {
 
       const shortId = String(order._id || "").slice(-5);
       const userEmail = order.userEmail || order.email || "cliente";
+      const displayName = await resolveDisplayNameByEmail(userEmail);
+
       await notifyStage(
         STAGES.EVIDENCIA_DE_PAGO,
-        "Evidencia de pago recibida",
-        `Pedido #${shortId} — Cliente: ${userEmail}`,
+        // "Evidencia de pago recibida",
+        "Orden en: Pedidos Nuevos",
+        `Pedido #${shortId} — Cliente: ${displayName}`,
         {
           orderId: String(order._id),
           stage: STAGES.EVIDENCIA_DE_PAGO,
           email: userEmail,
+          clientName: displayName,             // NEW
           orderStatus: order.orderStatus || "",
           deepLink: "https://gisconnect-web.onrender.com/adminHome",
         }
