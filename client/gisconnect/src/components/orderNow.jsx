@@ -661,6 +661,13 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
     doc.setDrawColor(200, 200, 200);
     doc.line(10, 92, 200, 92);
 
+    // === Helpers (define before any use) ===
+    const fmtNum = (v, locale = "en-US") =>
+      (Number(v) || 0).toLocaleString(locale, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+
     // ========= Items por divisa =========
     const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
     const isMXN = (it) => normCur(it.currency) === "MXN";
@@ -782,12 +789,18 @@ const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
     // ========= Resumen Financiero (NATURAL sums + optional desglose) =========
 
     // const fmtUSD_pdf = (v) => `$${(Number(v) || 0).toFixed(2)} USD`;
-    const fmtNum = (v, locale = "en-US") =>
-      (Number(v) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // const fmtNum = (v, locale = "en-US") =>
+    //   (Number(v) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    // const fmtUSD_pdf = (v) => `$${fmtNum(v, "en-US")} USD`;
+    // const fmtMXN_pdf = (v) =>
+    //   `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+    // const rate = Number.isFinite(dof2) ? dof2 : 0;
     const fmtUSD_pdf = (v) => `$${fmtNum(v, "en-US")} USD`;
     const fmtMXN_pdf = (v) =>
-      `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-    const rate = Number.isFinite(dof2) ? dof2 : 0;
+      `$${(Number(v) || 0).toLocaleString("es-MX", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })} MXN`;
 
     const hasUSD_pdf = usdItems.length > 0;
     const hasMXN_pdf = mxnItems.length > 0;
