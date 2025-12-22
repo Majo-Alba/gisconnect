@@ -9,18 +9,25 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 import { API } from "/src/lib/api";
 
+// === Products catalog (CSV) ===
+const PRODUCTS_CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
+
 export default function DeliveredSummary() {
   const { orderId } = useParams();
   const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
 
-  // === NEW: Mongo user fields (replaces Google Sheets)
+  // === Mongo user fields
   const [displayCustomer, setDisplayCustomer] = useState("");
   const [displayCompany, setDisplayCompany] = useState("");
 
   const [loading, setLoading] = useState(true);
   const [errMsg, setErrMsg] = useState("");
+
+  // === Products CSV (Map keyed by NOMBRE_PRODUCTO)
+  const [catalog, setCatalog] = useState(null);
 
   // ===== Fetch order =====
   useEffect(() => {
@@ -43,7 +50,7 @@ export default function DeliveredSummary() {
     return () => { cancelled = true; };
   }, [orderId]);
 
-  // ===== Fetch user (Mongo) by order.userEmail → { nombre, apellido, empresa }
+  // ===== Fetch user (Mongo)
   useEffect(() => {
     if (!order?.userEmail) return;
     const email = String(order.userEmail || "").trim().toLowerCase();
@@ -65,8 +72,7 @@ export default function DeliveredSummary() {
 
         setDisplayCustomer(fullName || order.userEmail || "");
         setDisplayCompany(empresa || "—");
-      } catch (err) {
-        // Fallbacks if user not found
+      } catch (_err) {
         setDisplayCustomer(order.userEmail || "Cliente");
         setDisplayCompany("—");
       }
@@ -75,39 +81,209 @@ export default function DeliveredSummary() {
     return () => { cancelled = true; };
   }, [order?.userEmail]);
 
+  // ===== Helpers for CSV parsing / matching (NOMBRE_PRODUCTO only) =====
+  const stripAccents = (s) =>
+    String(s ?? "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
+  const norm = (s) =>
+    stripAccents(s)
+      .replace(/\s+/g, " ")
+      .trim()
+      .toLowerCase();
+
+  // Optionally remove presentation bits from names to improve hits, but we still
+  // ONLY use NOMBRE_PRODUCTO column from CSV (no SKU)
+  const baseName = (s) => {
+    let t = String(s || "");
+    t = t.replace(/\s*—\s*.*$/u, ""); // drop “ — …”
+    t = t.replace(/\(.*?\)/g, "");    // drop (…)
+    return norm(t);
+  };
+
+  const normHeader = (s) => norm(s).replace(/[^a-z0-9]/g, "");
+
+  const parseMoney = (v) => {
+    const cleaned = String(v ?? "")
+      .replace(/\$/g, "")
+      .replace(/,/g, "")
+      .replace(/\s+/g, "");
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  // Quote-aware CSV parser
+  function parseCSVQuoted(csvText) {
+    const rows = [];
+    let row = [];
+    let cell = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < csvText.length; i++) {
+      const ch = csvText[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          const next = csvText[i + 1];
+          if (next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = false;
+          }
+        } else {
+          cell += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          row.push(cell);
+          cell = "";
+        } else if (ch === "\n") {
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+        } else if (ch === "\r") {
+          // ignore
+        } else {
+          cell += ch;
+        }
+      }
+    }
+    row.push(cell);
+    if (row.length > 1 || row[0] !== "") rows.push(row);
+    return rows;
+  }
+
+  // ===== Fetch products CSV once (strict NOMBRE_PRODUCTO rules) =====
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data } = await axios.get(PRODUCTS_CSV_URL, { responseType: "text" });
+        if (cancelled) return;
+
+        const table = parseCSVQuoted(data);
+        if (!table.length) { setCatalog(new Map()); return; }
+
+        const headerRow = table[0];
+        const H = {};
+        headerRow.forEach((h, i) => { H[normHeader(h)] = i; });
+
+        const idx = (...variants) => {
+          for (const v of variants) {
+            const k = normHeader(v);
+            if (Object.prototype.hasOwnProperty.call(H, k)) return H[k];
+          }
+          return -1;
+        };
+
+        const iName = idx("NOMBRE_PRODUCTO", "PRODUCTO", "NOMBRE");
+        const iUSD1 = idx("PRECIO_UNITARIO_DOLARES");
+        const iUSD2 = idx("PRECIO_PIEZA_DOLARES");
+        const iMXN1 = idx("PRECIO_UNITARIO_MXN");
+        const iMXN2 = idx("PRECIO_PIEZA_MXN");
+
+        const map = new Map();
+
+        for (let r = 1; r < table.length; r++) {
+          const row = table[r];
+          const nameRaw = iName >= 0 ? row[iName] : "";
+
+          const keyName = norm(nameRaw);
+          const keyBase = baseName(nameRaw);
+
+          // === Currency detection: USD first, else MXN ===
+          const usd = Math.max(
+            iUSD1 >= 0 ? parseMoney(row[iUSD1]) : 0,
+            iUSD2 >= 0 ? parseMoney(row[iUSD2]) : 0
+          );
+          const mxn = Math.max(
+            iMXN1 >= 0 ? parseMoney(row[iMXN1]) : 0,
+            iMXN2 >= 0 ? parseMoney(row[iMXN2]) : 0
+          );
+
+          let currency;
+          if (usd > 0) currency = "USD";
+          else if (mxn > 0) currency = "MXN";
+          else currency = "MXN"; // default if neither present
+
+          const entry = {
+            currency,
+            unitUSD: usd || null,
+            unitMXN: mxn || null,
+          };
+
+          if (keyName) map.set(`name:${keyName}`, entry);
+          if (keyBase) map.set(`base:${keyBase}`, entry);
+        }
+
+        setCatalog(map);
+      } catch (e) {
+        console.warn("Failed to load PRODUCTS_CSV_URL:", e);
+        setCatalog(new Map());
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, []);
+
   // ===== Navigation =====
   const goToAdminHome = () => navigate("/adminHome");
   const goToNewOrders = () => navigate("/newOrders");
   const goToPackageReady = () => navigate("/deliverReady");
 
   // ===== Helpers =====
+  // const formatDate = (value) => {
+  //   if (!value) return "Sin fecha";
+  //   const s = String(value);
+  //   let d;
+  //   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+  //     const [Y, M, D] = s.split("-").map(Number);
+  //     d = new Date(Y, M - 1, D);
+  //   } else {
+  //     d = new Date(value);
+  //   }
+  //   if (isNaN(d.getTime())) return "Sin fecha";
+  //   const day = d.getDate().toString().padStart(2, "0");
+  //   const month = d.toLocaleString("es-MX", { month: "short" });
+  //   const year = d.getFullYear();
+  //   return `${day}/${month}/${year}`;
+  // };
   const formatDate = (value) => {
     if (!value) return "Sin fecha";
-    const d = new Date(value);
-    if (isNaN(d.getTime())) return "Sin fecha";
-    const day = d.getDate().toString().padStart(2, "0");
-    const month = d.toLocaleString("es-MX", { month: "short" });
-    const year = d.getFullYear();
+    const s = String(value);
+  
+    // If we have a pure YMD or an ISO with time (e.g., ...Z), always render the YMD part as local calendar date
+    const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m) {
+      const [Y, M, D] = m[1].split("-").map(Number);
+      const d = new Date(Y, M - 1, D); // local date, no TZ shift
+      const day = d.getDate().toString().padStart(2, "0");
+      const month = d.toLocaleString("es-MX", { month: "short" });
+      const year = d.getFullYear();
+      return `${day}/${month}/${year}`;
+    }
+  
+    // Fallback for other formats
+    const d2 = new Date(s);
+    if (isNaN(d2.getTime())) return "Sin fecha";
+    const day = d2.getDate().toString().padStart(2, "0");
+    const month = d2.toLocaleString("es-MX", { month: "short" });
+    const year = d2.getFullYear();
     return `${day}/${month}/${year}`;
   };
-  const asCurrency = (amount, currency = "MXN") => {
-    const num = Number(amount);
-    if (!Number.isFinite(num)) return `— ${currency}`;
-    const opts =
-      currency === "USD"
-        ? { style: "currency", currency: "USD", maximumFractionDigits: 2 }
-        : { style: "currency", currency: "MXN", maximumFractionDigits: 2 };
-    return num.toLocaleString("es-MX", opts);
-  };
-  const asNumber = (amount) => {
-    const num = Number(amount);
-    if (!Number.isFinite(num)) return "—";
-    return num.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-  function isProbablyUrl(s) {
+
+  const fmtMoney = (n, locale = "es-MX") =>
+    (Number(n) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const isProbablyUrl = (s) => {
     if (!s || typeof s !== "string") return false;
     try { const u = new URL(s); return !!u.protocol && !!u.host; } catch { return false; }
-  }
+  };
 
   // Address extractor (OBJECT-first, legacy array fallback)
   function extractAddress(addr) {
@@ -158,7 +334,7 @@ export default function DeliveredSummary() {
     };
   }
 
-  // Evidence download URLs (adjust to your Express routes if different)
+  // Evidence URLs (legacy endpoints remain as fallback)
   const fileUrl = (kind, idx) => {
     switch (kind) {
       case "payment": return `${API}/orders/${orderId}/evidence/payment`;
@@ -173,22 +349,99 @@ export default function DeliveredSummary() {
   const billing = extractAddress(order?.billingInfo);
 
   const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
-  const normItems = useMemo(() => {
+
+  // Decorate items using ONLY NOMBRE_PRODUCTO-based mapping:
+  // 1) Find product by name (exact normalized) OR baseName in CSV under NOMBRE_PRODUCTO
+  // 2) If either USD price column exists → USD; else if either MXN price column exists → MXN; else MXN
+  // 3) Unit price: prefer CSV currency-specific unit; else fallback to item.price
+  const decoratedItems = useMemo(() => {
+    const map = catalog;
+    const toNum = (v) => (Number(v) || 0);
+
     return items.map((it) => {
       const qty = Number(it?.amount) || 0;
-      const unit = Number(it?.price) || 0; // schema: price is Number (no currency)
+
+      const nameFull = norm(it.product || it.name || it.nombre);
+      const nameBase = baseName(it.product || it.name || it.nombre);
+
+      let cat = null;
+      if (map) {
+        cat = map.get(`name:${nameFull}`) || map.get(`base:${nameBase}`) || null;
+      }
+
+      // Currency strictly by CSV rules; if not found, default MXN
+      const detectedCurrency = (cat?.currency || "MXN").toUpperCase();
+
+      // Unit price per detected currency (prefer CSV), else item.price
+      const unit = toNum(it?.price ?? it?.priceUSD ?? it?.priceMXN);
+      // let unit = 0;
+      // if (detectedCurrency === "USD") {
+      //   unit = Number(cat?.unitUSD) || Number(it?.priceUSD) || Number(it?.price) || 0;
+      // } else {
+      //   unit = Number(cat?.unitMXN) || Number(it?.priceMXN) || Number(it?.price) || 0;
+      // }
+
       return {
         ...it,
-        _qty: qty,
+        _currency: detectedCurrency,
         _unit: unit,
+        _qty: qty,
         _lineTotal: qty * unit,
       };
     });
-  }, [items]);
+  }, [items, catalog]);
 
-  // Pull totals from schema (first entry)
-  const T = order?.totals && order.totals.length > 0 ? order.totals[0] : null;
+  // Pull totals/DOF safely (object or [0])
+  const totalsObj = useMemo(() => {
+    const t = order?.totals;
+    if (!t) return null;
+    if (Array.isArray(t)) return t[0] || null;
+    if (typeof t === "object") return t;
+    return null;
+  }, [order]);
+
   const requestBill = !!order?.requestBill;
+  const dofRate =
+    Number(totalsObj?.dofRate) > 0 ? Number(totalsObj.dofRate) :
+    Number(order?.dofRate) > 0 ? Number(order.dofRate) :
+    undefined;
+  const dofDate = totalsObj?.dofDate || order?.dofDate || "";
+
+  const preferred = String(order?.preferredCurrency || "USD").toUpperCase();
+
+  // Subtotals by native currency
+  const buckets = decoratedItems.reduce(
+    (acc, it) => {
+      if (it._currency === "USD") acc.usd += it._lineTotal;
+      else acc.mxn += it._lineTotal;
+      return acc;
+    },
+    { usd: 0, mxn: 0 }
+  );
+
+  const isMixed = buckets.usd > 0 && buckets.mxn > 0;
+  const canConvert = Number.isFinite(dofRate) && dofRate > 0;
+
+  // VAT handling for "Final"
+  const addIVA = (n) => (requestBill ? n * 1.16 : n);
+
+  // Compute finals
+  const finalUSD = addIVA(buckets.usd); // USD bucket payable in USD when present
+  let finalMXNValue;
+  let mxnNote = "";
+  if (preferred === "MXN") {
+    if (isMixed && canConvert) {
+      finalMXNValue = addIVA(buckets.mxn + buckets.usd * dofRate);
+    } else if (isMixed && !canConvert) {
+      finalMXNValue = addIVA(buckets.mxn);
+      mxnNote = "* No hay TC DOF guardado; se muestran subtotales por divisa.";
+    } else {
+      finalMXNValue = addIVA(buckets.mxn);
+    }
+  } else {
+    // preferred USD → MXN items remain payable in MXN (no global combine)
+    finalMXNValue = addIVA(buckets.mxn);
+  }
 
   if (loading) return <p>Cargando resumen de entrega...</p>;
   if (errMsg) return <p>{errMsg}</p>;
@@ -230,15 +483,27 @@ export default function DeliveredSummary() {
             </div>
 
             <div className="orderDelivered-ProductsDiv">
-              {normItems.length > 0 ? (
+              {decoratedItems.length > 0 ? (
                 <>
-                  {normItems.map((item, index) => (
+                  {decoratedItems.map((item, index) => (
                     <div key={index} className="newOrderDets-Div">
                       <div className="orderDetails-Div">
                         <label className="orderDets-Label"><b>{item.product}</b></label>
+
+                        {/* Presentación (between name and Cantidad) */}
+                        {item.presentation && (
+                          <label className="orderDets-Label">
+                            <b>Presentación:</b> {item.presentation}
+                          </label>
+                        )}
+
                         <label className="orderDets-Label"><b>Cantidad:</b> {item._qty}</label>
-                        <label className="orderDets-Label"><b>Precio Unitario:</b> {asNumber(item._unit)}</label>
-                        <label className="newOrderDetsTotal-Label"><b>Total línea:</b> {asNumber(item._lineTotal)}</label>
+                        <label className="orderDets-Label">
+                          <b>Precio Unitario:</b> ${fmtMoney(item._unit, item._currency === "USD" ? "en-US" : "es-MX")} {item._currency}
+                        </label>
+                        <label className="newOrderDetsTotal-Label">
+                          <b>Total del producto:</b> ${fmtMoney(item._lineTotal, item._currency === "USD" ? "en-US" : "es-MX")} {item._currency}
+                        </label>
                       </div>
                     </div>
                   ))}
@@ -248,41 +513,49 @@ export default function DeliveredSummary() {
               )}
             </div>
 
-            {/* ========== Totales (desde order.totals[0]) ========== */}
-            {T && (
-              <div className="newOrderDets-Div" style={{ marginTop: 8 }}>
-                <div className="orderDetails-Div">
-                  <label className="orderDets-Label">
-                    <b>Subtotal USD (nativo):</b> {asCurrency(T.totalUSDNative, "USD")} USD
-                  </label>
-                  <label className="orderDets-Label">
-                    <b>Subtotal MXN (nativo):</b> {asCurrency(T.totalMXNNative, "MXN")} MXN
-                  </label>
+            {/* ========== Totales financieros ========== */}
+            <div className="headerEditIcon-Div">
+              <label className="newUserData-Label">Resumen Financiero</label>
+            </div>
 
-                  <label className="orderDets-Label">
-                    <b>Total USD (unificado):</b> {asCurrency(T.totalAllUSD, "USD")} USD
-                  </label>
-                  <label className="orderDets-Label">
-                    <b>Total MXN (unificado):</b> {asCurrency(T.totalAllMXN, "MXN")} MXN
-                  </label>
+            <div className="orderDelivered-ProductsDiv" style={{ marginTop: 8 }}>
+              <div className="orderDetails-Div">
+                {/* Subtotales nativos */}
+                <label className="orderDets-Label"  style={{ fontSize: 12, marginBottom: 4}}>
+                  <b>Subtotal USD (nativo):</b> ${fmtMoney(buckets.usd, "en-US")} USD
+                </label>
+                <label className="orderDets-Label" style={{ fontSize: 12}}>
+                  <b>Subtotal MXN (nativo):</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
+                </label>
 
+                {/* Finales */}
+                {buckets.usd > 0 && (
                   <label className="newOrderDetsTotal-Label">
-                    <b>Final USD{requestBill ? " (con IVA)" : ""}:</b>{" "}
-                    {asCurrency(requestBill ? T.finalAllUSD : T.totalAllUSD, "USD")} USD
+                    <b>Final USD{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalUSD, "en-US")} USD
                   </label>
-                  <label className="newOrderDetsTotal-Label">
-                    <b>Final MXN{requestBill ? " (con IVA)" : ""}:</b>{" "}
-                    {asCurrency(requestBill ? T.finalAllMXN : T.totalAllMXN, "MXN")} MXN
-                  </label>
+                )}
 
+                <label className="newOrderDetsTotal-Label">
+                  <b>Final MXN{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalMXNValue, "es-MX")} MXN
+                </label>
+
+                {/* Detail note for conversion when applicable */}
+                {preferred === "MXN" && isMixed && (
                   <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
-                    {T?.dofRate
-                      ? `Tipo de cambio DOF ${T.dofDate || ""}: $${Number(T.dofRate).toFixed(2)} MXN/USD`
-                      : "Tipo de cambio DOF no disponible"}
+                    {canConvert
+                      ? `Detalle: USD $${fmtMoney(buckets.usd, "en-US")} × ${fmtMoney(dofRate, "es-MX")} = $${fmtMoney(buckets.usd * dofRate, "es-MX")}  + MXN nativo $${fmtMoney(buckets.mxn, "es-MX")}${dofDate ? `  (DOF ${dofDate})` : ""}`
+                      : "* No hay TC DOF guardado; se muestran subtotales por divisa."}
                   </div>
-                </div>
+                )}
+
+                {/* Mixed orders policy */}
+                {isMixed && (
+                  <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 6 }}>
+                    IMPORTANTE: Los artículos cotizados en MXN deben pagarse en MXN.
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
             {/* ========== Dirección de Envío ========== */}
             <div className="deliveryDets-AddressDiv">
@@ -320,7 +593,7 @@ export default function DeliveredSummary() {
                     {billing.businessName && (<label className="productDetail-Label"><b>Razón Social:</b> {billing.businessName}</label>)}
                     {billing.rfc && (<label className="productDetail-Label"><b>RFC:</b> {billing.rfc}</label>)}
                     {billing.email && (<label className="productDetail-Label"><b>Correo:</b> {billing.email}</label>)}
-                    {billing.phone && (<label className="productDetail-Label"><b>Teléfono:</b> {billing.phone}</label>)}<br></br>
+                    {billing.phone && (<label className="productDetail-Label"><b>Teléfono:</b> {billing.phone}</label>)}<br/>
                     {(billing.billingStreet || billing.billingExterior || billing.billingInterior) && (
                       <label className="productDetail-Label">
                         {billing.billingStreet} {billing.billingExterior}
@@ -380,8 +653,18 @@ export default function DeliveredSummary() {
               </div>
               <div className="existingQuote-Div">
                 <div className="quoteAndFile-Div">
-                  {/* Payment evidence (single) */}
-                  {order?.evidenceFile?.filename && (
+                  {/* Payment evidence (new ext field first) */}
+                  {order?.evidenceFileExt?.url ? (
+                    <a
+                      href={order.evidenceFileExt.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="productDetail-Label"
+                      style={{ textDecoration: "underline" }}
+                    >
+                      <b>Pago:</b> {order.evidenceFileExt.filename || "evidencia_de_pago"}
+                    </a>
+                  ) : order?.evidenceFile?.filename ? (
                     <a
                       href={fileUrl("payment")}
                       target="_blank"
@@ -391,16 +674,34 @@ export default function DeliveredSummary() {
                     >
                       <b>Pago:</b> {order.evidenceFile.filename}
                     </a>
-                  )}
+                  ) : null}
 
-                  {/* Packing evidence (multiple) */}
-                  {Array.isArray(order?.packingEvidence) && order.packingEvidence.length > 0 && (
+                  {/* Packing evidence (new ext array first) */}
+                  {Array.isArray(order?.packingEvidenceExt) && order.packingEvidenceExt.length > 0 ? (
+                    <>
+                      <label className="productDetail-Label"><b>Empaque:</b></label>
+                      {order.packingEvidenceExt.map((f, idx) => (
+                        f?.url ? (
+                          <a
+                            key={`p-ext-${idx}`}
+                            href={f.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="productDetail-Label"
+                            style={{ textDecoration: "underline", display: "block", marginLeft: 12 }}
+                          >
+                            • {f.filename || `evidencia_${idx + 1}`}
+                          </a>
+                        ) : null
+                      ))}
+                    </>
+                  ) : Array.isArray(order?.packingEvidence) && order.packingEvidence.length > 0 ? (
                     <>
                       <label className="productDetail-Label"><b>Empaque:</b></label>
                       {order.packingEvidence.map((f, idx) =>
                         f?.filename ? (
                           <a
-                            key={idx}
+                            key={`p-legacy-${idx}`}
                             href={fileUrl("packing", idx)}
                             target="_blank"
                             rel="noreferrer"
@@ -412,10 +713,20 @@ export default function DeliveredSummary() {
                         ) : null
                       )}
                     </>
-                  )}
+                  ) : null}
 
-                  {/* Delivery evidence (single) */}
-                  {order?.deliveryEvidence?.filename && (
+                  {/* Delivery evidence (new ext optional; else legacy endpoint) */}
+                  {order?.deliveryEvidenceExt?.url ? (
+                    <a
+                      href={order.deliveryEvidenceExt.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="productDetail-Label"
+                      style={{ textDecoration: "underline" }}
+                    >
+                      <b>Entrega:</b> {order.deliveryEvidenceExt.filename || "evidencia_de_entrega"}
+                    </a>
+                  ) : order?.deliveryEvidence?.filename ? (
                     <a
                       href={fileUrl("delivery")}
                       target="_blank"
@@ -425,10 +736,10 @@ export default function DeliveredSummary() {
                     >
                       <b>Entrega:</b> {order.deliveryEvidence.filename}
                     </a>
-                  )}
+                  ) : null}
 
-                  {/* Legacy fallbacks */}
-                  {order?.packEvidenceImage && !order?.packingEvidence?.length && (
+                  {/* Ultra-legacy fallbacks */}
+                  {order?.packEvidenceImage && !order?.packingEvidence?.length && !order?.packingEvidenceExt?.length && (
                     isProbablyUrl(order.packEvidenceImage) ? (
                       <a
                         href={order.packEvidenceImage}
@@ -465,14 +776,17 @@ export default function DeliveredSummary() {
               </div>
               <div className="existingQuote-Div">
                 <div className="quoteAndFile-Div">
-                  <label className="productDetail-Label">
+                  {/* <label className="productDetail-Label">
                     Fecha de entrega: <label>{formatDate(order?.deliveryDate)}</label>
+                  </label> */}
+                  <label className="productDetail-Label">
+                    Fecha de entrega: <label>{formatDate(order?.deliveryDateYMD || order?.deliveryDate)}</label>
                   </label>
                   {order?.trackingNumber && (
                     <label className="productDetail-Label">Número de guía: {order.trackingNumber}</label>
                   )}
                   {order?.insuredAmount != null && order?.insuredAmount !== "" && (
-                    <label className="productDetail-Label"><b>Monto asegurado:</b> {asCurrency(order.insuredAmount, "MXN")}</label>
+                    <label className="productDetail-Label"><b>Monto asegurado:</b> ${fmtMoney(order.insuredAmount, "es-MX")} MXN</label>
                   )}
                 </div>
               </div>
@@ -503,8 +817,11 @@ export default function DeliveredSummary() {
   );
 }
 
-// // this is my deliveredSummary.jsx file. Can you add same logic of withdrawing username and company from mongoDB rather than using userEmail like we are currently doing. Please make direct edit 
 
+
+
+
+// // Hey chatgpt, in my deliveredSummary.jsx file I'd like to make the following modifs: For each products description, add param "Presentacion" that inlcudes products presentation (insert that field between product name and "Cantidad"), connect to PRODUCTS_CSV_URL=https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv to add correct currency for each product (just as we previously did), change "Total Linea" for "Total del producto", for the financial summary leave the fields "Subtotal USD" & "Subtotal MXN", but get rid of "Total USD" & "Total MXN". As for "Final USD" & "Final MXN", apply same logic as previously stated to handle USD-listed products, MXN-listed products and mixed orders, in the "Evidencias" field, we aren't getting any of the images stored displayed. These are stored in mongodb as "packingEvidenceExt" and "evidenceFileExt". Lastly, "Fecha de entrega" doesnt match with the "Fecha de entrega" user inputs in deliveryDetails.jsx. Here is my current deliveredSummary.jsx, please direct edit
 // import { useEffect, useMemo, useState } from "react";
 // import { useParams, useNavigate } from "react-router-dom";
 // import axios from "axios";
@@ -513,7 +830,6 @@ export default function DeliveredSummary() {
 // import summaryIcon from "/src/assets/images/Icono_fileDownload.png";
 // import { faHouse, faCartShopping, faCheckToSlot } from "@fortawesome/free-solid-svg-icons";
 // import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-// // import ShippingAddress from "../../../../server/models/ShippingAddress";
 
 // import { API } from "/src/lib/api";
 
@@ -523,16 +839,12 @@ export default function DeliveredSummary() {
 
 //   const [order, setOrder] = useState(null);
 
-//   // Client DB (Google Sheet)
-//   const [csvClientData, setCsvClientData] = useState([]);
+//   // === NEW: Mongo user fields (replaces Google Sheets)
 //   const [displayCustomer, setDisplayCustomer] = useState("");
 //   const [displayCompany, setDisplayCompany] = useState("");
 
 //   const [loading, setLoading] = useState(true);
 //   const [errMsg, setErrMsg] = useState("");
-
-//   const CLIENT_DB_URL =
-//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
 
 //   // ===== Fetch order =====
 //   useEffect(() => {
@@ -555,36 +867,37 @@ export default function DeliveredSummary() {
 //     return () => { cancelled = true; };
 //   }, [orderId]);
 
-//   // ===== Client DB CSV =====
+//   // ===== Fetch user (Mongo) by order.userEmail → { nombre, apellido, empresa }
 //   useEffect(() => {
-//     axios
-//       .get(CLIENT_DB_URL)
-//       .then((res) => setCsvClientData(parseCSV(res.data)))
-//       .catch((err) => console.error("Error fetching CLIENT DB CSV:", err));
-//   }, []);
+//     if (!order?.userEmail) return;
+//     const email = String(order.userEmail || "").trim().toLowerCase();
+//     if (!email) return;
 
-//   // Resolve names from client DB (by email)
-//   useEffect(() => {
-//     if (!order) return;
+//     let cancelled = false;
 
-//     const fbName = (order.customerName || order.userName || order.userEmail || "").toString().trim();
-//     const fbCompany = (order.companyName || "").toString().trim();
-//     if (fbName && !displayCustomer) setDisplayCustomer(fbName);
-//     if (fbCompany && !displayCompany) setDisplayCompany(fbCompany);
+//     (async () => {
+//       try {
+//         const { data: user } = await axios.get(`${API}/users/by-email`, {
+//           params: { email },
+//         });
+//         if (cancelled) return;
 
-//     if (csvClientData.length === 0) return;
+//         const nombre = (user?.nombre || "").trim();
+//         const apellido = (user?.apellido || "").trim();
+//         const fullName = [nombre, apellido].filter(Boolean).join(" ");
+//         const empresa = (user?.empresa || "").trim();
 
-//     const row = findClientRowByEmail(order.userEmail, csvClientData);
-//     if (row) {
-//       const fullName =
-//         row.NOMBRE_APELLIDO || row.NOMBRE_COMPLETO || row.FULL_NAME || "";
-//       const company =
-//         row.NOMBRE_EMPRESA || row.EMPRESA || row.RAZON_SOCIAL || row.EMPRESA_CLIENTE || "";
-//       if (fullName) setDisplayCustomer(fullName.toString().trim());
-//       if (company) setDisplayCompany(company.toString().trim());
-//     }
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, [order, csvClientData]);
+//         setDisplayCustomer(fullName || order.userEmail || "");
+//         setDisplayCompany(empresa || "—");
+//       } catch (err) {
+//         // Fallbacks if user not found
+//         setDisplayCustomer(order.userEmail || "Cliente");
+//         setDisplayCompany("—");
+//       }
+//     })();
+
+//     return () => { cancelled = true; };
+//   }, [order?.userEmail]);
 
 //   // ===== Navigation =====
 //   const goToAdminHome = () => navigate("/adminHome");
@@ -592,21 +905,6 @@ export default function DeliveredSummary() {
 //   const goToPackageReady = () => navigate("/deliverReady");
 
 //   // ===== Helpers =====
-//   function parseCSV(csvText) {
-//     const rows = csvText.split(/\r\n/).filter(Boolean);
-//     const headers = rows[0].split(",").map((h) => h.trim());
-//     return rows.slice(1).map((line) => {
-//       const cols = line.split(",");
-//       const obj = {};
-//       headers.forEach((h, i) => (obj[h] = (cols[i] || "").trim()));
-//       return obj;
-//     });
-//   }
-//   const normalize = (s) => (s ?? "").toString().trim().toLowerCase();
-//   function findClientRowByEmail(email, rows) {
-//     if (!email) return null;
-//     return rows.find((r) => normalize(r.CORREO_EMPRESA) === normalize(email)) || null;
-//   }
 //   const formatDate = (value) => {
 //     if (!value) return "Sin fecha";
 //     const d = new Date(value);
@@ -686,10 +984,6 @@ export default function DeliveredSummary() {
 
 //   // Evidence download URLs (adjust to your Express routes if different)
 //   const fileUrl = (kind, idx) => {
-//     // Suggested routes:
-//     //  GET /orders/:orderId/evidence/payment
-//     //  GET /orders/:orderId/evidence/delivery
-//     //  GET /orders/:orderId/evidence/packing/:index
 //     switch (kind) {
 //       case "payment": return `${API}/orders/${orderId}/evidence/payment`;
 //       case "delivery": return `${API}/orders/${orderId}/evidence/delivery`;

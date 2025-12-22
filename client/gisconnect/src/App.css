@@ -3139,6 +3139,13 @@ input:checked + .slider:before {
 }
 
 /* GIS CONNECT: DELIVERY SUMMARY - ADMIN */
+.delivered-FinancialSummaryDiv{
+  background-color: rgb(236, 236, 236);
+  margin-top: 5%;
+  margin-bottom: 5%;
+  width: 80%;
+}
+
 .orderDelivered-screenScroll{
   height:650px;
   overflow-y:scroll;

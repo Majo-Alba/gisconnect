@@ -154,6 +154,62 @@ export default function DeliveryDetails() {
     setOkMsg("");
   };
 
+  // const markAsDelivered = async () => {
+  //   if (!order?._id) return;
+  //   if (!deliveryImage) {
+  //     alert("Selecciona una imagen de entrega.");
+  //     return;
+  //   }
+  //   if (!deliveryDate) {
+  //     alert("Seleccione la fecha de entrega.");
+  //     return;
+  //   }
+
+  //   setBusy(true);
+  //   setProgress(0);
+  //   setErrMsg("");
+  //   setOkMsg("");
+
+  //   try {
+  //     // 1) Upload delivery evidence
+  //     const form = new FormData();
+  //     form.append("deliveryImage", deliveryImage);
+
+  //     await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
+  //       onUploadProgress: (pe) => {
+  //         if (!pe.total) return;
+  //         setProgress(Math.round((pe.loaded / pe.total) * 100));
+  //       },
+  //     });
+
+  //     // 2) Update delivery meta on the order (send numeric insuredAmount if available)
+  //     await fetch(`${API}/orders/${order._id}`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         insuredAmount: insuredAmount != null ? Number(insuredAmount) : undefined,
+  //         deliveryDate, // yyyy-mm-dd
+  //         trackingNumber,
+  //       }),
+  //     });
+
+  //     // 3) Update status to "Pedido Entregado"
+  //     await fetch(`${API}/order/${order._id}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Pedido Entregado" }),
+  //     });
+
+  //     setOkMsg("Evidencia subida y pedido marcado como entregado.");
+  //     navigate("/adminHome");
+  //   } catch (error) {
+  //     console.error("Error marking delivered:", error);
+  //     setErrMsg(error?.response?.data?.error || error.message || "Error al procesar la entrega.");
+  //   } finally {
+  //     setBusy(false);
+  //     setTimeout(() => setProgress(0), 800);
+  //   }
+  // };
   const markAsDelivered = async () => {
     if (!order?._id) return;
     if (!deliveryImage) {
@@ -164,42 +220,43 @@ export default function DeliveryDetails() {
       alert("Seleccione la fecha de entrega.");
       return;
     }
-
+  
     setBusy(true);
     setProgress(0);
     setErrMsg("");
     setOkMsg("");
-
+  
     try {
       // 1) Upload delivery evidence
       const form = new FormData();
       form.append("deliveryImage", deliveryImage);
-
+  
       await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
         onUploadProgress: (pe) => {
           if (!pe.total) return;
           setProgress(Math.round((pe.loaded / pe.total) * 100));
         },
       });
-
-      // 2) Update delivery meta on the order (send numeric insuredAmount if available)
-      await fetch(`${API}/orders/${order._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          insuredAmount: insuredAmount != null ? Number(insuredAmount) : undefined,
-          deliveryDate, // yyyy-mm-dd
-          trackingNumber,
-        }),
+  
+      // Build a safe ISO at local noon to avoid previous-day shifts when stored as UTC
+      const safeLocalNoonISO = new Date(`${deliveryDate}T12:00:00`).toISOString();
+  
+      // 2) Persist delivery meta (use PUT for consistency with your other updates)
+      await axios.put(`${API}/orders/${order._id}`, {
+        insuredAmount: insuredAmount != null ? Number(insuredAmount) : undefined,
+        trackingNumber,
+        // Send both a pure YMD and an ISO; server can store either
+        deliveryDateYMD: deliveryDate,     // "YYYY-MM-DD" (string)
+        deliveryDate: safeLocalNoonISO,    // ISO "YYYY-MM-DDT12:00:00.000Z"
       });
-
+  
       // 3) Update status to "Pedido Entregado"
       await fetch(`${API}/order/${order._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderStatus: "Pedido Entregado" }),
       });
-
+  
       setOkMsg("Evidencia subida y pedido marcado como entregado.");
       navigate("/adminHome");
     } catch (error) {
@@ -210,6 +267,7 @@ export default function DeliveryDetails() {
       setTimeout(() => setProgress(0), 800);
     }
   };
+  
 
   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
 
