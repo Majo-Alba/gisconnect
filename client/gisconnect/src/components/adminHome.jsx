@@ -18,6 +18,7 @@ import PorEmpacarIcono from "/src/assets/images/Icono_porEmpacar.png"
 import GestionaIcono from "/src/assets/images/Icono_gestionarEntrega.png"
 import PorEntregarIcono from "/src/assets/images/Icono_porEntregar.png"
 import EntregadoIcono from "/src/assets/images/Icono_entregado.png"
+import EmpacandoIcono from "/src/assets/images/Icono_packing.png"
 
 // import { registerAdminPushToken, refreshAdminPushToken, getCurrentFcmToken } from "../lib/pushClient";
 import { registerAdminPushToken, getCurrentFcmToken } from "../lib/pushClient";
@@ -150,6 +151,8 @@ export default function AdminHome() {
   function goToPackageReady() { navigate("/deliverReady"); }
   function goToDelivered() { navigate("/delivered"); }
   function goToAdminHome() { navigate("/adminHome"); }
+  function goToPackInProcess() { navigate("/packing"); }
+
 
   // SEP19
   // (NEW) Helper to ping the service worker and show a test notification
@@ -310,6 +313,10 @@ export default function AdminHome() {
         <div className="adminHome-iconLabel-Div" onClick={goToForPacking}>
           <img className="homeQuoter-Icon" src={PorEmpacarIcono} alt="Home Icon" width="50" height="50"/>
           <label className="homeIcon-Label">Por <br/>empacar</label>
+        </div>
+        <div className="adminHome-iconLabel-Div" onClick={goToPackInProcess}>
+          <img className="homeQuoter-Icon" src={EmpacandoIcono} alt="Home Icon" width="50" height="50"/>
+          <label className="homeIcon-Label">Empacando</label>
         </div>
         <div className="adminHome-iconLabel-Div" onClick={goToManageDelivery}>
           <img className="homeQuoter-Icon" src={GestionaIcono} alt="Home Icon" width="50" height="50"/>

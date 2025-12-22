@@ -39,6 +39,7 @@ import ManageDeliveryDetails from './components/manageDeliveryDetails'
 import DeliveredSummary from './components/deliveredSummary'
 import NoAccess from './components/NoAccess'
 import ManageAddresses from './components/ManageAddresses'
+import PackInProcess from './components/packInProcess'
 // GISCONNECT - END
 
 function AdminRoute({ pathPrefix, Component }) {
@@ -131,6 +132,7 @@ function App() {
             <Route path='/quotes' element={<AdminRoute pathPrefix="/quotes" Component={GeneratedQuotes} />}/>
             <Route path='/toPack' element={<AdminRoute pathPrefix="/toPack" Component={PendingPack} />}/>
             <Route path='/packDetails/:orderId' element={<AdminRoute pathPrefix="/packDetails" Component={PackDetails} />}/>
+            <Route path='/packing' element={<AdminRoute pathPrefix="/packing" Component={PackInProcess} />}/>
             <Route path='/manageDelivery' element={<AdminRoute pathPrefix="/manageDelivery" Component={ManageDelivery} />}/>
             <Route path='/manageDelivery/:orderId' element={<AdminRoute pathPrefix="/manageDelivery" Component={ManageDeliveryDetails} />}/>
             <Route path='/deliverReady' element={<AdminRoute pathPrefix="/deliverReady" Component={DeliverReady} />}/>
