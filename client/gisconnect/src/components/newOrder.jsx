@@ -1291,6 +1291,8 @@ export default function NewOrder() {
     </body>
   );
 }
+
+
 // // following on polishing our PDF, as part of file expressQuote.jsx we allow the user to select currency in which he wants to pay - either USD or MXN. However we have a limitation: If a product is listed in USD, the user can decide to pay either in USD or translate currency to MXN. If a product is listed in MXN it can ONLY be payed in MXN. In mixed orderes, where the user has products in USD and MXN, if user selects paying in USD, he'll have "split total" showing amount to pay in USD for USD-listed products and amount to pay in MXN for MXN-listed products. On the other hand, if the user has mixed order and selects MXN as desired currency, then USD-listed items are converted using DOF Rate and the user is predented with a global total expressed in MXN. As an extra, if a user has a mixed order, please add legend "IMPORTANTE:En órdenes mixtas, donde se tengan articulos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN". Following this logic and with all that is already setup, can you help me add the "financial summaries" for the PDF. Here is current expressQuote.jsx, can you help me do a direct edit to code 
 // import { useState, useEffect } from "react";
 // import { Link, useNavigate } from "react-router-dom";

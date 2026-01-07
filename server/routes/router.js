@@ -2077,6 +2077,143 @@ router.post("/orders/:id/mark-ready", async (req, res) => {
 });
 // Nov24
 
+// Claim delivery (atomic, no state checks beyond "is it already claimed by someone else?")
+router.post("/orders/:id/claim-delivery", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { deliverer } = req.body || {};
+    if (!deliverer) return res.status(400).json({ error: "Missing deliverer" });
+
+    // Try to claim if:
+    //  - currently NOT in_progress, OR
+    //  - it's already claimed by THIS deliverer (idempotent)
+    const now = new Date();
+    const updated = await newOrderModel.findOneAndUpdate(
+      {
+        _id: id,
+        $or: [
+          { "deliveryWork.status": { $ne: "in_progress" } },
+          { "deliveryWork.claimedBy": deliverer }
+        ],
+      },
+      {
+        $set: {
+          "deliveryWork.status": "in_progress",
+          "deliveryWork.claimedBy": deliverer,
+          "deliveryWork.claimedAt": now,
+        },
+      },
+      { new: true }
+    );
+
+    if (updated) {
+      return res.json({ ok: true, order: updated });
+    }
+
+    // If not updated, find who holds it to show nice 409
+    const current = await newOrderModel.findById(id).select("deliveryWork").lean();
+    const holder = current?.deliveryWork?.claimedBy || "otro encargado";
+    return res.status(409).json({ error: `Este pedido está siendo entregado por ${holder}.` });
+  } catch (e) {
+    console.error("claim-delivery error:", e);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// Release delivery (only the current holder can release)
+router.post("/orders/:id/release-delivery", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { deliverer } = req.body || {};
+
+    const updated = await newOrderModel.findOneAndUpdate(
+      {
+        _id: id,
+        "deliveryWork.status": "in_progress",
+        "deliveryWork.claimedBy": deliverer, // only holder can release
+      },
+      {
+        $set: {
+          "deliveryWork.status": "waiting",
+          "deliveryWork.claimedBy": "",
+          "deliveryWork.claimedAt": null,
+        },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Either not found or not held by this user
+      const current = await newOrderModel.findById(id).select("deliveryWork").lean();
+      if (!current) return res.status(404).json({ error: "Order not found" });
+      return res.status(403).json({ error: "Solo quien tomó el pedido puede liberarlo." });
+    }
+
+    return res.json({ ok: true, order: updated });
+  } catch (e) {
+    console.error("release-delivery error:", e);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+// // Claim delivery
+// router.post("/orders/:id/claim-delivery", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { deliverer } = req.body || {};
+//     if (!deliverer) return res.status(400).json({ error: "Missing deliverer" });
+
+//     const order = await newOrderModel.findById(id).lean();
+//     if (!order) return res.status(404).json({ error: "Order not found" });
+
+//     // Ensure subdoc exists
+//     order.deliveryWork = order.deliveryWork || { status: "idle", claimedBy: "" };
+
+//     // If someone else already has it, block
+//     if (order.deliveryWork.status === "in_progress" &&
+//         order.deliveryWork.claimedBy &&
+//         order.deliveryWork.claimedBy !== deliverer) {
+//       return res.status(409).json({ error: `Este pedido está siendo entregado por ${order.deliveryWork.claimedBy}.` });
+//     }
+
+//     // Claim it
+//     order.deliveryWork.status = "in_progress";
+//     order.deliveryWork.claimedBy = deliverer;
+//     await newOrderModel.save();
+
+//     return res.json({ ok: true, order });
+//   } catch (e) {
+//     console.error("claim-delivery error:", e);
+//     return res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+// // Release delivery
+// router.post("/orders/:id/release-delivery", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { deliverer } = req.body || {};
+//     const order = await Order.findById(id);
+//     if (!order) return res.status(404).json({ error: "Order not found" });
+
+//     order.deliveryWork = newOrderModel.deliveryWork || { status: "idle", claimedBy: "" };
+
+//     // Only the current holder can release
+//     if (order.deliveryWork.claimedBy && order.deliveryWork.claimedBy !== deliverer) {
+//       return res.status(403).json({ error: "Solo quien tomó el pedido puede liberarlo." });
+//     }
+
+//     order.deliveryWork.status = "idle";
+//     order.deliveryWork.claimedBy = "";
+//     await newOrderModel.save();
+
+//     return res.json({ ok: true, order });
+//   } catch (e) {
+//     console.error("release-delivery error:", e);
+//     return res.status(500).json({ error: "Server error" });
+//   }
+// });
+
 module.exports = router;
 
 

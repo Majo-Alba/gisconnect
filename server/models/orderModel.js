@@ -45,6 +45,21 @@ const packingSchema = new Schema(
   { _id: false }
 );
 
+/* 🔹 NEW (delivery lock) */
+const deliveryWorkSchema = new Schema(
+  {
+    status: {
+      type: String,
+      enum: ["waiting", "in_progress", "ready"],
+      default: "waiting",
+    },
+    claimedBy: { type: String, default: "" },   // who is delivering
+    claimedAt: { type: Date },
+    leaseMs: { type: Number, default: 30 * 60 * 1000 }, // optional, similar to packing
+  },
+  { _id: false }
+);
+
 const orderSchema = new Schema(
   {
     userEmail: String,
@@ -125,6 +140,9 @@ const orderSchema = new Schema(
     deliveryDate: { type: Date, default: null },
     trackingNumber: { type: String, default: "" },
     evidenceURL: { type: String },       // legacy URL approach
+
+    /* 🔹 NEW (delivery lock) */
+    deliveryWork: { type: deliveryWorkSchema, default: () => ({}) },
 
     /* 🔹 NEW (packing lock): server-enforced claim */
     packing: { type: packingSchema, default: () => ({}) },

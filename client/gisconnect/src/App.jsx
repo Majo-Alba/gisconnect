@@ -40,6 +40,9 @@ import DeliveredSummary from './components/deliveredSummary'
 import NoAccess from './components/NoAccess'
 import ManageAddresses from './components/ManageAddresses'
 import PackInProcess from './components/packInProcess'
+import NewAdminOrder from './components/newAdminOrder'
+import PendingEvidence from './components/pendingEvidence'
+import PendingEvidenceAdmin from './components/pendingEvidenceAdmin'
 // GISCONNECT - END
 
 function AdminRoute({ pathPrefix, Component }) {
@@ -139,6 +142,9 @@ function App() {
             <Route path='/deliveryDetails/:orderId' element={<AdminRoute pathPrefix="/deliveryDetails" Component={DeliveryDetails} />}/>
             <Route path='/delivered' element={<AdminRoute pathPrefix="/delivered" Component={DeliveredOrders} />}/>
             <Route path='/deliveredSummary/:orderId' element={<AdminRoute pathPrefix="/deliveredSummary" Component={DeliveredSummary} />}/>
+            <Route path='/adminOrder' element={<AdminRoute pathPrefix="/adminOrder" Component={NewAdminOrder} />}/>
+            <Route path='/pendingEvidence' element={<AdminRoute pathPrefix="/pendingEvidence" Component={PendingEvidence} />}/>
+            <Route path='/pendingEvidence/:orderId' element={<AdminRoute pathPrefix="/pendingEvidence" Component={PendingEvidenceAdmin} />}/>
 
             {/* If you still need these non-guarded admin pages, keep them; otherwise remove */}
             <Route path='/newQuotes' element={<AdminRoute pathPrefix="/newQuotes" Component={NewQuotes} />}/>
