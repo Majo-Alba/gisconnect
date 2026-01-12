@@ -1,3 +1,5 @@
+// Hey chatgpt, I'd like to add an extra field to be stored in MongoDb. Currently, we dont store the total the user is paying for the order, nor the currency in which the person is paying. Now, since we are using data from DOF to convert, I'd like to save the total the user is paying using that moments convertion rate, not changing everytime the currency changes. So, in order to do so, I'm thinking adding to orderModel.js three fields "paymentCurrency" (which takes value of field "Moneda de Pago" from orderNow.jsx), "amountPayed" (this one's kinf of tricky. Remember that we have the following scenarios that need to be taken into consideration. The user can ask for USD-listed products and select to pay in USd, which works perfect. Second, user can usk for USD-listed items and pay in MXN, in which case the amountPayed would be converted using the DOF rate and thus amountPayed would be sotred in MXN. Third case is that user can ask for mixed orders - orders containing USD-listed & MXN-listed products. In such case, Items listed in USD can be payed in USD but products listed in MXN cannot be payed in USD, thus, if user selects USD as desired currency to pay, we would have to amountPayed: the amouont payed in USD and the amount payed in MXN), and "currencyExchange" (which stores the currency rate at the moment of placing the order). Im attachinf my orderNow.jsx file, as well as orderModel.js to make the needed modifs to both files to get these modifications going on. Please direct edit
+// orderNow.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -58,6 +60,9 @@ export default function OrderNow() {
     if (!Number.isFinite(x)) return null;
     return Math.trunc(x * 100) / 100;
   };
+
+  // NEW: round to 2 decimals (bankers not needed here)
+  const round2 = (n) => Math.round(Number(n) * 100) / 100;
   
   // NEW: effective rate used across the app
   const dof2 = useMemo(() => trunc2(dofRate), [dofRate]);
@@ -1243,6 +1248,58 @@ export default function OrderNow() {
         ? addDays(new Date(), creditDays).toISOString()
         : null;
 
+    // NEW JAN12 ====== SNAPSHOT de pago según reglas (moneda seleccionada + DOF actual) ======
+    const paymentCurrency = String(preferredCurrency || "USD").toUpperCase();
+    const hasRate = Number.isFinite(rate) && rate > 0;
+    const usdSum = subtotalUSD_pdf2 || 0;
+    const mxnSum = subtotalMXN_pdf2 || 0;
+    
+    // Sanitiza descuento
+    const discUSD = Number(numericDiscount || 0);
+    const discMXN = hasRate ? discUSD * rate : 0;
+    
+    let amountPayed = null;
+    
+        if (paymentCurrency === "MXN") {
+          if (hasRate) {
+            // Se paga TODO en MXN: USD se convierte con DOF; MXN queda en MXN
+            const grossMXN = mxnSum + usdSum * rate;
+            const netMXN   = round2(grossMXN - discMXN); // desc. convertido a MXN
+            amountPayed = Math.max(0, netMXN);
+          } else {
+            // No hay DOF: snapshot como mixto para no perder integridad
+            // USD se pagará en USD; MXN en MXN. Descuento en MXN desconocido => no se aplica.
+            amountPayed = {
+              usd: round2(Math.max(0, usdSum)), // sin descuento por no poder convertirlo
+              mxn: round2(Math.max(0, mxnSum)), // igual que arriba
+            };
+          }
+        } else {
+          // paymentCurrency === "USD"
+          if (mxnSum > 0 && usdSum > 0) {
+            // Orden mixta: USD-listado en USD, MXN-listado en MXN
+            // Descuento (si existe) lo aplicamos a la porción USD
+            const netUSD = round2(Math.max(0, usdSum - discUSD));
+            amountPayed = { usd: netUSD, mxn: round2(mxnSum) };
+          } else if (usdSum > 0 && mxnSum === 0) {
+            // Solo USD
+            const netUSD = round2(Math.max(0, usdSum - discUSD));
+            amountPayed = netUSD;
+          } else {
+            // Solo MXN (aunque eligió USD, no se puede pagar MXN en USD)
+            amountPayed = round2(mxnSum); // snapshot en MXN
+          }
+    }
+    
+    // Estructura del tipo de cambio usado (si existe)
+    const currencyExchange = {
+          pair: "USD/MXN",
+          source: "DOF",
+          rate: hasRate ? round2(rate) : null,
+          asOf: dofDate || null,
+    };
+    
+
     const orderInfo = {
       userEmail,
       items,
@@ -1257,6 +1314,12 @@ export default function OrderNow() {
         vatUSD,
         vatMXN: totalAllMXN !== null ? vatMXN : null,
       },
+
+      // 🔻 NUEVO SNAPSHOT
+      paymentCurrency,
+      amountPayed,
+      currencyExchange,
+      
       requestBill: !!wantsInvoice,
 
       // ⬇️ keep string for compatibility + include structured pickup details
