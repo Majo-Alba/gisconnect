@@ -1850,6 +1850,9 @@ export default function OrderNow() {
   );
 }
 
+
+
+
 // // when clicking on "Recoger en Matriz" please add two dropdowns immediatly bellow: a date and a time dropdown. If the user is ordering past 13:00hrs of current day, dont show current date on date dropdown. If order is placed before 13:00hrs, then allow for the first available timeslot shown to be two hours after current time (say, order is placed at 10am local time, then first available pickup timeslot is at 12pm). As well, when clikcing "Descargar Orden" I want a modal to pop-up that is a call to action, since users aren't following the order flow. In this modal I want a message that says something like "Atención: Recuerda que para que tu pedido sea procesado, es necesario nos envies to comporbante de pago. Para hacerlo sigue estos sencillos pasos: 1. En la pagina principal de la app GISConnect entra a "Mis Pedidos", 2. Busca y selecciona el pedido que acabas de realizar. 3. En la parte inferior de la pantalla donde puedes ver el detalle de tu pedido anexa la evidencia de tu pago - ya sea un ticket o captura de pantalla. 4. Da click a "Subir Evidencia" y listo. PLease direct edit.   
 // import { useState, useEffect, useMemo } from "react";
 // import { useLocation, useNavigate } from "react-router-dom";

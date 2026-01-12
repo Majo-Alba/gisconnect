@@ -364,7 +364,8 @@ export default function ExpressQuote() {
   const allUSDWithIVA = ivaAllUSD != null ? +(allUSD + ivaAllUSD).toFixed(2) : null;
   const allMXNWithIVA = ivaAllMXN != null ? +(allMXN + ivaAllMXN).toFixed(2) : null;
 
-  const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+  // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+  const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
   const fmtMXN = (v) =>
     `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
@@ -372,7 +373,8 @@ export default function ExpressQuote() {
   const downloadPDF = async () => {
     const doc = new jsPDF();
 
-    const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+    // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+    const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
     const fmtMXN = (v) =>
       `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
@@ -521,7 +523,7 @@ export default function ExpressQuote() {
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
-      doc.text(`Subtotal USD: $${subtotalUSD.toFixed(2)} USD`, 140, cursorY);
+      doc.text(`Subtotal USD: $${subtotalUSD.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 140, cursorY);
       cursorY += 12;
     }
 

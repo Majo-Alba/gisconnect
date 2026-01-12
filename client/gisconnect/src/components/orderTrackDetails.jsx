@@ -143,6 +143,32 @@ export default function OrderTrackDetails() {
   const ship = order?.shippingInfo || {};
   const bill = order?.billingInfo || {};
 
+  // ⬇️ Helpers para "Recoger en Matriz"
+  const isPickup = (() => {
+    const s = order?.shippingInfo;
+    if (typeof s === "string") return s.toLowerCase().includes("recoger");
+    if (s && typeof s === "object" && s.method) {
+      return String(s.method).toLowerCase().includes("recoger");
+    }
+    return false;
+  })();
+  
+  const pickup = order?.pickupDetails || {};
+  const pickupDateLabel = pickup?.date
+    ? new Date(`${pickup.date}T00:00:00`).toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+    : "No especificada";
+  const pickupTimeLabel = pickup?.time || "No especificada";
+
+  // ⬇️ Facturación: banderas robustas
+  const wantsInvoice = !!order?.requestBill;
+  const hasBillingInfo =
+    bill && typeof bill === "object" && Object.keys(bill).some((k) => (bill?.[k] ?? "") !== "");
+  
+
   const generateInvoice = () => {
     if (!order) return;
     const doc = new jsPDF();
@@ -557,20 +583,67 @@ export default function OrderTrackDetails() {
           {/* SHIPPING */}
           <div className="orderNumberAndDate-Div">
             <label className="orderNumber-Label">DIRECCIÓN DE ENVÍO</label>
-            <div className="shippingAddress-Div">
-              <label className="orderDate-Label">
-                {sCalle} #{sExt} Int.{sInt}
-              </label>
-              <label className="orderDate-Label">Col. {sCol}</label>
-              <label className="orderDate-Label">
-                {sCiudad}, {sEstado}
-              </label>
-              <label className="orderDate-Label">C.P. {sCP}</label>
-            </div>
+
+            {isPickup ? (
+              <div className="shippingAddress-Div">
+                <label className="orderDate-Label" style={{ fontWeight: 700 }}>
+                  Pedido será recogido en matriz
+                </label>
+                <label className="orderDate-Label">
+                  Fecha de recolección: {pickupDateLabel}
+                </label>
+                <label className="orderDate-Label">
+                  Hora de recolección: {pickupTimeLabel}
+                </label>
+              </div>
+            ) : (
+              <div className="shippingAddress-Div">
+                <label className="orderDate-Label">
+                  {sCalle} #{sExt} Int.{sInt}
+                </label>
+                <label className="orderDate-Label">Col. {sCol}</label>
+                <label className="orderDate-Label">
+                  {sCiudad}, {sEstado}
+                </label>
+                <label className="orderDate-Label">C.P. {sCP}</label>
+              </div>
+            )}
           </div>
 
           {/* BILLING */}
           <div className="orderTrack-BillingDiv">
+            <label className="orderNumber-Label">DATOS DE FACTURACIÓN</label>
+
+            <div className="shippingAddress-Div">
+              {!wantsInvoice ? (
+                // Caso 1: el cliente NO solicitó factura
+                <label className="orderDate-Label" style={{ fontStyle: "italic" }}>
+                  Factura no solicitada
+                </label>
+              ) : hasBillingInfo ? (
+                // Caso 2: sí solicitó y SÍ hay datos
+                <>
+                  <label className="orderDate-Label">{bill.razonSocial || ""}</label>
+                  <label className="orderDate-Label">{bill.rfcEmpresa || ""}</label>
+                  <label className="orderDate-Label">
+                    {(bill.calleFiscal || "")} #{bill.exteriorFiscal || ""} Int.{bill.interiorFiscal || ""}
+                  </label>
+                  <label className="orderDate-Label">Col. {bill.coloniaFiscal || ""}</label>
+                  <label className="orderDate-Label">
+                    {(bill.ciudadFiscal || "")}, {(bill.estadoFiscal || "")}
+                  </label>
+                  <label className="orderDate-Label">C.P. {bill.cpFiscal || ""}</label>
+                </>
+              ) : (
+                // Caso 3: sí solicitó pero no hay datos disponibles (robustez)
+                <label className="orderDate-Label" style={{ fontStyle: "italic" }}>
+                  Datos de facturación no disponibles
+                </label>
+              )}
+            </div>
+          </div>
+
+          {/* <div className="orderTrack-BillingDiv">
             <label className="orderNumber-Label">DATOS DE FACTURACIÓN</label>
             <div className="shippingAddress-Div">
               <label className="orderDate-Label">{order?.billingInfo?.razonSocial || ""}</label>
@@ -585,26 +658,7 @@ export default function OrderTrackDetails() {
               </label>
               <label className="orderDate-Label">C.P. {order?.billingInfo?.cpFiscal || ""}</label>
             </div>
-
-            {/* Gate “Solicitar Factura” by status >= “Pago Verificado” */}
-            {/* <div className="requestBill-Div">
-              <button
-                className="submitOrder-Btn"
-                type="button"
-                onClick={generateInvoice}
-                disabled={!canRequestInvoice}
-                title={!canRequestInvoice ? "Disponible cuando el pago sea verificado" : ""}
-              >
-                Solicitar<br />Factura
-              </button>
-
-              {!canRequestInvoice && (
-                <div style={{ fontSize: 10, color: "#b00", marginTop: 6 }}>
-                  Esta opción se habilita <br />cuando el pago se <br />verifique.
-                </div>
-              )}
-            </div> */}
-          </div>
+          </div> */}
 
           {/* ===== SUBIR EVIDENCIA (tu UI original, pero con el nuevo endpoint) ===== */}
           <div className="orderTracker-UploadEvidenceDiv">
@@ -662,6 +716,14 @@ export default function OrderTrackDetails() {
     </body>
   );
 }
+
+
+
+
+
+
+
+
 
 // import { ProgressBar, Step } from "react-step-progress-bar";
 // import "react-step-progress-bar/styles.css";

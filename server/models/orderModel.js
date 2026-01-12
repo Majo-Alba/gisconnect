@@ -95,6 +95,11 @@ const orderSchema = new Schema(
 
     // Store as Mixed (explicit and flexible)
     shippingInfo: { type: Schema.Types.Mixed },
+    // ⬇️ NEW: structured pickup details when user picks "Recoger en Matriz"
+    pickupDetails: {
+      date: { type: String, default: null }, // "YYYY-MM-DD"
+      time: { type: String, default: null }, // "HH:mm"
+    },
     billingInfo: { type: Schema.Types.Mixed },
 
     orderDate: Date,
