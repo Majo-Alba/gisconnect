@@ -1,3 +1,4 @@
+// in my manageDeliveryDetails.jsx, I'd like to add the amount for which the order is insured, which equals to the orders total. For this piece of info, we'll be using MongoDb's field "totalAllMXN". Show this amount in the following places: within the screen, right under "Mercancía Asegurada" add field "Monto Asegurado". As well when generating label, bring the "Enviar Paquete Asegurado!" text a but up and right underneath that text, in red as well, add text "Monto Asegurado" and the same amount. Here is my manageDeliveryDetails.jsx, please direct edit
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -20,6 +21,13 @@ export default function ManageDeliveryDetails() {
   const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
+
+  // MXN money formatter (screen)
+  const fmtMXNScreen = (v) =>
+    `$${(Number(v) || 0).toLocaleString("es-MX", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+  })} MXN`;
 
   // ===== NEW: Mongo user data (by email) =====
   const [mongoUser, setMongoUser] = useState(null);
@@ -110,6 +118,56 @@ export default function ManageDeliveryDetails() {
     return "";
   }, [mongoUser]);
 
+  // ===== NEW: pick latest totals snapshot (object or last array element)
+  const totalsSnap = useMemo(() => {
+    const t = order?.totals;
+      if (!t) return null;
+      if (Array.isArray(t)) {
+        for (let i = t.length - 1; i >= 0; i--) {
+          const s = t[i];
+          if (s && typeof s === "object") return s;
+        }
+        return null;
+      }
+      if (typeof t === "object") return t;
+      return null;
+  }, [order?.totals]);
+  
+  // ===== NEW: Insured amount in MXN (robust)
+  const insuredAmountMXN = useMemo(() => {
+    const snap = totalsSnap || {};
+
+    // 1) Preferred keys
+    const fromTotalAllMXN = Number(snap.totalAllMXN);
+    if (Number.isFinite(fromTotalAllMXN) && fromTotalAllMXN > 0) return fromTotalAllMXN;
+  
+    // 2) Alternate keys sometimes used
+    const alt = Number(snap.finalAllMXN ?? snap.totalMXNNative);
+    if (Number.isFinite(alt) && alt > 0) return alt;
+  
+    // 3) Fallback: compute from items + dofRate
+    const rate = Number(snap.dofRate ?? order?.totals?.dofRate);
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+  
+    let usd = 0, mxn = 0;
+    for (const it of items) {
+      const qty = Number(it?.amount) || 0;
+      const cur = normCur(it?.currency);
+      if (cur === "MXN") {
+        const unit = Number(it?.priceMXN ?? it?.price) || 0;
+        mxn += qty * unit;
+      } else {
+        const unit = Number(it?.priceUSD ?? it?.price) || 0;
+        usd += qty * unit;
+      }
+    }
+    const hasRate = Number.isFinite(rate) && rate > 0;
+    if (hasRate) return mxn + usd * rate;
+    // No FX: at least return the MXN native subtotal
+    return mxn || 0;
+  }, [totalsSnap, order?.items, order?.totals]);
+
   if (!order) return <p>Cargando pedido...</p>;
 
   // ===== NEW: object-based shipping/billing with array fallback =====
@@ -150,35 +208,76 @@ export default function ManageDeliveryDetails() {
     const fmtMXN = (v) =>
       `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
-    // Compute insured amount in MXN (order total expressed in MXN)
-    const rate = Number(order?.totals?.dofRate) || 0;
-    const items = Array.isArray(order?.items) ? order.items : [];
-    const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
-    const isUSD = (it) => normCur(it.currency) === "USD";
-    const isMXN = (it) => normCur(it.currency) === "MXN";
+    // // Compute insured amount in MXN (order total expressed in MXN)
+    // const rate = Number(order?.totals?.dofRate) || 0;
+    // const items = Array.isArray(order?.items) ? order.items : [];
+    // const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+    // const isUSD = (it) => normCur(it.currency) === "USD";
+    // const isMXN = (it) => normCur(it.currency) === "MXN";
     
-    // Prefer server-computed combined MXN if available
-    let insuredAmountMXN = Number.isFinite(order?.totals?.totalAllMXN)
-      ? Number(order.totals.totalAllMXN)
-      : null;
+    // // Prefer server-computed combined MXN if available
+    // let insuredAmountMXN = Number.isFinite(order?.totals?.totalAllMXN)
+    //   ? Number(order.totals.totalAllMXN)
+    //   : null;
     
-    if (insuredAmountMXN == null) {
-      const subtotalUSD = items.reduce(
-        (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
-        0
-      );
-      const subtotalMXN = items.reduce(
-        (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
-        0
-      );
-      if (subtotalMXN && !subtotalUSD) {
-        insuredAmountMXN = subtotalMXN;
-      } else if (!subtotalMXN && subtotalUSD && rate) {
-        insuredAmountMXN = subtotalUSD * rate;
-      } else if (subtotalMXN && subtotalUSD && rate) {
-        insuredAmountMXN = subtotalMXN + subtotalUSD * rate;
+    // if (insuredAmountMXN == null) {
+    //   const subtotalUSD = items.reduce(
+    //     (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
+    //     0
+    //   );
+    //   const subtotalMXN = items.reduce(
+    //     (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
+    //     0
+    //   );
+    //   if (subtotalMXN && !subtotalUSD) {
+    //     insuredAmountMXN = subtotalMXN;
+    //   } else if (!subtotalMXN && subtotalUSD && rate) {
+    //     insuredAmountMXN = subtotalUSD * rate;
+    //   } else if (subtotalMXN && subtotalUSD && rate) {
+    //     insuredAmountMXN = subtotalMXN + subtotalUSD * rate;
+    //   } else {
+    //     insuredAmountMXN = null;
+    //   }
+    // }
+    
+    // Insured amount (robust): pick latest totals snapshot, try multiple keys, fallback to compute
+    const pickTotalsSnap = (t) => {
+      if (!t) return null;
+      if (Array.isArray(t)) {
+        for (let i = t.length - 1; i >= 0; i--) {
+          const s = t[i];
+          if (s && typeof s === "object") return s;
+        }
+        return null;
+      }
+      if (typeof t === "object") return t;
+      return null;
+    };
+    const snap = pickTotalsSnap(order?.totals) || {};
+    let insuredAmountMXN = Number(snap.totalAllMXN);
+    if (!(Number.isFinite(insuredAmountMXN) && insuredAmountMXN > 0)) {
+      const alt = Number(snap.finalAllMXN ?? snap.totalMXNNative);
+      if (Number.isFinite(alt) && alt > 0) {
+        insuredAmountMXN = alt;
       } else {
-        insuredAmountMXN = null;
+        // Compute fallback from items + dofRate
+        const items = Array.isArray(order?.items) ? order.items : [];
+        const rate = Number(snap.dofRate ?? order?.totals?.dofRate);
+        const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
+        let usd = 0, mxn = 0;
+        for (const it of items) {
+          const qty = Number(it?.amount) || 0;
+          const cur = normCur(it?.currency);
+          if (cur === "MXN") {
+            const unit = Number(it?.priceMXN ?? it?.price) || 0;
+            mxn += qty * unit;
+          } else {
+            const unit = Number(it?.priceUSD ?? it?.price) || 0;
+            usd += qty * unit;
+          }
+        }
+        const hasRate = Number.isFinite(rate) && rate > 0;
+        insuredAmountMXN = hasRate ? (mxn + usd * rate) : mxn || 0;
       }
     }
   
@@ -221,7 +320,16 @@ export default function ManageDeliveryDetails() {
     if (insureShipmentLabel === "Sí") {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 0, 0);
-      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
+      // doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 104);
+      // doc.setTextColor(0, 0, 0);
+      // Move the heading a bit UP
+      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 55, 80);
+      // Red Monto Asegurado right UNDER the heading
+      doc.setFontSize(9);
+      // doc.text(`Monto Asegurado: ${fmtMXN(insuredAmountMXN)}`, 55, 112);
+      doc.text("Monto Asegurado:", 55, 90);
+      doc.text(`${fmtMXN(insuredAmountMXN)}`, 55, 95);
+
       doc.setTextColor(0, 0, 0);
     }
   
@@ -357,6 +465,12 @@ export default function ManageDeliveryDetails() {
           <label className="shippingMethod-Label">Mercancía Asegurada</label>
           <label className="productDetail-Label">
             {insureShipmentLabel || "No especificado"}
+          </label>
+          <br />
+          {/* NEW: Monto Asegurado (from Mongo totals.totalAllMXN) */}
+          <label className="shippingMethod-Label">Monto Asegurado</label>
+          <label className="productDetail-Label">
+            {fmtMXNScreen(insuredAmountMXN)}
           </label>
           <br />
         </div>
