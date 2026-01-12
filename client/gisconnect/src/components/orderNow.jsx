@@ -1,5 +1,3 @@
-// Hey chatgpt, I'd like to add an extra field to be stored in MongoDb. Currently, we dont store the total the user is paying for the order, nor the currency in which the person is paying. Now, since we are using data from DOF to convert, I'd like to save the total the user is paying using that moments convertion rate, not changing everytime the currency changes. So, in order to do so, I'm thinking adding to orderModel.js three fields "paymentCurrency" (which takes value of field "Moneda de Pago" from orderNow.jsx), "amountPayed" (this one's kinf of tricky. Remember that we have the following scenarios that need to be taken into consideration. The user can ask for USD-listed products and select to pay in USd, which works perfect. Second, user can usk for USD-listed items and pay in MXN, in which case the amountPayed would be converted using the DOF rate and thus amountPayed would be sotred in MXN. Third case is that user can ask for mixed orders - orders containing USD-listed & MXN-listed products. In such case, Items listed in USD can be payed in USD but products listed in MXN cannot be payed in USD, thus, if user selects USD as desired currency to pay, we would have to amountPayed: the amouont payed in USD and the amount payed in MXN), and "currencyExchange" (which stores the currency rate at the moment of placing the order). Im attachinf my orderNow.jsx file, as well as orderModel.js to make the needed modifs to both files to get these modifications going on. Please direct edit
-// orderNow.jsx
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -29,7 +27,26 @@ export default function OrderNow() {
   const location = useLocation();
 
   const items = location.state?.items || [];
-  const preferredCurrency = (location.state?.preferredCurrency || "USD").toUpperCase();
+  // const preferredCurrency = (location.state?.preferredCurrency || "USD").toUpperCase();
+  // Robust, normalized preferred currency
+  const preferredCurrency = useMemo(() => {
+    const raw = location.state?.preferredCurrency;
+    const val = String(raw ?? "").trim().toUpperCase();
+    if (val === "MXN" || val === "USD") return val;
+
+    // Heuristics if nothing valid came in:
+    const hasMXN = (items || []).some(it => String(it?.currency || "").trim().toUpperCase() === "MXN");
+    const hasUSD = (items || []).some(it => String(it?.currency || "").trim().toUpperCase() === "USD");
+
+    // If all items are MXN, prefer MXN
+    if (hasMXN && !hasUSD) return "MXN";
+
+    // If nothing was explicitly chosen, favor MXN per your flow
+    if (!raw) return "MXN";
+
+    // Fallback
+    return "USD";
+  }, [location.state?.preferredCurrency, items]);
 
   const [discountTotal, setDiscountTotal] = useState("");
   const [requestBill, setRequestBill] = useState("");
@@ -1249,7 +1266,12 @@ export default function OrderNow() {
         : null;
 
     // NEW JAN12 ====== SNAPSHOT de pago según reglas (moneda seleccionada + DOF actual) ======
-    const paymentCurrency = String(preferredCurrency || "USD").toUpperCase();
+    // const paymentCurrency = String(preferredCurrency || "USD").toUpperCase();
+    const paymentCurrency = (() => {
+      const val = String(preferredCurrency || "").trim().toUpperCase();
+      if (val === "MXN" || val === "USD") return val;
+      return "MXN";
+    })();
     const hasRate = Number.isFinite(rate) && rate > 0;
     const usdSum = subtotalUSD_pdf2 || 0;
     const mxnSum = subtotalMXN_pdf2 || 0;
