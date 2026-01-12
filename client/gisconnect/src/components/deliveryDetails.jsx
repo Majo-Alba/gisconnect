@@ -1,3 +1,4 @@
+// similarly, I'd like to use "totalAllMXN" on mongodb to autofill "Monto Asegurado" on my deliveryDetails.jsx screen. Here is my deliveryDetails.jsx, please direct edit
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -53,27 +54,72 @@ export default function DeliveryDetails() {
   const isUSD = (it) => normCur(it.currency) === "USD";
   const isMXN = (it) => normCur(it.currency) === "MXN";
 
+  // const calcInsuredAmountMXN = (ord) => {
+  //   if (!ord) return null;
+  //   const totalAllMXN = ord?.totals?.totalAllMXN;
+  //   if (Number.isFinite(totalAllMXN)) return Number(totalAllMXN);
+
+  //   const items = Array.isArray(ord?.items) ? ord.items : [];
+  //   const rate = Number(ord?.totals?.dofRate) || 0;
+
+  //   const subtotalUSD = items.reduce(
+  //     (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
+  //     0
+  //   );
+  //   const subtotalMXN = items.reduce(
+  //     (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
+  //     0
+  //   );
+
+  //   if (subtotalMXN && !subtotalUSD) return subtotalMXN;
+  //   if (!subtotalMXN && subtotalUSD && rate) return subtotalUSD * rate;
+  //   if (subtotalMXN && subtotalUSD && rate) return subtotalMXN + subtotalUSD * rate;
+  //   return null;
+  // };
   const calcInsuredAmountMXN = (ord) => {
     if (!ord) return null;
-    const totalAllMXN = ord?.totals?.totalAllMXN;
-    if (Number.isFinite(totalAllMXN)) return Number(totalAllMXN);
-
+    // Pick the latest totals snapshot (object or last object in array)
+    const pickTotalsSnap = (t) => {
+      if (!t) return null;
+      if (Array.isArray(t)) {
+        for (let i = t.length - 1; i >= 0; i--) {
+          const s = t[i];
+          if (s && typeof s === "object") return s;
+        }
+        return null;
+      }
+      if (typeof t === "object") return t;
+      return null;
+    };
+    const snap = pickTotalsSnap(ord?.totals) || {};
+    
+    // 1) Try preferred and alternate keys from Mongo
+    const candidates = [snap.totalAllMXN, snap.finalAllMXN, snap.totalMXNNative];
+    for (const v of candidates) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    
+    // 2) Fallback: compute from items + dofRate
+    const rate = Number(snap.dofRate ?? ord?.totals?.dofRate) || 0;
     const items = Array.isArray(ord?.items) ? ord.items : [];
-    const rate = Number(ord?.totals?.dofRate) || 0;
-
+    
     const subtotalUSD = items.reduce(
-      (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
-      0
+      (s, it) =>
+        s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
+        0
     );
     const subtotalMXN = items.reduce(
-      (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
-      0
+      (s, it) =>
+        s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
+        0
     );
-
+    
     if (subtotalMXN && !subtotalUSD) return subtotalMXN;
     if (!subtotalMXN && subtotalUSD && rate) return subtotalUSD * rate;
     if (subtotalMXN && subtotalUSD && rate) return subtotalMXN + subtotalUSD * rate;
-    return null;
+    // No FX → at least return native MXN subtotal (or null if nothing)
+    return subtotalMXN || null;
   };
 
   // Load order
