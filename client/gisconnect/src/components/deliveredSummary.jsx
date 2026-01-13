@@ -1,3 +1,4 @@
+// in deliveredSummary.jsx, I;d like for the following tweaks. Under resumen financiero, add field "Divisa de Pago" and get info from mongodb's field "paymentCurrency". Inside that same div, lets clean up a bit. instead of current 'Subtotal USD (nativo)' lets change it to "Subtotal productos USD", same for MXN (so it'll end up reading "Subtotal productos MXN"). after those two fields, add "Divisa de pago". Following (and still inside same div), if paymentCurrency = USD then we'll have "Total pagado (USD)" which is populated by totalUSDNative and check if data is available for "totalMXNNative". If so, then add second field "Total pagado (MXN)" and populate with data from "totalMXNNative". If paymentCurrency = MXN, then show field "Total pagado (MXN)" and populate with data from "totalAllMXN". Finally, at the bottom of that same div, add smaller message, in light gray, that says "Tipo de cambio utilizado para la transacción" and add mongodb field "dofRate", followed by "dofDate". Here is current deliveredSummary.jsx, please direct edit  
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -236,23 +237,6 @@ export default function DeliveredSummary() {
   const goToNewOrders = () => navigate("/newOrders");
   const goToPackageReady = () => navigate("/deliverReady");
 
-  // ===== Helpers =====
-  // const formatDate = (value) => {
-  //   if (!value) return "Sin fecha";
-  //   const s = String(value);
-  //   let d;
-  //   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
-  //     const [Y, M, D] = s.split("-").map(Number);
-  //     d = new Date(Y, M - 1, D);
-  //   } else {
-  //     d = new Date(value);
-  //   }
-  //   if (isNaN(d.getTime())) return "Sin fecha";
-  //   const day = d.getDate().toString().padStart(2, "0");
-  //   const month = d.toLocaleString("es-MX", { month: "short" });
-  //   const year = d.getFullYear();
-  //   return `${day}/${month}/${year}`;
-  // };
   const formatDate = (value) => {
     if (!value) return "Sin fecha";
     const s = String(value);
@@ -374,12 +358,6 @@ export default function DeliveredSummary() {
 
       // Unit price per detected currency (prefer CSV), else item.price
       const unit = toNum(it?.price ?? it?.priceUSD ?? it?.priceMXN);
-      // let unit = 0;
-      // if (detectedCurrency === "USD") {
-      //   unit = Number(cat?.unitUSD) || Number(it?.priceUSD) || Number(it?.price) || 0;
-      // } else {
-      //   unit = Number(cat?.unitMXN) || Number(it?.priceMXN) || Number(it?.price) || 0;
-      // }
 
       return {
         ...it,
@@ -392,10 +370,23 @@ export default function DeliveredSummary() {
   }, [items, catalog]);
 
   // Pull totals/DOF safely (object or [0])
+  // const totalsObj = useMemo(() => {
+  //   const t = order?.totals;
+  //   if (!t) return null;
+  //   if (Array.isArray(t)) return t[0] || null;
+  //   if (typeof t === "object") return t;
+  //   return null;
+  // }, [order]);
   const totalsObj = useMemo(() => {
     const t = order?.totals;
     if (!t) return null;
-    if (Array.isArray(t)) return t[0] || null;
+    if (Array.isArray(t)) {
+      // prefer the last (most recent) snapshot; fallback to first
+      for (let i = t.length - 1; i >= 0; i--) {
+        if (t[i] && typeof t[i] === "object") return t[i];
+      }
+      return t[0] || null;
+    }
     if (typeof t === "object") return t;
     return null;
   }, [order]);
@@ -406,8 +397,13 @@ export default function DeliveredSummary() {
     Number(order?.dofRate) > 0 ? Number(order.dofRate) :
     undefined;
   const dofDate = totalsObj?.dofDate || order?.dofDate || "";
+  const totalUSDNative  = Number.isFinite(Number(totalsObj?.totalUSDNative))  ? Number(totalsObj.totalUSDNative)  : undefined;
+  const totalMXNNative  = Number.isFinite(Number(totalsObj?.totalMXNNative))  ? Number(totalsObj.totalMXNNative)  : undefined;
+  const totalAllMXN     = Number.isFinite(Number(totalsObj?.totalAllMXN))     ? Number(totalsObj.totalAllMXN)     : undefined;
 
+  // const preferred = String(order?.preferredCurrency || "USD").toUpperCase();
   const preferred = String(order?.preferredCurrency || "USD").toUpperCase();
+  const paymentCurrency = String(order?.paymentCurrency || order?.preferredCurrency || "USD").toUpperCase();
 
   // Subtotals by native currency
   const buckets = decoratedItems.reduce(
@@ -520,16 +516,57 @@ export default function DeliveredSummary() {
 
             <div className="orderDelivered-ProductsDiv" style={{ marginTop: 8 }}>
               <div className="orderDetails-Div">
+                {/* Subtotales por moneda (renombrados) */}
+                <label className="orderDets-Label" style={{ fontSize: 12, marginBottom: 4 }}>
+                  <b>Subtotal productos USD:</b> ${fmtMoney(buckets.usd, "en-US")} USD
+                </label>
+                <label className="orderDets-Label" style={{ fontSize: 12 }}>
+                  <b>Subtotal productos MXN:</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
+                </label>
+
+                {/* Divisa de pago */}
+                <label className="orderDets-Label" style={{ fontSize: 12, marginTop: 6 }}>
+                  <b>Divisa de pago:</b> {paymentCurrency}
+                </label>
+
+                {/* Totales pagados, según divisa de pago */}
+                {paymentCurrency === "USD" ? (
+                    <>
+                      <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+                        <b>Total pagado (USD):</b>{" "}
+                        {totalUSDNative != null ? `$${fmtMoney(totalUSDNative, "en-US")} USD` : "—"}
+                      </label>
+                      {Number.isFinite(totalMXNNative) && totalMXNNative > 0 && (
+                        <label className="newOrderDetsTotal-Label">
+                          <b>Total pagado (MXN):</b> ${fmtMoney(totalMXNNative, "es-MX")} MXN
+                        </label>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+                        <b>Total pagado (MXN):</b>{" "}
+                        {totalAllMXN != null ? `$${fmtMoney(totalAllMXN, "es-MX")} MXN` : "—"}
+                      </label>
+                    </>
+                  )}
+      
+                {/* Nota de tipo de cambio al final del bloque */}
+                <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
+                  {`Tipo de cambio utilizado para la transacción: ${
+                    Number.isFinite(dofRate) && dofRate > 0 ? fmtMoney(dofRate, "es-MX") : "—"
+                    }${dofDate ? `  (DOF ${dofDate})` : ""}`}
+                </div>
                 {/* Subtotales nativos */}
-                <label className="orderDets-Label"  style={{ fontSize: 12, marginBottom: 4}}>
+                {/* <label className="orderDets-Label"  style={{ fontSize: 12, marginBottom: 4}}>
                   <b>Subtotal USD (nativo):</b> ${fmtMoney(buckets.usd, "en-US")} USD
                 </label>
                 <label className="orderDets-Label" style={{ fontSize: 12}}>
                   <b>Subtotal MXN (nativo):</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
-                </label>
+                </label> */}
 
                 {/* Finales */}
-                {buckets.usd > 0 && (
+                {/* {buckets.usd > 0 && (
                   <label className="newOrderDetsTotal-Label">
                     <b>Final USD{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalUSD, "en-US")} USD
                   </label>
@@ -537,23 +574,23 @@ export default function DeliveredSummary() {
 
                 <label className="newOrderDetsTotal-Label">
                   <b>Final MXN{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalMXNValue, "es-MX")} MXN
-                </label>
+                </label> */}
 
                 {/* Detail note for conversion when applicable */}
-                {preferred === "MXN" && isMixed && (
+                {/* {preferred === "MXN" && isMixed && (
                   <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
                     {canConvert
                       ? `Detalle: USD $${fmtMoney(buckets.usd, "en-US")} × ${fmtMoney(dofRate, "es-MX")} = $${fmtMoney(buckets.usd * dofRate, "es-MX")}  + MXN nativo $${fmtMoney(buckets.mxn, "es-MX")}${dofDate ? `  (DOF ${dofDate})` : ""}`
                       : "* No hay TC DOF guardado; se muestran subtotales por divisa."}
                   </div>
-                )}
+                )} */}
 
                 {/* Mixed orders policy */}
-                {isMixed && (
+                {/* {isMixed && (
                   <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 6 }}>
                     IMPORTANTE: Los artículos cotizados en MXN deben pagarse en MXN.
                   </div>
-                )}
+                )} */}
               </div>
             </div>
 
