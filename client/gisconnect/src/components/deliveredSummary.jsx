@@ -1,4 +1,4 @@
-// in deliveredSummary.jsx, I;d like for the following tweaks. Under resumen financiero, add field "Divisa de Pago" and get info from mongodb's field "paymentCurrency". Inside that same div, lets clean up a bit. instead of current 'Subtotal USD (nativo)' lets change it to "Subtotal productos USD", same for MXN (so it'll end up reading "Subtotal productos MXN"). after those two fields, add "Divisa de pago". Following (and still inside same div), if paymentCurrency = USD then we'll have "Total pagado (USD)" which is populated by totalUSDNative and check if data is available for "totalMXNNative". If so, then add second field "Total pagado (MXN)" and populate with data from "totalMXNNative". If paymentCurrency = MXN, then show field "Total pagado (MXN)" and populate with data from "totalAllMXN". Finally, at the bottom of that same div, add smaller message, in light gray, that says "Tipo de cambio utilizado para la transacción" and add mongodb field "dofRate", followed by "dofDate". Here is current deliveredSummary.jsx, please direct edit  
+// in deliveredSummary.jsx, I'd like to be able to see the images that have made up for all evidence collected along the funnel. As well, if order is being picked up in store, under div "Dirección de Envío", show text "Recoger en matriz" alongside time and date selected for pickup (this can be found in MongoDB) 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -269,6 +269,10 @@ export default function DeliveredSummary() {
     try { const u = new URL(s); return !!u.protocol && !!u.host; } catch { return false; }
   };
 
+  function isImageMime(m) {
+    return /^image\//i.test(m || "");
+  }
+
   // Address extractor (OBJECT-first, legacy array fallback)
   function extractAddress(addr) {
     if (!addr) return {};
@@ -331,6 +335,13 @@ export default function DeliveredSummary() {
   // ===== Derivations =====
   const shipping = extractAddress(order?.shippingInfo);
   const billing = extractAddress(order?.billingInfo);
+
+  const packerName =
+    order?.packerName ||
+    order?.packing?.packerName ||
+    order?.packedBy ||
+    order?.packingManager ||
+    "";
 
   const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
 
@@ -557,40 +568,25 @@ export default function DeliveredSummary() {
                     Number.isFinite(dofRate) && dofRate > 0 ? fmtMoney(dofRate, "es-MX") : "—"
                     }${dofDate ? `  (DOF ${dofDate})` : ""}`}
                 </div>
-                {/* Subtotales nativos */}
-                {/* <label className="orderDets-Label"  style={{ fontSize: 12, marginBottom: 4}}>
-                  <b>Subtotal USD (nativo):</b> ${fmtMoney(buckets.usd, "en-US")} USD
-                </label>
-                <label className="orderDets-Label" style={{ fontSize: 12}}>
-                  <b>Subtotal MXN (nativo):</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
-                </label> */}
-
-                {/* Finales */}
-                {/* {buckets.usd > 0 && (
-                  <label className="newOrderDetsTotal-Label">
-                    <b>Final USD{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalUSD, "en-US")} USD
-                  </label>
+                {/* Evidencia de pago: mostrar como imagen si es MIME de imagen; si no, como link */}
+                {order?.evidenceFileExt && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
+                      <b>Evidencia de pago:</b>
+                    </div>
+                    <a href={fileUrl("payment")} target="_blank" rel="noreferrer">
+                      {isImageMime(order.evidenceFileExt.mimetype) ? (
+                        <img
+                          src={fileUrl("payment")}
+                          alt={order.evidenceFileExt.filename || "evidencia_de_pago"}
+                          style={{ maxWidth: "100%", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)" }}
+                        />
+                      ) : (
+                        <span>Descargar: {order.evidenceFileExt.filename || "pago"}</span>
+                      )}
+                    </a>
+                  </div>
                 )}
-
-                <label className="newOrderDetsTotal-Label">
-                  <b>Final MXN{requestBill ? " (con IVA)" : ""}:</b> ${fmtMoney(finalMXNValue, "es-MX")} MXN
-                </label> */}
-
-                {/* Detail note for conversion when applicable */}
-                {/* {preferred === "MXN" && isMixed && (
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
-                    {canConvert
-                      ? `Detalle: USD $${fmtMoney(buckets.usd, "en-US")} × ${fmtMoney(dofRate, "es-MX")} = $${fmtMoney(buckets.usd * dofRate, "es-MX")}  + MXN nativo $${fmtMoney(buckets.mxn, "es-MX")}${dofDate ? `  (DOF ${dofDate})` : ""}`
-                      : "* No hay TC DOF guardado; se muestran subtotales por divisa."}
-                  </div>
-                )} */}
-
-                {/* Mixed orders policy */}
-                {/* {isMixed && (
-                  <div style={{ fontSize: 12, color: "#b91c1c", marginTop: 6 }}>
-                    IMPORTANTE: Los artículos cotizados en MXN deben pagarse en MXN.
-                  </div>
-                )} */}
               </div>
             </div>
 
@@ -683,124 +679,42 @@ export default function DeliveredSummary() {
               </div>
             </div>
 
-            {/* ========== Evidencias ========== */}
+            {/* ========== Preparación de Pedido ========== */}
             <div className="deliveryDets-AddressDiv">
               <div className="headerEditIcon-Div">
-                <label className="newUserData-Label">Evidencias</label>
+                <label className="newUserData-Label">Preparación de Pedido</label>
               </div>
               <div className="existingQuote-Div">
                 <div className="quoteAndFile-Div">
-                  {/* Payment evidence (new ext field first) */}
-                  {order?.evidenceFileExt?.url ? (
-                    <a
-                      href={order.evidenceFileExt.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="productDetail-Label"
-                      style={{ textDecoration: "underline" }}
-                    >
-                      <b>Pago:</b> {order.evidenceFileExt.filename || "evidencia_de_pago"}
-                    </a>
-                  ) : order?.evidenceFile?.filename ? (
-                    <a
-                      href={fileUrl("payment")}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="productDetail-Label"
-                      style={{ textDecoration: "underline" }}
-                    >
-                      <b>Pago:</b> {order.evidenceFile.filename}
-                    </a>
-                  ) : null}
+                  <label className="productDetail-Label">
+                    <b>Pedido preparado por:</b> {packerName || "—"}
+                  </label>
 
-                  {/* Packing evidence (new ext array first) */}
+                  {/* Fotos de empaque */}
                   {Array.isArray(order?.packingEvidenceExt) && order.packingEvidenceExt.length > 0 ? (
-                    <>
-                      <label className="productDetail-Label"><b>Empaque:</b></label>
-                      {order.packingEvidenceExt.map((f, idx) => (
-                        f?.url ? (
-                          <a
-                            key={`p-ext-${idx}`}
-                            href={f.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="productDetail-Label"
-                            style={{ textDecoration: "underline", display: "block", marginLeft: 12 }}
-                          >
-                            • {f.filename || `evidencia_${idx + 1}`}
-                          </a>
-                        ) : null
-                      ))}
-                    </>
-                  ) : Array.isArray(order?.packingEvidence) && order.packingEvidence.length > 0 ? (
-                    <>
-                      <label className="productDetail-Label"><b>Empaque:</b></label>
-                      {order.packingEvidence.map((f, idx) =>
-                        f?.filename ? (
-                          <a
-                            key={`p-legacy-${idx}`}
-                            href={fileUrl("packing", idx)}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="productDetail-Label"
-                            style={{ textDecoration: "underline", display: "block", marginLeft: 12 }}
-                          >
-                            • {f.filename}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 10, marginTop: 10 }}>
+                      {order.packingEvidenceExt.map((f, idx) =>
+                        f ? (
+                          <a key={`p-img-${idx}`} href={fileUrl("packing", idx)} target="_blank" rel="noreferrer" title={f.filename || `evidencia_${idx + 1}`}>
+                            {isImageMime(f.mimetype) ? (
+                              <img
+                                src={fileUrl("packing", idx)}
+                                alt={f.filename || `evidencia_${idx + 1}`}
+                                style={{ width: "100%", height: 120, objectFit: "cover", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)" }}
+                              />
+                            ) : (
+                              <div style={{ width: "100%", height: 120, display: "grid", placeItems: "center", border: "1px solid #ddd", borderRadius: 8 }}>
+                                {f.filename || `archivo-${idx + 1}`}
+                              </div>
+                            )}
                           </a>
                         ) : null
                       )}
-                    </>
-                  ) : null}
-
-                  {/* Delivery evidence (new ext optional; else legacy endpoint) */}
-                  {order?.deliveryEvidenceExt?.url ? (
-                    <a
-                      href={order.deliveryEvidenceExt.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="productDetail-Label"
-                      style={{ textDecoration: "underline" }}
-                    >
-                      <b>Entrega:</b> {order.deliveryEvidenceExt.filename || "evidencia_de_entrega"}
-                    </a>
-                  ) : order?.deliveryEvidence?.filename ? (
-                    <a
-                      href={fileUrl("delivery")}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="productDetail-Label"
-                      style={{ textDecoration: "underline" }}
-                    >
-                      <b>Entrega:</b> {order.deliveryEvidence.filename}
-                    </a>
-                  ) : null}
-
-                  {/* Ultra-legacy fallbacks */}
-                  {order?.packEvidenceImage && !order?.packingEvidence?.length && !order?.packingEvidenceExt?.length && (
-                    isProbablyUrl(order.packEvidenceImage) ? (
-                      <a
-                        href={order.packEvidenceImage}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="productDetail-Label"
-                        style={{ textDecoration: "underline" }}
-                      >
-                        (legacy) Evidencia de empaque
-                      </a>
-                    ) : (
-                      <label className="productDetail-Label">(legacy) Evidencia de empaque: {order.packEvidenceImage}</label>
-                    )
-                  )}
-                  {order?.evidenceURL && (
-                    <a
-                      href={order.evidenceURL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="productDetail-Label"
-                      style={{ textDecoration: "underline" }}
-                    >
-                      (legacy) Evidencia
-                    </a>
+                    </div>
+                  ) : (
+                    <label className="productDetail-Label" style={{ color: "#6b7280", marginTop: 6 }}>
+                      (Sin fotos de preparación registradas)
+                    </label>
                   )}
                 </div>
               </div>
@@ -824,6 +738,25 @@ export default function DeliveredSummary() {
                   )}
                   {order?.insuredAmount != null && order?.insuredAmount !== "" && (
                     <label className="productDetail-Label"><b>Monto asegurado:</b> ${fmtMoney(order.insuredAmount, "es-MX")} MXN</label>
+                  )}
+                  {/* Foto de entrega */}
+                  {order?.deliveryEvidenceExt && (
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
+                        <b>Evidencia de entrega:</b>
+                      </div>
+                      <a href={fileUrl("delivery")} target="_blank" rel="noreferrer">
+                        {isImageMime(order.deliveryEvidenceExt.mimetype) ? (
+                          <img
+                            src={fileUrl("delivery")}
+                            alt={order.deliveryEvidenceExt.filename || "evidencia_de_entrega"}
+                            style={{ maxWidth: "100%", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)" }}
+                          />
+                        ) : (
+                          <span>Descargar: {order.deliveryEvidenceExt.filename || "entrega"}</span>
+                        )}
+                      </a>
+                    </div>
                   )}
                 </div>
               </div>
