@@ -1,4 +1,5 @@
-// in my manageDeliveryDetails.jsx, I'd like to add the amount for which the order is insured, which equals to the orders total. For this piece of info, we'll be using MongoDb's field "totalAllMXN". Show this amount in the following places: within the screen, right under "Mercancía Asegurada" add field "Monto Asegurado". As well when generating label, bring the "Enviar Paquete Asegurado!" text a but up and right underneath that text, in red as well, add text "Monto Asegurado" and the same amount. Here is my manageDeliveryDetails.jsx, please direct edit
+// in manageDeliveryDetails.jsx, if "shippingInfo" in mongoDb is "Recoger en Matriz", then rather than having "#" show in the shippingDetails div, can you put "Recoger en Matriz" text, followed by pickup info (in mongodb we have pickupDetails object that contains date and time). Here is current manageDeliveryDetails.jsx
+// with these changes, im getting the following error on console "Warning: React has detected a change in the order of Hooks called by ManageDeliveryDetails. This will lead to bugs and errors if not fixed. For more information, read the Rules of Hooks: " "Error: Rendered more hooks than during the previous render. 
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -54,15 +55,36 @@ export default function ManageDeliveryDetails() {
     fetchOrderDetails();
   }, [orderId]);
 
+  // const fetchOrderDetails = async () => {
+  //   try {
+  //     const response = await axios.get(`${API}/orders/${orderId}`);
+  //     const o = response.data;
+  //     setOrder(o);
+
+  //     // Preselect method from order.shippingInfo.pickup if available
+  //     const pickupFlag =
+  //       (o?.shippingInfo && (o.shippingInfo.pickup === true || o.shippingInfo?.method === "pickup")) ? true : false;
+  //     setShipMethod(pickupFlag ? "Recoger en matriz" : "Enviar");
+  //   } catch (err) {
+  //     console.error("Error fetching order:", err);
+  //   }
+  // };
   const fetchOrderDetails = async () => {
     try {
       const response = await axios.get(`${API}/orders/${orderId}`);
       const o = response.data;
       setOrder(o);
-
-      // Preselect method from order.shippingInfo.pickup if available
-      const pickupFlag =
-        (o?.shippingInfo && (o.shippingInfo.pickup === true || o.shippingInfo?.method === "pickup")) ? true : false;
+  
+      // ✅ Recognize the string form ("Recoger en Matriz") and the object flags
+      const pickupByString =
+        typeof o?.shippingInfo === "string" &&
+        o.shippingInfo.trim().toLowerCase() === "recoger en matriz";
+  
+      const pickupByObject =
+        !!(o?.shippingInfo && (o.shippingInfo.pickup === true || o.shippingInfo?.method === "pickup"));
+  
+      const pickupFlag = pickupByString || pickupByObject;
+  
       setShipMethod(pickupFlag ? "Recoger en matriz" : "Enviar");
     } catch (err) {
       console.error("Error fetching order:", err);
@@ -197,6 +219,39 @@ export default function ManageDeliveryDetails() {
   const bEstado= billIsArray ? (billRaw?.[8] || "") : (billRaw?.estadoFiscal || "");
   const bCP    = billIsArray ? (billRaw?.[9] || "") : (billRaw?.cpFiscal || "");
 
+  // ==== Pickup rendering helpers (handle string "Recoger en Matriz") ====
+  const isPickupFromString =
+  typeof shipRaw === "string" &&
+  shipRaw.trim().toLowerCase() === "recoger en matriz";
+
+  const pickupDetails = order?.pickupDetails || null;
+
+  const fmtDMY = (isoLike) => {
+  if (!isoLike) return "";
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return String(isoLike); // fallback
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+  };
+
+  // const pickupLine = useMemo(() => {
+  // if (!pickupDetails) return "";
+  // const d = fmtDMY(pickupDetails.date);
+  // const t = (pickupDetails.time || "").trim();
+  // if (d && t) return `${d} • ${t}`;
+  // return d || t || "";
+  // }, [pickupDetails]);
+  
+  const pickupLine = (() => {
+    if (!pickupDetails) return "";
+    const d = fmtDMY(pickupDetails.date);
+    const t = (pickupDetails.time || "").trim();
+    if (d && t) return `${d} • ${t}`;
+    return d || t || "";
+  })();
+
   // ===== SHIPPING LABEL =====
   const generateShippingLabel = async (order) => {
     const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: [100, 150] });
@@ -207,38 +262,6 @@ export default function ManageDeliveryDetails() {
     // dec21
     const fmtMXN = (v) =>
       `$${(Number(v) || 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-
-    // // Compute insured amount in MXN (order total expressed in MXN)
-    // const rate = Number(order?.totals?.dofRate) || 0;
-    // const items = Array.isArray(order?.items) ? order.items : [];
-    // const normCur = (v) => String(v ?? "USD").trim().toUpperCase();
-    // const isUSD = (it) => normCur(it.currency) === "USD";
-    // const isMXN = (it) => normCur(it.currency) === "MXN";
-    
-    // // Prefer server-computed combined MXN if available
-    // let insuredAmountMXN = Number.isFinite(order?.totals?.totalAllMXN)
-    //   ? Number(order.totals.totalAllMXN)
-    //   : null;
-    
-    // if (insuredAmountMXN == null) {
-    //   const subtotalUSD = items.reduce(
-    //     (s, it) => s + (isUSD(it) ? (Number(it.amount) || 0) * (Number(it.priceUSD ?? it.price) || 0) : 0),
-    //     0
-    //   );
-    //   const subtotalMXN = items.reduce(
-    //     (s, it) => s + (isMXN(it) ? (Number(it.amount) || 0) * (Number(it.priceMXN ?? it.price) || 0) : 0),
-    //     0
-    //   );
-    //   if (subtotalMXN && !subtotalUSD) {
-    //     insuredAmountMXN = subtotalMXN;
-    //   } else if (!subtotalMXN && subtotalUSD && rate) {
-    //     insuredAmountMXN = subtotalUSD * rate;
-    //   } else if (subtotalMXN && subtotalUSD && rate) {
-    //     insuredAmountMXN = subtotalMXN + subtotalUSD * rate;
-    //   } else {
-    //     insuredAmountMXN = null;
-    //   }
-    // }
     
     // Insured amount (robust): pick latest totals snapshot, try multiple keys, fallback to compute
     const pickTotalsSnap = (t) => {
@@ -421,6 +444,50 @@ export default function ManageDeliveryDetails() {
         <div className="shippingDetails-Div">
           <label className="productDetail-Label">{displayName || order.userEmail}</label>
           <br />
+
+          {isPickupFromString ? (
+            // ✅ Pickup one-liner
+            <>
+              <label className="productDetail-Label" style={{ fontWeight: 600 }}>
+                Recoger en Matriz
+              </label>
+              {pickupLine && (
+                <label className="productDetail-Label">
+                  {pickupLine}
+                </label>
+              )}
+              <br />
+            </>
+          ) : (
+            // 📨 Regular address (only render pieces that exist; no stray '#')
+            <>
+              {(sCalle || sExt || sInt) && (
+                <label className="productDetail-Label">
+                  {[
+                    sCalle || "",
+                    [sExt && `#${sExt}`, sInt && `Int. ${sInt}`].filter(Boolean).join(" "),
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .trim()}
+                </label>
+              )}
+              {sCol && <label className="productDetail-Label">Col. {sCol}</label>}
+              {(sCiudad || sEstado) && (
+                <label className="productDetail-Label">
+                  {sCiudad}
+                  {sCiudad && sEstado ? ", " : ""}
+                  {sEstado}
+                </label>
+              )}
+              {sCP && <label className="productDetail-Label">C.P.: {sCP}</label>}
+              <br />
+            </>
+          )}
+        </div>
+        {/* <div className="shippingDetails-Div">
+          <label className="productDetail-Label">{displayName || order.userEmail}</label>
+          <br />
           <label className="productDetail-Label">
             {sCalle} #{sExt} {sInt ? `Int. ${sInt}` : ""}
           </label>
@@ -430,7 +497,7 @@ export default function ManageDeliveryDetails() {
           </label>
           {sCP && <label className="productDetail-Label">C.P.: {sCP}</label>}
           <br />
-        </div>
+        </div> */}
 
         {/* ===== NEW: Shipping Method Choice ===== */}
         <div className="shippingMethod-Div">

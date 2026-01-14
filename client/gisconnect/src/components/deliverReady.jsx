@@ -152,7 +152,6 @@ export default function DeliverReady() {
     const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
     const b = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
     return a > b;
-    // (If you want "today but later time" to still be "today", this is correct.)
   };
 
   const fmtDate = (d) => {
@@ -161,6 +160,35 @@ export default function DeliverReady() {
     const month = d.toLocaleString("es-MX", { month: "short" }); // keep short label style
     const year = d.getFullYear();
     return `${day}/${month}/${year}`;
+  };
+
+  // ===== NEW: pickup helpers for inline label override =====
+  const isPickupOrder = (order) => {
+    const sr = order?.shippingInfo;
+    const fromString =
+      typeof sr === "string" && sr.trim().toLowerCase() === "recoger en matriz";
+    const fromObject =
+      !!(sr && (sr.pickup === true || sr?.method === "pickup"));
+    return fromString || fromObject;
+  };
+
+  const fmtDMY = (isoLike) => {
+    if (!isoLike) return "";
+    const d = new Date(isoLike);
+    if (Number.isNaN(d.getTime())) return String(isoLike);
+    const dd = String(d.getDate()).padStart(2, "0");
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const yyyy = d.getFullYear();
+    return `${dd}/${mm}/${yyyy}`;
+  };
+
+  const pickupLineFor = (order) => {
+    const p = order?.pickupDetails || null;
+    if (!p) return "";
+    const d = fmtDMY(p.date);
+    const t = (p.time || "").trim();
+    if (d && t) return `${d} • ${t}`;
+    return d || t || "";
   };
 
   return (
@@ -203,6 +231,10 @@ export default function DeliverReady() {
           const isPendingBadge =
             order.orderStatus === "Pendiente de Entrega" || isFuture(d);
 
+          // NEW: detect pickup + build line
+          const isPickup = isPickupOrder(order);
+          const pickupLine = pickupLineFor(order);
+
           return (
             <div className="existingQuote-Div" key={order._id}>
               <div
@@ -227,9 +259,16 @@ export default function DeliverReady() {
                   No. {String(order._id).slice(-5)}
                 </label>
 
-                <label className="orderQuick-Label">
-                  <b>Paquetería:</b> {carrier || "No especificado"}
-                </label>
+                {/* ✅ Override Paquetería for pickup orders */}
+                {isPickup ? (
+                  <label className="orderQuick-Label">
+                    <b>Recoger en Matriz:</b> {pickupLine || "—"}
+                  </label>
+                ) : (
+                  <label className="orderQuick-Label">
+                    <b>Paquetería:</b> {carrier || "No especificado"}
+                  </label>
+                )}
 
                 {/* ✨ NEW: Badge when pending or future date */}
                 {isPendingBadge && (
@@ -271,6 +310,7 @@ export default function DeliverReady() {
   );
 }
 
+// // hey chatgpt, for deliverReady.jsx if in mongodb we have "shippingInfo" set as "Recoger en Matriz", I'd like to override label "Paquetería" and, instead of having that, display "Recoger en Matriz: date and time" (remember we have "pickupDetails" object in mongodb, ehich contains date and time). Here is my deliverReady.jsx, please direct edit
 // import { useState, useEffect, useMemo } from "react";
 // import { useNavigate } from "react-router-dom";
 // import axios from "axios";
@@ -287,8 +327,7 @@ export default function DeliverReady() {
 //   const [orders, setOrders] = useState([]);
 
 //   // ===== NEW: Mongo cache (email -> user) =====
-//   // user shape (from /users/by-email): { nombre, apellido, empresa?, shippingPreferences?: { preferredCarrier, insureShipment }, ... }
-//   const [mongoByEmail, setMongoByEmail] = useState({}); // { [email]: user | null }
+//   const [mongoByEmail, setMongoByEmail] = useState({});
 //   const [mongoLoading, setMongoLoading] = useState(false);
 
 //   useEffect(() => {
@@ -298,8 +337,11 @@ export default function DeliverReady() {
 //   const fetchOrders = async () => {
 //     try {
 //       const response = await axios.get(`${API}/orders`);
+//       // ✨ Include both statuses in the list
 //       const deliverableOrders = response.data.filter(
-//         (order) => order.orderStatus === "Etiqueta Generada"
+//         (order) =>
+//           order.orderStatus === "Etiqueta Generada" ||
+//           order.orderStatus === "Pendiente de Entrega"
 //       );
 //       setOrders(deliverableOrders);
 //     } catch (err) {
@@ -318,7 +360,6 @@ export default function DeliverReady() {
 //       )
 //     );
 
-//     // figure out which emails we still need
 //     const missing = emails.filter((e) => !(e in mongoByEmail));
 //     if (missing.length === 0) return;
 
@@ -344,8 +385,6 @@ export default function DeliverReady() {
 //             if (r.status === "fulfilled") {
 //               const { email, user } = r.value;
 //               next[email] = user;
-//             } else {
-//               // Promise rejected (shouldn't happen due to catch above), keep null
 //             }
 //           });
 //           return next;
@@ -367,15 +406,12 @@ export default function DeliverReady() {
 //   function goToAdminHome() {
 //     navigate("/adminHome");
 //   }
-
 //   function goToNewOrders() {
 //     navigate("/newOrders");
 //   }
-
 //   function goToPackageReady() {
 //     navigate("/deliverReady");
 //   }
-
 //   const goHomeLogo = () => {
 //     navigate("/adminHome");
 //   };
@@ -406,7 +442,38 @@ export default function DeliverReady() {
 //       user?.shippingPreferences?.insureShipment ??
 //       user?.insureShipment;
 //     if (typeof val === "boolean") return val ? "Sí" : "No";
-//     return ""; // not specified
+//     return "";
+//   };
+
+//   // ===== Helpers to detect "future" date & format nicely =====
+//   const parseDeliveryDate = (order) => {
+//     // Prefer YMD string if present, else native Date
+//     if (order?.deliveryDateYMD) {
+//       // YYYY-MM-DD
+//       return new Date(`${order.deliveryDateYMD}T00:00:00`);
+//     }
+//     if (order?.deliveryDate) {
+//       return new Date(order.deliveryDate);
+//     }
+//     return null;
+//   };
+
+//   const isFuture = (d) => {
+//     if (!d) return false;
+//     const today = new Date();
+//     // Compare by local date (ignore time)
+//     const a = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+//     const b = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+//     return a > b;
+//     // (If you want "today but later time" to still be "today", this is correct.)
+//   };
+
+//   const fmtDate = (d) => {
+//     if (!d) return "—";
+//     const day = d.getDate().toString().padStart(2, "0");
+//     const month = d.toLocaleString("es-MX", { month: "short" }); // keep short label style
+//     const year = d.getFullYear();
+//     return `${day}/${month}/${year}`;
 //   };
 
 //   return (
@@ -444,6 +511,11 @@ export default function DeliverReady() {
 //           const carrier = preferredCarrierFor(order.userEmail);
 //           const insured = insureShipmentLabelFor(order.userEmail);
 
+//           // NEW: Pending label logic
+//           const d = parseDeliveryDate(order);
+//           const isPendingBadge =
+//             order.orderStatus === "Pendiente de Entrega" || isFuture(d);
+
 //           return (
 //             <div className="existingQuote-Div" key={order._id}>
 //               <div
@@ -451,6 +523,7 @@ export default function DeliverReady() {
 //                 onClick={() => handleOrderClick(order._id)}
 //               >
 //                 <label className="orderQuick-Label">{name}</label>
+
 //                 <label className="orderQuick-Label">
 //                   {order.orderDate
 //                     ? (() => {
@@ -462,14 +535,21 @@ export default function DeliverReady() {
 //                       })()
 //                     : "Sin fecha"}
 //                 </label>
+
 //                 <label className="orderQuick-Label">
 //                   No. {String(order._id).slice(-5)}
 //                 </label>
 
-//                 {/* NEW: shipping preferences from Mongo */}
 //                 <label className="orderQuick-Label">
 //                   <b>Paquetería:</b> {carrier || "No especificado"}
 //                 </label>
+
+//                 {/* ✨ NEW: Badge when pending or future date */}
+//                 {isPendingBadge && (
+//                   <label className="orderQuick-Label" style={{ color: "#b45309" }}>
+//                     <b>Pendiente de Entrega:</b> {fmtDate(d)}
+//                   </label>
+//                 )}
 //               </div>
 //             </div>
 //           );
