@@ -1,3 +1,4 @@
+// and to conclude, the "Crédito", in newOrderDetails.jsx under the "Método de Pago", lets add "Crédito" to the options.Let me know if we need to make any modifictions so this also shows and gets stored correctly to mongodb's "paymentMethod". As well, for "Cuenta de Recepción" dropdown, add "Pendiente" as an option and, as well, tell me if anything else needs to be modified for it to be stored in mongodb's "paymentAccount". Here is my current newOrderDetails.jsx 
 import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
 import { API } from "/src/lib/api";
@@ -299,23 +300,28 @@ export default function NewOrderDetails() {
     return vals.some((v) => String(v ?? "").trim() !== "");
   }, [order?.billingInfo]);
 
-  const receivingAccountOptions = useMemo(
-    () =>
-      hasInvoiceBilling
-        ? [
-            { value: "BBVA *1207", label: "MXN: BBVA *1207" },
-            { value: "MONEX *8341", label: "USD: MONEX *8341" },
-            { value: "INVEX *4234", label: "USD: INVEX *4234" },
-          ]
-        : [{ value: "BBVA *4078", label: "MXN: BBVA *4078" }],
-    [hasInvoiceBilling]
-  );
+  const receivingAccountOptions = useMemo(() => {
+    const base = hasInvoiceBilling
+      ? [
+          { value: "BBVA *1207", label: "MXN: BBVA *1207" },
+          { value: "MONEX *8341", label: "USD: MONEX *8341" },
+          { value: "INVEX *4234", label: "USD: INVEX *4234" },
+        ]
+      : [
+          { value: "BBVA *4078", label: "MXN: BBVA *4078" },
+        ];
+  
+    // NEW: always include "Pendiente" at the top
+    return [{ value: "Pendiente", label: "Pendiente" }, ...base];
+  }, [hasInvoiceBilling]);
 
   // Keep selected account valid when options change; prefer order.receivingAccount if valid
   useEffect(() => {
     const allowed = receivingAccountOptions.map((o) => o.value);
     if (!allowed.includes(account)) {
-      const preferred = allowed.includes(order?.receivingAccount) ? order?.receivingAccount : "";
+      const preferred = allowed.includes(order?.receivingAccount) 
+      ? order?.receivingAccount 
+      : "";
       setAccount(preferred);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -629,6 +635,7 @@ export default function NewOrderDetails() {
               <option value="Efectivo">01: Efectivo</option>
               <option value="Cheque Nominativo">02: Cheque Nominativo</option>
               <option value="Transferencia electrónica de fondos">03: Transferencia electrónica de fondos</option>
+              <option value="Crédito">04: Crédito</option>
             </select>
           </div>
 

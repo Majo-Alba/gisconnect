@@ -1,3 +1,4 @@
+// following on that flow, in newOrders.jsx, if an order has been bought through credit (mongodb paymentOption is "Crédito"), then I'd like for a text to show this. As available option on mongodb regarding credit, we have "paymentOption", "creditTermDays" (shows for how long the client has this credit line), and "creditDueDate". So add some message that includes those pieces of info insidde the orders div (maybe in slight bold letters or red)
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -344,36 +345,54 @@ export default function NewOrders() {
         </div>
 
         <ul>
-          {filteredOrders.map((order) => {
-            const { finalUSD, finalMXN } = computeDisplayTotals(order);
-            const displayName = displayForEmail(order.userEmail);
-            return (
-              <li
-                key={order._id}
-                onClick={() => navigate(`/newOrders/${order._id}`)}
-              >
-                <div className="orderQuickDetails-Div">
-                  <label className="orderQuick-Label">
-                    No. {String(order._id).slice(-5)}
+        {filteredOrders.map((order) => {
+          const { finalUSD, finalMXN } = computeDisplayTotals(order);
+          const displayName = displayForEmail(order.userEmail);
+
+          const fmtDate = (v) => {
+            try { return new Date(v).toLocaleDateString("es-MX"); }
+            catch { return "—"; }
+          };
+
+          const isCredit = String(order.paymentOption || "").toLowerCase() === "crédito";
+
+          return (
+            <li
+              key={order._id}
+              onClick={() => navigate(`/newOrders/${order._id}`)}
+            >
+              <div className="orderQuickDetails-Div">
+                <label className="orderQuick-Label">
+                  No. {String(order._id).slice(-5)}
+                </label>
+
+                <label className="orderQuick-Label">
+                  {order.orderDate
+                    ? (() => {
+                        const d = new Date(order.orderDate);
+                        const day = d.getDate().toString().padStart(2, "0");
+                        const month = d.toLocaleString("es-MX", { month: "short" });
+                        const year = d.getFullYear();
+                        return `${day}/${month}/${year}`;
+                      })()
+                    : "Sin fecha"}
+                </label>
+
+                <label className="orderQuick-Label">
+                  {displayName}
+                </label>
+
+                {/* one-liner credit info sitting at bottom */}
+                {isCredit && (
+                  <label style={{marginLeft: "-185%", marginTop: "20%", fontSize: 12, color: "#B91C1C", fontWeight: 600, lineHeight: 1.2,}}>
+                    Compra a crédito, válido por {Number(order.creditTermDays || 0)} día(s). Vigencia:{" "}
+                    {order.creditDueDate ? fmtDate(order.creditDueDate) : "—"}
                   </label>
-                  <label className="orderQuick-Label">
-                    {order.orderDate
-                      ? (() => {
-                          const date = new Date(order.orderDate);
-                          const day = date.getDate().toString().padStart(2, "0");
-                          const month = date.toLocaleString("en-MX", { month: "short" });
-                          const year = date.getFullYear();
-                          return `${day}/${month}/${year}`;
-                        })()
-                      : "Sin fecha"}
-                  </label>
-                  <label className="orderQuick-Label">
-                    {displayName}
-                  </label>
-                </div>
-              </li>
-            );
-          })}
+                )}
+              </div>
+            </li>
+          );
+        })}
         </ul>
       </div>
 
