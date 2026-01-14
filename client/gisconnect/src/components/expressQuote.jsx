@@ -1,4 +1,4 @@
-// //   ----> HERE MJ
+//Hey chatgpt, currently to determine if a person has specialPrices over a product we check for NOMBRE_APELLIDO in CLIENT_DB_URL and then look for coincidence in SPECIAL_PRICES_URL. However, not all users who have special prices are registered in CLIENT_DB_URL hence sometimes this generates wrong quotes. To amplify the search, in mongodb, under newusers we have fields "nombre", "apellido", and "empresa", all of which are possibilities of how to link users to the SPECIAL_PRICES_URL. Now, for example, in mongodb we have a user registered as nombre: Miguel, apellido: Marquez, empresa: Nutricion Vegetal. That same user, in CLIENT_DB_URL can be found as "NUTRICION_VEGETAL". How can we make this work? Here is my current expressQuote.jsx, please direct edit   
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -38,10 +38,12 @@ export default function ExpressQuote() {
   const [csvData, setCsvData] = useState([]);             // Products
   const [csvClientData, setCsvClientData] = useState([]); // (kept but no longer used for addr)
   const [specialPrices, setSpecialPrices] = useState([]);
+  const [specialHeaders, setSpecialHeaders] = useState([]); // headers present in SPECIAL_PRICES sheet
 
   const [stockByKey, setStockByKey] = useState({});
 
   const [user, setUser] = useState(null);
+  const [mongoProfile, setMongoProfile] = useState(null);   // << new
   const [isActive, setIsActive] = useState(false);
 
   const [dofRate, setDofRate] = useState(null);
@@ -114,6 +116,20 @@ export default function ExpressQuote() {
     setUser(creds);
   }, []);
 
+  // Fetch Mongo profile to get nombre, apellido, empresa
+  useEffect(() => {
+    const email = user?.correo;
+    if (!email) return;
+    (async () => {
+      try {
+        const { data } = await axios.get(`${API}/users/by-email`, { params: { email } });
+        setMongoProfile(data || null);
+      } catch {
+        setMongoProfile(null);
+      }
+    })();
+  }, [user?.correo]);
+
   // CSV URLs (left as-is for product/pricing logic)
   const PRODUCTS_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
@@ -169,9 +185,15 @@ export default function ExpressQuote() {
   }, [user?.correo]);
 
   function fetchCSV(url, setter) {
-    axios
-      .get(url)
-      .then((res) => setter(parseCSV(res.data)))
+    axios.get(url)
+      .then((res) => {
+        const parsed = parseCSV(res.data);
+        setter(parsed);
+        // If this is SPECIAL_PRICES_URL, store headers once
+        if (url === SPECIAL_PRICES_URL && Array.isArray(parsed) && parsed.length) {
+          setSpecialHeaders(Object.keys(parsed[0] || {}));
+        }
+      })
       .catch((err) => console.error("Error fetching CSV:", err));
   }
 
@@ -192,6 +214,54 @@ export default function ExpressQuote() {
     const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   };
+
+  // Clean common MX company suffixes for better matches
+  const stripCompanySuffixes = (s) => {
+    if (!s) return s;
+    let t = s.toString();
+    t = t.replace(/\bS\.?A\.?\s*D?E?\s*C\.?V\.?\b/gi, ""); // SA de CV variants
+    t = t.replace(/\bS\.? DE R\.?L\.? DE C\.?V\.?\b/gi, ""); // S de RL de CV
+    t = t.replace(/\bS\.?C\.?A\.??\b/gi, "");
+    t = t.replace(/\bS\.?C\.?\b/gi, "");
+    t = t.replace(/\bA\.?C\.?\b/gi, "");
+    t = t.replace(/\bDE\s+M[EÉ]XICO\b/gi, "");
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  };
+
+  // Build a prioritized list of possible client columns to try in SPECIAL_PRICES
+  const getCandidateClientCols = () => {
+    const candidates = [];
+    // 1) Existing mapping via CLIENT_DB_URL (if present)
+    const viaClientDb = getClientColumnName(user, csvClientData);
+    if (viaClientDb) candidates.push(viaClientDb);
+
+    // 2) From Mongo profile
+    const nombre = mongoProfile?.nombre || "";
+    const apellido = mongoProfile?.apellido || "";
+    const empresa = mongoProfile?.empresa || "";
+    const razonSocial = billingAddr?.razonSocial || ""; // sometimes more “official”
+
+    const fullName = [nombre, apellido].filter(Boolean).join(" ");
+    const empresaClean = stripCompanySuffixes(empresa);
+    const razonClean = stripCompanySuffixes(razonSocial);
+
+    [fullName, empresa, empresaClean, razonSocial, razonClean].forEach((s) => {
+      const h = toClientHeader(s);
+      if (h) candidates.push(h);
+    });
+
+    // 3) Dedup while preserving order
+    const uniq = [];
+    const seen = new Set();
+    for (const c of candidates) {
+      if (!seen.has(c)) { seen.add(c); uniq.push(c); }
+    }
+    // Filter to only headers that actually exist in SPECIAL_PRICES sheet
+    const allowed = new Set((specialHeaders || []).map(String));
+    return uniq.filter((c) => allowed.has(c));
+  };
+
   const getClientColumnName = (user, clientRows) => {
     if (!user?.correo || clientRows.length === 0) return "";
     const hit = clientRows.find(
@@ -230,6 +300,7 @@ export default function ExpressQuote() {
     setTimeout(() => setStockReady(true), 0);
 
     const clientCol = getClientColumnName(user, csvClientData);
+
     const spRow = specialPrices.find(
       (row) =>
         normalize(row.NOMBRE_PRODUCTO) === normalize(selectedProduct) &&
@@ -241,14 +312,28 @@ export default function ExpressQuote() {
     let resolvedCurrency = "USD";
     let applied = false;
 
-    if (spRow && clientCol) {
-      const clientVal = n(spRow[clientCol]);
-      if (clientVal && clientVal > 0) {
-        resolvedPrice = clientVal;
-        resolvedCurrency = "USD";
-        applied = true;
+    // Try multiple candidate columns: CLIENT_DB mapping first, then Mongo-based variants
+    if (spRow) {
+      const candidates = getCandidateClientCols();
+      for (const col of candidates) {
+        const v = n(spRow[col]);
+        if (v && v > 0) {
+          resolvedPrice = v;
+          resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+          applied = true;
+          break;
+        }
       }
     }
+
+    // if (spRow && clientCol) {
+    //   const clientVal = n(spRow[clientCol]);
+    //   if (clientVal && clientVal > 0) {
+    //     resolvedPrice = clientVal;
+    //     resolvedCurrency = "USD";
+    //     applied = true;
+    //   }
+    // }
 
     if (resolvedPrice === null) {
       const usdFallback =
@@ -280,6 +365,8 @@ export default function ExpressQuote() {
     setPriceCurrency(resolvedCurrency);
     setSpecialApplied(applied);
   }, [selectedProduct, presentation, csvData, specialPrices, csvClientData, user, stockByKey]);
+
+  console.log(csvClientData)
 
   const presentationOptions = csvData
     .filter((r) => r.NOMBRE_PRODUCTO === selectedProduct)
@@ -1193,6 +1280,12 @@ export default function ExpressQuote() {
     </body>
   );
 }
+
+
+
+
+
+
 // {/* hey chatgpt, Im having the following error. in expressQuote.jsx, the user is prompted to select the amount of a certain product he wants. code is connected to google sheets inventory and if the amount selected is unavailable, a message pops up to warn about stock be ing unaveilable. This generally works fine, but sometimes even though theres enough stock, the message pops up. However, when this happens, the app does allow the user to add product to cart, not like when truly unavailable that the app doesnt allow the user to add to cart. can you help me bulletproof current code */}
 
 // import { useState, useEffect } from "react";
