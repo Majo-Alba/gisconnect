@@ -385,8 +385,9 @@ export default function DeliveryDetails() {
         >
           <option value="Encargado">Encargado...</option>
           <option value="Oswaldo">Oswaldo</option>
-          <option value="Santiago">Santiago</option>
+          <option value="Luis">Luis</option>
           <option value="Mauro">Mauro</option>
+          <option value="Memo">Memo</option>
         </select>
       </div>
 

@@ -13,6 +13,13 @@ import { API } from "/src/lib/api";
 const PRODUCTS_CSV_URL =
   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
 
+// === Who can see "Resumen Financiero" ===
+const ALLOWED_ADMIN_EMAILS = new Set([
+  "majo_test@gmail.com",
+  "info@greenimportsol.com",
+  "ventas@greenimportsol.com",
+]);
+
 export default function DeliveredSummary() {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -28,6 +35,15 @@ export default function DeliveredSummary() {
 
   // === Products CSV (Map keyed by NOMBRE_PRODUCTO)
   const [catalog, setCatalog] = useState(null);
+
+  // === Current logged-in email (for financial visibility)
+  const [currentUserEmail, setCurrentUserEmail] = useState("");
+  useEffect(() => {
+    const creds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+    const email = (creds?.correo || "").trim().toLowerCase();
+    setCurrentUserEmail(email);
+  }, []);
+  const canSeeFinancial = ALLOWED_ADMIN_EMAILS.has(currentUserEmail);
 
   // ===== Fetch order =====
   useEffect(() => {
@@ -93,12 +109,10 @@ export default function DeliveredSummary() {
       .trim()
       .toLowerCase();
 
-  // Optionally remove presentation bits from names to improve hits, but we still
-  // ONLY use NOMBRE_PRODUCTO column from CSV (no SKU)
   const baseName = (s) => {
     let t = String(s || "");
-    t = t.replace(/\s*—\s*.*$/u, ""); // drop “ — …”
-    t = t.replace(/\(.*?\)/g, "");    // drop (…)
+    t = t.replace(/\s*—\s*.*$/u, "");
+    t = t.replace(/\(.*?\)/g, "");
     return norm(t);
   };
 
@@ -113,7 +127,6 @@ export default function DeliveredSummary() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  // Quote-aware CSV parser
   function parseCSVQuoted(csvText) {
     const rows = [];
     let row = [];
@@ -196,7 +209,6 @@ export default function DeliveredSummary() {
           const keyName = norm(nameRaw);
           const keyBase = baseName(nameRaw);
 
-          // === Currency detection: USD first, else MXN ===
           const usd = Math.max(
             iUSD1 >= 0 ? parseMoney(row[iUSD1]) : 0,
             iUSD2 >= 0 ? parseMoney(row[iUSD2]) : 0
@@ -209,7 +221,7 @@ export default function DeliveredSummary() {
           let currency;
           if (usd > 0) currency = "USD";
           else if (mxn > 0) currency = "MXN";
-          else currency = "MXN"; // default if neither present
+          else currency = "MXN";
 
           const entry = {
             currency,
@@ -291,29 +303,29 @@ export default function DeliveredSummary() {
       return "";
     };
     return {
-        street: firstNonEmpty("street", "calle", "addressLine1", "direccion", "calleEnvio"),
-        exteriorNumber: firstNonEmpty("exteriorNumber", "extNumber", "numeroExterior", "noExterior", "numero", "exteriorEnvio"),
-        interiorNumber: firstNonEmpty("interiorNumber", "intNumber", "numeroInterior", "noInterior", "interior", "interiorEnvio"),
-        colony: firstNonEmpty("colony", "colonia", "neighborhood", "barrio", "coloniaEnvio"),
-        city: firstNonEmpty("city", "municipality", "municipio", "localidad", "ciudadEnvio"),
-        state: firstNonEmpty("state", "estado", "region", "estadoEnvio"),
-        postalCode: firstNonEmpty("postalCode", "cp", "zip", "zipcode", "codigoPostal", "cpEnvio"),
-        country: firstNonEmpty("country", "pais"),
-        
-        contactName: firstNonEmpty("contactName", "contactoNombre"),
-        phone: firstNonEmpty("phone", "telefono"),
-        email: firstNonEmpty("email", "correo", "correoFiscal"),
-        rfc: firstNonEmpty("rfc", "RFC", "rfcEmpresa"),
-        businessName: firstNonEmpty("businessName", "razonSocial", "razon_social"),
-        taxRegime: firstNonEmpty("taxRegime", "regimenFiscal", "regimen_fiscal"),
+      street: firstNonEmpty("street", "calle", "addressLine1", "direccion", "calleEnvio"),
+      exteriorNumber: firstNonEmpty("exteriorNumber", "extNumber", "numeroExterior", "noExterior", "numero", "exteriorEnvio"),
+      interiorNumber: firstNonEmpty("interiorNumber", "intNumber", "numeroInterior", "noInterior", "interior", "interiorEnvio"),
+      colony: firstNonEmpty("colony", "colonia", "neighborhood", "barrio", "coloniaEnvio"),
+      city: firstNonEmpty("city", "municipality", "municipio", "localidad", "ciudadEnvio"),
+      state: firstNonEmpty("state", "estado", "region", "estadoEnvio"),
+      postalCode: firstNonEmpty("postalCode", "cp", "zip", "zipcode", "codigoPostal", "cpEnvio"),
+      country: firstNonEmpty("country", "pais"),
+      
+      contactName: firstNonEmpty("contactName", "contactoNombre"),
+      phone: firstNonEmpty("phone", "telefono"),
+      email: firstNonEmpty("email", "correo", "correoFiscal"),
+      rfc: firstNonEmpty("rfc", "RFC", "rfcEmpresa"),
+      businessName: firstNonEmpty("businessName", "razonSocial", "razon_social"),
+      taxRegime: firstNonEmpty("taxRegime", "regimenFiscal", "regimen_fiscal"),
 
-        billingStreet: firstNonEmpty("calleFiscal"),
-        billingExterior: firstNonEmpty("exteriorFiscal"),
-        billingInterior: firstNonEmpty("interiorFiscal"),
-        billingColony: firstNonEmpty("coloniaFiscal"),
-        billingCity: firstNonEmpty("ciudadFiscal"),
-        billingState: firstNonEmpty("estadoFiscal"),
-        billingCP: firstNonEmpty("cpFiscal"),
+      billingStreet: firstNonEmpty("calleFiscal"),
+      billingExterior: firstNonEmpty("exteriorFiscal"),
+      billingInterior: firstNonEmpty("interiorFiscal"),
+      billingColony: firstNonEmpty("coloniaFiscal"),
+      billingCity: firstNonEmpty("ciudadFiscal"),
+      billingState: firstNonEmpty("estadoFiscal"),
+      billingCP: firstNonEmpty("cpFiscal"),
     };
   }
 
@@ -331,7 +343,7 @@ export default function DeliveredSummary() {
   const shipping = extractAddress(order?.shippingInfo);
   const billing = extractAddress(order?.billingInfo);
 
-  // ✅ Detect pickup orders (string "Recoger en Matriz" or object flags)
+  // Detect pickup orders
   const isPickupOrder = (() => {
     const si = order?.shippingInfo;
     if (typeof si === "string") {
@@ -357,7 +369,7 @@ export default function DeliveredSummary() {
 
   const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
 
-  // Decorate items (unchanged) …
+  // Decorate items (kept for currency detection if needed in future)
   const decoratedItems = useMemo(() => {
     const map = catalog;
     const toNum = (v) => (Number(v) || 0);
@@ -493,12 +505,7 @@ export default function DeliveredSummary() {
                           </label>
                         )}
                         <label className="orderDets-Label"><b>Cantidad:</b> {item._qty}</label>
-                        <label className="orderDets-Label">
-                          <b>Precio Unitario:</b> ${fmtMoney(item._unit, item._currency === "USD" ? "en-US" : "es-MX")} {item._currency}
-                        </label>
-                        <label className="newOrderDetsTotal-Label">
-                          <b>Total del producto:</b> ${fmtMoney(item._lineTotal, item._currency === "USD" ? "en-US" : "es-MX")} {item._currency}
-                        </label>
+                        {/* Removed Precio Unitario & Total del producto for all users */}
                       </div>
                     </div>
                   ))}
@@ -508,71 +515,75 @@ export default function DeliveredSummary() {
               )}
             </div>
 
-            {/* ========== Totales financieros ========== */}
-            <div className="headerEditIcon-Div">
-              <label className="newUserData-Label">Resumen Financiero</label>
-            </div>
-
-            <div className="orderDelivered-ProductsDiv" style={{ marginTop: 8 }}>
-              <div className="orderDetails-Div">
-                <label className="orderDets-Label" style={{ fontSize: 12, marginBottom: 4 }}>
-                  <b>Subtotal productos USD:</b> ${fmtMoney(buckets.usd, "en-US")} USD
-                </label>
-                <label className="orderDets-Label" style={{ fontSize: 12 }}>
-                  <b>Subtotal productos MXN:</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
-                </label>
-
-                <label className="orderDets-Label" style={{ fontSize: 12, marginTop: 6 }}>
-                  <b>Divisa de pago:</b> {paymentCurrency}
-                </label>
-
-                {paymentCurrency === "USD" ? (
-                  <>
-                    <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
-                      <b>Total pagado (USD):</b>{" "}
-                      {totalUSDNative != null ? `$${fmtMoney(totalUSDNative, "en-US")} USD` : "—"}
-                    </label>
-                    {Number.isFinite(totalMXNNative) && totalMXNNative > 0 && (
-                      <label className="newOrderDetsTotal-Label">
-                        <b>Total pagado (MXN):</b> ${fmtMoney(totalMXNNative, "es-MX")} MXN
-                      </label>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
-                      <b>Total pagado (MXN):</b>{" "}
-                      {totalAllMXN != null ? `$${fmtMoney(totalAllMXN, "es-MX")} MXN` : "—"}
-                    </label>
-                  </>
-                )}
-
-                <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
-                  {`Tipo de cambio utilizado para la transacción: ${
-                    Number.isFinite(dofRate) && dofRate > 0 ? fmtMoney(dofRate, "es-MX") : "—"
-                  }${dofDate ? `  (DOF ${dofDate})` : ""}`}
+            {/* ========== Totales financieros (visible solo para correos permitidos) ========== */}
+            {canSeeFinancial && (
+              <>
+                <div className="headerEditIcon-Div">
+                  <label className="newUserData-Label">Resumen Financiero</label>
                 </div>
 
-                {order?.evidenceFileExt && (
-                  <div style={{ marginTop: 10 }}>
-                    <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
-                      <b>Evidencia de pago:</b>
+                <div className="orderDelivered-ProductsDiv" style={{ marginTop: 8 }}>
+                  <div className="orderDetails-Div">
+                    <label className="orderDets-Label" style={{ fontSize: 12, marginBottom: 4 }}>
+                      <b>Subtotal productos USD:</b> ${fmtMoney(buckets.usd, "en-US")} USD
+                    </label>
+                    <label className="orderDets-Label" style={{ fontSize: 12 }}>
+                      <b>Subtotal productos MXN:</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
+                    </label>
+
+                    <label className="orderDets-Label" style={{ fontSize: 12, marginTop: 6 }}>
+                      <b>Divisa de pago:</b> {paymentCurrency}
+                    </label>
+
+                    {paymentCurrency === "USD" ? (
+                      <>
+                        <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+                          <b>Total pagado (USD):</b>{" "}
+                          {totalUSDNative != null ? `$${fmtMoney(totalUSDNative, "en-US")} USD` : "—"}
+                        </label>
+                        {Number.isFinite(totalMXNNative) && totalMXNNative > 0 && (
+                          <label className="newOrderDetsTotal-Label">
+                            <b>Total pagado (MXN):</b> ${fmtMoney(totalMXNNative, "es-MX")} MXN
+                          </label>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+                          <b>Total pagado (MXN):</b>{" "}
+                          {totalAllMXN != null ? `$${fmtMoney(totalAllMXN, "es-MX")} MXN` : "—"}
+                        </label>
+                      </>
+                    )}
+
+                    <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
+                      {`Tipo de cambio utilizado para la transacción: ${
+                        Number.isFinite(dofRate) && dofRate > 0 ? fmtMoney(dofRate, "es-MX") : "—"
+                      }${dofDate ? `  (DOF ${dofDate})` : ""}`}
                     </div>
-                    <a href={fileUrl("payment")} target="_blank" rel="noreferrer">
-                      {isImageMime(order.evidenceFileExt.mimetype) ? (
-                        <img
-                          src={fileUrl("payment")}
-                          alt={order.evidenceFileExt.filename || "evidencia_de_pago"}
-                          style={{ maxWidth: "100%", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)" }}
-                        />
-                      ) : (
-                        <span>Descargar: {order.evidenceFileExt.filename || "pago"}</span>
-                      )}
-                    </a>
+
+                    {order?.evidenceFileExt && (
+                      <div style={{ marginTop: 10 }}>
+                        <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
+                          <b>Evidencia de pago:</b>
+                        </div>
+                        <a href={fileUrl("payment")} target="_blank" rel="noreferrer">
+                          {isImageMime(order.evidenceFileExt.mimetype) ? (
+                            <img
+                              src={fileUrl("payment")}
+                              alt={order.evidenceFileExt.filename || "evidencia_de_pago"}
+                              style={{ maxWidth: "100%", borderRadius: 8, boxShadow: "0 1px 6px rgba(0,0,0,.12)" }}
+                            />
+                          ) : (
+                            <span>Descargar: {order.evidenceFileExt.filename || "pago"}</span>
+                          )}
+                        </a>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
+                </div>
+              </>
+            )}
 
             {/* ========== Dirección de Envío / Detalles de Pedido (Pickup) ========== */}
             <div className="deliveryDets-AddressDiv">
@@ -787,7 +798,7 @@ export default function DeliveredSummary() {
   );
 }
 
-// // in deliveredSummary.jsx, for those orders that (mongodb) have "shippingInfo" set to "Recoger en Matriz", instead of having label "Dirección de Envío", lets switch it to "Detalles de Pedido" (like we previously did). As for the content of that div, since we dont have a shipping address, lets put Fecha & Hora (from mongodb's "piskupDetails" date and time). Here is my current deliveredSummary.jsx, please direct edit
+// // hey chatgpt, in deliveredSummary.jsx I'd like to add the following feature that allows only certain admin user accounts to see the "Resumen Financiero" div. Make that div only visible for the following admin users: majo_test@gmail.com, info@greenimportsol.com, and ventas@greenimportsol.com. For all other user accounts, do not show "Resumen Financiero". As well, for this same screen, in "Productos" lets remove (for all users) the "Precio Unitario" field (for all products) and the "Total del producto". Here is my current deliveredSummary.jsx, please direct edit
 // import { useEffect, useMemo, useState } from "react";
 // import { useParams, useNavigate } from "react-router-dom";
 // import axios from "axios";
@@ -1029,19 +1040,15 @@ export default function DeliveredSummary() {
 //   const formatDate = (value) => {
 //     if (!value) return "Sin fecha";
 //     const s = String(value);
-  
-//     // If we have a pure YMD or an ISO with time (e.g., ...Z), always render the YMD part as local calendar date
 //     const m = s.match(/^(\d{4}-\d{2}-\d{2})/);
 //     if (m) {
 //       const [Y, M, D] = m[1].split("-").map(Number);
-//       const d = new Date(Y, M - 1, D); // local date, no TZ shift
+//       const d = new Date(Y, M - 1, D);
 //       const day = d.getDate().toString().padStart(2, "0");
 //       const month = d.toLocaleString("es-MX", { month: "short" });
 //       const year = d.getFullYear();
 //       return `${day}/${month}/${year}`;
 //     }
-  
-//     // Fallback for other formats
 //     const d2 = new Date(s);
 //     if (isNaN(d2.getTime())) return "Sin fecha";
 //     const day = d2.getDate().toString().padStart(2, "0");
@@ -1085,29 +1092,29 @@ export default function DeliveredSummary() {
 //       return "";
 //     };
 //     return {
-//       street: firstNonEmpty("street", "calle", "addressLine1", "direccion", "calleEnvio"),
-//       exteriorNumber: firstNonEmpty("exteriorNumber", "extNumber", "numeroExterior", "noExterior", "numero", "exteriorEnvio"),
-//       interiorNumber: firstNonEmpty("interiorNumber", "intNumber", "numeroInterior", "noInterior", "interior", "interiorEnvio"),
-//       colony: firstNonEmpty("colony", "colonia", "neighborhood", "barrio", "coloniaEnvio"),
-//       city: firstNonEmpty("city", "municipality", "municipio", "localidad", "ciudadEnvio"),
-//       state: firstNonEmpty("state", "estado", "region", "estadoEnvio"),
-//       postalCode: firstNonEmpty("postalCode", "cp", "zip", "zipcode", "codigoPostal", "cpEnvio"),
-//       country: firstNonEmpty("country", "pais"),
-      
-//       contactName: firstNonEmpty("contactName", "contactoNombre"),
-//       phone: firstNonEmpty("phone", "telefono"),
-//       email: firstNonEmpty("email", "correo", "correoFiscal"),
-//       rfc: firstNonEmpty("rfc", "RFC", "rfcEmpresa"),
-//       businessName: firstNonEmpty("businessName", "razonSocial", "razon_social"),
-//       taxRegime: firstNonEmpty("taxRegime", "regimenFiscal", "regimen_fiscal"),
+//         street: firstNonEmpty("street", "calle", "addressLine1", "direccion", "calleEnvio"),
+//         exteriorNumber: firstNonEmpty("exteriorNumber", "extNumber", "numeroExterior", "noExterior", "numero", "exteriorEnvio"),
+//         interiorNumber: firstNonEmpty("interiorNumber", "intNumber", "numeroInterior", "noInterior", "interior", "interiorEnvio"),
+//         colony: firstNonEmpty("colony", "colonia", "neighborhood", "barrio", "coloniaEnvio"),
+//         city: firstNonEmpty("city", "municipality", "municipio", "localidad", "ciudadEnvio"),
+//         state: firstNonEmpty("state", "estado", "region", "estadoEnvio"),
+//         postalCode: firstNonEmpty("postalCode", "cp", "zip", "zipcode", "codigoPostal", "cpEnvio"),
+//         country: firstNonEmpty("country", "pais"),
+        
+//         contactName: firstNonEmpty("contactName", "contactoNombre"),
+//         phone: firstNonEmpty("phone", "telefono"),
+//         email: firstNonEmpty("email", "correo", "correoFiscal"),
+//         rfc: firstNonEmpty("rfc", "RFC", "rfcEmpresa"),
+//         businessName: firstNonEmpty("businessName", "razonSocial", "razon_social"),
+//         taxRegime: firstNonEmpty("taxRegime", "regimenFiscal", "regimen_fiscal"),
 
-//       billingStreet: firstNonEmpty("calleFiscal"),
-//       billingExterior: firstNonEmpty("exteriorFiscal"),
-//       billingInterior: firstNonEmpty("interiorFiscal"),
-//       billingColony: firstNonEmpty("coloniaFiscal"),
-//       billingCity: firstNonEmpty("ciudadFiscal"),
-//       billingState: firstNonEmpty("estadoFiscal"),
-//       billingCP: firstNonEmpty("cpFiscal"),
+//         billingStreet: firstNonEmpty("calleFiscal"),
+//         billingExterior: firstNonEmpty("exteriorFiscal"),
+//         billingInterior: firstNonEmpty("interiorFiscal"),
+//         billingColony: firstNonEmpty("coloniaFiscal"),
+//         billingCity: firstNonEmpty("ciudadFiscal"),
+//         billingState: firstNonEmpty("estadoFiscal"),
+//         billingCP: firstNonEmpty("cpFiscal"),
 //     };
 //   }
 
@@ -1125,6 +1132,23 @@ export default function DeliveredSummary() {
 //   const shipping = extractAddress(order?.shippingInfo);
 //   const billing = extractAddress(order?.billingInfo);
 
+//   // ✅ Detect pickup orders (string "Recoger en Matriz" or object flags)
+//   const isPickupOrder = (() => {
+//     const si = order?.shippingInfo;
+//     if (typeof si === "string") {
+//       return si.trim().toLowerCase() === "recoger en matriz";
+//     }
+//     if (si && typeof si === "object") {
+//       return si.pickup === true || si.method === "pickup";
+//     }
+//     return false;
+//   })();
+
+//   // Safe pickupDetails (date & time)
+//   const pickupDetails = order?.pickupDetails || null;
+//   const pickupDate = pickupDetails?.date || "";
+//   const pickupTime = pickupDetails?.time || "";
+
 //   const packerName =
 //     order?.packerName ||
 //     order?.packing?.packerName ||
@@ -1134,14 +1158,10 @@ export default function DeliveredSummary() {
 
 //   const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
 
-//   // Decorate items using ONLY NOMBRE_PRODUCTO-based mapping:
-//   // 1) Find product by name (exact normalized) OR baseName in CSV under NOMBRE_PRODUCTO
-//   // 2) If either USD price column exists → USD; else if either MXN price column exists → MXN; else MXN
-//   // 3) Unit price: prefer CSV currency-specific unit; else fallback to item.price
+//   // Decorate items (unchanged) …
 //   const decoratedItems = useMemo(() => {
 //     const map = catalog;
 //     const toNum = (v) => (Number(v) || 0);
-
 //     return items.map((it) => {
 //       const qty = Number(it?.amount) || 0;
 
@@ -1153,10 +1173,7 @@ export default function DeliveredSummary() {
 //         cat = map.get(`name:${nameFull}`) || map.get(`base:${nameBase}`) || null;
 //       }
 
-//       // Currency strictly by CSV rules; if not found, default MXN
 //       const detectedCurrency = (cat?.currency || "MXN").toUpperCase();
-
-//       // Unit price per detected currency (prefer CSV), else item.price
 //       const unit = toNum(it?.price ?? it?.priceUSD ?? it?.priceMXN);
 
 //       return {
@@ -1173,7 +1190,6 @@ export default function DeliveredSummary() {
 //     const t = order?.totals;
 //     if (!t) return null;
 //     if (Array.isArray(t)) {
-//       // prefer the last (most recent) snapshot; fallback to first
 //       for (let i = t.length - 1; i >= 0; i--) {
 //         if (t[i] && typeof t[i] === "object") return t[i];
 //       }
@@ -1193,11 +1209,9 @@ export default function DeliveredSummary() {
 //   const totalMXNNative  = Number.isFinite(Number(totalsObj?.totalMXNNative))  ? Number(totalsObj.totalMXNNative)  : undefined;
 //   const totalAllMXN     = Number.isFinite(Number(totalsObj?.totalAllMXN))     ? Number(totalsObj.totalAllMXN)     : undefined;
 
-//   // const preferred = String(order?.preferredCurrency || "USD").toUpperCase();
 //   const preferred = String(order?.preferredCurrency || "USD").toUpperCase();
 //   const paymentCurrency = String(order?.paymentCurrency || order?.preferredCurrency || "USD").toUpperCase();
 
-//   // Subtotals by native currency
 //   const buckets = decoratedItems.reduce(
 //     (acc, it) => {
 //       if (it._currency === "USD") acc.usd += it._lineTotal;
@@ -1210,11 +1224,9 @@ export default function DeliveredSummary() {
 //   const isMixed = buckets.usd > 0 && buckets.mxn > 0;
 //   const canConvert = Number.isFinite(dofRate) && dofRate > 0;
 
-//   // VAT handling for "Final"
 //   const addIVA = (n) => (requestBill ? n * 1.16 : n);
 
-//   // Compute finals
-//   const finalUSD = addIVA(buckets.usd); // USD bucket payable in USD when present
+//   const finalUSD = addIVA(buckets.usd);
 //   let finalMXNValue;
 //   let mxnNote = "";
 //   if (preferred === "MXN") {
@@ -1227,7 +1239,6 @@ export default function DeliveredSummary() {
 //       finalMXNValue = addIVA(buckets.mxn);
 //     }
 //   } else {
-//     // preferred USD → MXN items remain payable in MXN (no global combine)
 //     finalMXNValue = addIVA(buckets.mxn);
 //   }
 
@@ -1277,14 +1288,11 @@ export default function DeliveredSummary() {
 //                     <div key={index} className="newOrderDets-Div">
 //                       <div className="orderDetails-Div">
 //                         <label className="orderDets-Label"><b>{item.product}</b></label>
-
-//                         {/* Presentación (between name and Cantidad) */}
 //                         {item.presentation && (
 //                           <label className="orderDets-Label">
 //                             <b>Presentación:</b> {item.presentation}
 //                           </label>
 //                         )}
-
 //                         <label className="orderDets-Label"><b>Cantidad:</b> {item._qty}</label>
 //                         <label className="orderDets-Label">
 //                           <b>Precio Unitario:</b> ${fmtMoney(item._unit, item._currency === "USD" ? "en-US" : "es-MX")} {item._currency}
@@ -1308,7 +1316,6 @@ export default function DeliveredSummary() {
 
 //             <div className="orderDelivered-ProductsDiv" style={{ marginTop: 8 }}>
 //               <div className="orderDetails-Div">
-//                 {/* Subtotales por moneda (renombrados) */}
 //                 <label className="orderDets-Label" style={{ fontSize: 12, marginBottom: 4 }}>
 //                   <b>Subtotal productos USD:</b> ${fmtMoney(buckets.usd, "en-US")} USD
 //                 </label>
@@ -1316,40 +1323,37 @@ export default function DeliveredSummary() {
 //                   <b>Subtotal productos MXN:</b> ${fmtMoney(buckets.mxn, "es-MX")} MXN
 //                 </label>
 
-//                 {/* Divisa de pago */}
 //                 <label className="orderDets-Label" style={{ fontSize: 12, marginTop: 6 }}>
 //                   <b>Divisa de pago:</b> {paymentCurrency}
 //                 </label>
 
-//                 {/* Totales pagados, según divisa de pago */}
 //                 {paymentCurrency === "USD" ? (
-//                     <>
-//                       <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
-//                         <b>Total pagado (USD):</b>{" "}
-//                         {totalUSDNative != null ? `$${fmtMoney(totalUSDNative, "en-US")} USD` : "—"}
+//                   <>
+//                     <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+//                       <b>Total pagado (USD):</b>{" "}
+//                       {totalUSDNative != null ? `$${fmtMoney(totalUSDNative, "en-US")} USD` : "—"}
+//                     </label>
+//                     {Number.isFinite(totalMXNNative) && totalMXNNative > 0 && (
+//                       <label className="newOrderDetsTotal-Label">
+//                         <b>Total pagado (MXN):</b> ${fmtMoney(totalMXNNative, "es-MX")} MXN
 //                       </label>
-//                       {Number.isFinite(totalMXNNative) && totalMXNNative > 0 && (
-//                         <label className="newOrderDetsTotal-Label">
-//                           <b>Total pagado (MXN):</b> ${fmtMoney(totalMXNNative, "es-MX")} MXN
-//                         </label>
-//                       )}
-//                     </>
-//                   ) : (
-//                     <>
-//                       <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
-//                         <b>Total pagado (MXN):</b>{" "}
-//                         {totalAllMXN != null ? `$${fmtMoney(totalAllMXN, "es-MX")} MXN` : "—"}
-//                       </label>
-//                     </>
-//                   )}
-      
-//                 {/* Nota de tipo de cambio al final del bloque */}
+//                     )}
+//                   </>
+//                 ) : (
+//                   <>
+//                     <label className="newOrderDetsTotal-Label" style={{ marginTop: 6 }}>
+//                       <b>Total pagado (MXN):</b>{" "}
+//                       {totalAllMXN != null ? `$${fmtMoney(totalAllMXN, "es-MX")} MXN` : "—"}
+//                     </label>
+//                   </>
+//                 )}
+
 //                 <div style={{ fontSize: 11, color: "#888", marginTop: 8 }}>
 //                   {`Tipo de cambio utilizado para la transacción: ${
 //                     Number.isFinite(dofRate) && dofRate > 0 ? fmtMoney(dofRate, "es-MX") : "—"
-//                     }${dofDate ? `  (DOF ${dofDate})` : ""}`}
+//                   }${dofDate ? `  (DOF ${dofDate})` : ""}`}
 //                 </div>
-//                 {/* Evidencia de pago: mostrar como imagen si es MIME de imagen; si no, como link */}
+
 //                 {order?.evidenceFileExt && (
 //                   <div style={{ marginTop: 10 }}>
 //                     <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
@@ -1371,27 +1375,47 @@ export default function DeliveredSummary() {
 //               </div>
 //             </div>
 
-//             {/* ========== Dirección de Envío ========== */}
+//             {/* ========== Dirección de Envío / Detalles de Pedido (Pickup) ========== */}
 //             <div className="deliveryDets-AddressDiv">
 //               <div className="headerEditIcon-Div">
-//                 <label className="newUserData-Label">Dirección de Envío</label>
+//                 <label className="newUserData-Label">
+//                   {isPickupOrder ? "Detalles de Pedido" : "Dirección de Envío"}
+//                 </label>
 //               </div>
 //               <div className="existingQuote-Div">
 //                 <div className="quoteAndFile-Div">
-//                   {(shipping.street || shipping.exteriorNumber || shipping.interiorNumber) && (
-//                     <label className="productDetail-Label">
-//                       {shipping.street} {shipping.exteriorNumber}
-//                       {shipping.interiorNumber ? ` Int. ${shipping.interiorNumber}` : ""}
-//                     </label>
+//                   {isPickupOrder ? (
+//                     <>
+//                       <label className="productDetail-Label">
+//                         <b>Pedido recogido en matriz</b>
+//                       </label>
+//                       <label className="productDetail-Label">
+//                         <b>Fecha:</b> {pickupDate ? formatDate(pickupDate) : "—"}
+//                       </label>
+//                       {pickupTime && (
+//                         <label className="productDetail-Label">
+//                           <b>Hora:</b> {pickupTime}
+//                         </label>
+//                       )}
+//                     </>
+//                   ) : (
+//                     <>
+//                       {(shipping.street || shipping.exteriorNumber || shipping.interiorNumber) && (
+//                         <label className="productDetail-Label">
+//                           {shipping.street} {shipping.exteriorNumber}
+//                           {shipping.interiorNumber ? ` Int. ${shipping.interiorNumber}` : ""}
+//                         </label>
+//                       )}
+//                       {shipping.colony && <label className="productDetail-Label">Col. {shipping.colony}</label>}
+//                       {(shipping.city || shipping.state) && (
+//                         <label className="productDetail-Label">
+//                           {shipping.city}{shipping.city && shipping.state ? ", " : ""}{shipping.state}
+//                         </label>
+//                       )}
+//                       {shipping.postalCode && <label className="productDetail-Label">C.P.: {shipping.postalCode}</label>}
+//                       {shipping.country && <label className="productDetail-Label">{shipping.country}</label>}
+//                     </>
 //                   )}
-//                   {shipping.colony && <label className="productDetail-Label">Col. {shipping.colony}</label>}
-//                   {(shipping.city || shipping.state) && (
-//                     <label className="productDetail-Label">
-//                       {shipping.city}{shipping.city && shipping.state ? ", " : ""}{shipping.state}
-//                     </label>
-//                   )}
-//                   {shipping.postalCode && <label className="productDetail-Label">C.P.: {shipping.postalCode}</label>}
-//                   {shipping.country && <label className="productDetail-Label">{shipping.country}</label>}
 //                 </div>
 //               </div>
 //             </div>
@@ -1508,9 +1532,6 @@ export default function DeliveredSummary() {
 //               </div>
 //               <div className="existingQuote-Div">
 //                 <div className="quoteAndFile-Div">
-//                   {/* <label className="productDetail-Label">
-//                     Fecha de entrega: <label>{formatDate(order?.deliveryDate)}</label>
-//                   </label> */}
 //                   <label className="productDetail-Label">
 //                     Fecha de entrega: <label>{formatDate(order?.deliveryDateYMD || order?.deliveryDate)}</label>
 //                   </label>
@@ -1520,7 +1541,6 @@ export default function DeliveredSummary() {
 //                   {order?.insuredAmount != null && order?.insuredAmount !== "" && (
 //                     <label className="productDetail-Label"><b>Monto asegurado:</b> ${fmtMoney(order.insuredAmount, "es-MX")} MXN</label>
 //                   )}
-//                   {/* Foto de entrega */}
 //                   {order?.deliveryEvidenceExt && (
 //                     <div style={{ marginTop: 10 }}>
 //                       <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
@@ -1567,4 +1587,8 @@ export default function DeliveredSummary() {
 //     </body>
 //   );
 // }
+
+
+
+
 
