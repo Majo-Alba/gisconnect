@@ -52,6 +52,8 @@ export default function ExpressQuote() {
 
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
 
+  const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+
   // ===== NEW: pull latest shipping/billing from Mongo =====
   const [shippingAddr, setShippingAddr] = useState(null);
   const [billingAddr, setBillingAddr] = useState(null);
@@ -456,46 +458,48 @@ export default function ExpressQuote() {
   const fmtMXN = (v) =>
     `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
 
-  // ======== PDF (address now from Mongo) ========
+  // // ======== PDF (address now from Mongo) ========
   const downloadPDF = async () => {
     const doc = new jsPDF();
-
-    // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
-    const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+  
+    // Helper: strict 2-dec rounding
+    const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+  
+    const fmtUSD = (v) =>
+      `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
     const fmtMXN = (v) =>
       `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
-
+  
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-
+  
     const drawBg = () => doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
     drawBg();
-
+  
     doc.setFontSize(10);
     doc.setFont("custom", "bold");
     doc.text(`Fecha de Elaboración: ${new Date().toLocaleDateString("es-MX")}`, 195, 15, { align: "right" });
     doc.text(`Cotización Válida Hasta: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString("es-MX")}`, 195, 20, { align: "right" });
-
+  
     doc.setLineWidth(0.1);
     doc.setDrawColor(200, 200, 200);
     doc.line(10, 45, 200, 45);
-
+  
     // === Address sections from Mongo ===
     const userCreds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
-
+  
     // Shipping
     doc.setFontSize(11);
     doc.setFont("custom", "bold");
     doc.text("Información de Envío", 13, 51);
-
+  
     doc.setFontSize(10);
     doc.addImage(iconBuilding, 13, 53, 5, 5);
-    // We don't have company name in shipping; leave blank or use billing razonSocial if needed
     doc.text(`${billingAddr?.razonSocial || ""}`, 19, 57);
-
+  
     doc.addImage(iconContact, 13.5, 59.5, 4, 4);
     doc.text(`${shippingAddr?.apodo || ""}`, 19, 63);
-
+  
     doc.addImage(iconLocation, 13.7, 65, 3, 4);
     doc.text(
       `${shippingAddr?.calleEnvio || ""}  # ${shippingAddr?.exteriorEnvio || ""}  Int. ${shippingAddr?.interiorEnvio || ""}`,
@@ -508,26 +512,25 @@ export default function ExpressQuote() {
       19,
       76
     );
-
+  
     doc.addImage(iconPhone, 13.7, 78, 3, 4);
-    // If you have phone stored elsewhere, render here; else leave blank
     doc.text(``, 19, 81.5);
-
+  
     doc.addImage(iconEmail, 13.7, 84, 4, 3);
     doc.text(`${userCreds?.correo || shippingAddr?.userEmail || ""}`, 19, 87);
-
+  
     // Billing
     doc.setFontSize(11);
     doc.setFont("custom", "bold");
     doc.text("Información Fiscal", 100, 51);
-
+  
     doc.setFontSize(10);
     doc.text(`Razón Social: ${billingAddr?.razonSocial || ""}`, 106, 57);
     doc.text(`RFC: ${billingAddr?.rfcEmpresa || ""}`, 106, 63);
-
+  
     doc.addImage(iconEmail, 100, 65, 4, 3);
     doc.text(`${billingAddr?.correoFiscal || ""}`, 106, 68);
-
+  
     doc.addImage(iconLocation, 100.5, 70, 3, 4);
     doc.text(
       `${billingAddr?.calleFiscal || ""}  # ${billingAddr?.exteriorFiscal || ""}  Int. ${billingAddr?.interiorFiscal || ""}`,
@@ -540,11 +543,11 @@ export default function ExpressQuote() {
       106,
       81
     );
-
+  
     doc.setLineWidth(0.1);
     doc.setDrawColor(200, 200, 200);
     doc.line(10, 92, 200, 92);
-
+  
     const tableData = items.map((it) => [
       it.product,
       it.presentation,
@@ -553,27 +556,22 @@ export default function ExpressQuote() {
       `$${Number(it.price).toFixed(2)} ${it.currency || "USD"}`,
       `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${it.currency || "USD"}`,
     ]);
-
-    // --- Currency sections (unchanged logic) ---
+  
+    // --- Currency sections ---
     const toCur = (v) => String(v ?? "").trim().toUpperCase();
     const itemCur = (it) => toCur(it.currency ?? it.priceCurrency);
     const isMXN = (it) => itemCur(it) === "MXN";
     const isUSD = (it) => itemCur(it) === "USD";
-    const normCur = (v) => String(v ?? "").trim().toUpperCase();
-    const getCur = (it) => {
-      const c = normCur(it.currency || it.priceCurrency);
-      return c === "MXN" ? "MXN" : "USD";
-    };
-
+  
     const usdItemsPDF = items.filter(isUSD);
     const mxnItemsPDF = items.filter(isMXN);
-
+  
     const sectionTitle = (text, y) => {
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text(text, 13, y);
     };
-
+  
     const makeBody = (arr) =>
       arr.map((it) => {
         const cur = itemCur(it) || "—";
@@ -588,13 +586,13 @@ export default function ExpressQuote() {
           `$${(qty * unit).toFixed(2)} ${cur}`,
         ];
       });
-
+  
     let cursorY = 105;
-
+  
     if (usdItemsPDF.length) {
       doc.setTextColor(24, 144, 69);
       sectionTitle("Artículos en USD", cursorY - 6);
-
+  
       autoTable(doc, {
         head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
         body: makeBody(usdItemsPDF),
@@ -604,20 +602,24 @@ export default function ExpressQuote() {
         margin: { top: 100, right: 10, bottom: 20, left: 10 },
         didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
       });
-
+  
       cursorY = doc.lastAutoTable.finalY + 6;
       const subtotalUSD = usdItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
       doc.setFontSize(11);
       doc.setTextColor(0, 0, 0);
       doc.setFont("helvetica", "bold");
-      doc.text(`Subtotal USD: $${subtotalUSD.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 140, cursorY);
+      doc.text(
+        `Subtotal USD: $${subtotalUSD.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+        140,
+        cursorY
+      );
       cursorY += 12;
     }
-
+  
     if (mxnItemsPDF.length) {
       doc.setTextColor(24, 144, 69);
       sectionTitle("Artículos en MXN", cursorY - 6);
-
+  
       autoTable(doc, {
         head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
         body: makeBody(mxnItemsPDF),
@@ -627,7 +629,7 @@ export default function ExpressQuote() {
         margin: { top: 100, right: 10, bottom: 20, left: 10 },
         didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
       });
-
+  
       cursorY = doc.lastAutoTable.finalY + 6;
       const subtotalMXN = mxnItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
       doc.setFontSize(11);
@@ -640,38 +642,42 @@ export default function ExpressQuote() {
       );
       cursorY += 12;
     }
-
+  
     {
       const usdItems = usdItemsPDF;
       const mxnItems = mxnItemsPDF;
-
+  
       const subtotalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
       const subtotalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
-
-      const rate = Number(dofRate) || 0;
-      const iva16 = (v) => (isActive ? +(v * 0.16).toFixed(2) : 0);
+  
+      // Round DOF rate and all conversions to 2 decimals
+      const rateRaw = Number(dofRate) || 0;
+      const rate = rateRaw ? round2(rateRaw) : 0;
+  
+      const iva16 = (v) => (isActive ? round2(v * 0.16) : 0);
       const hasUSD = usdItems.length > 0;
       const hasMXN = mxnItems.length > 0;
       const isMixed = hasUSD && hasMXN;
       const wantsMXN = (preferredCurrency || "USD").toUpperCase() === "MXN";
-
+  
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
       doc.text("Resumen Financiero", 13, cursorY);
       cursorY += 6;
-
+  
       const boxX = 12;
       const boxW = 186;
       const boxPad = 4;
       const textMaxW = boxW - boxPad * 2;
       const lineH = 6;
-
-      const usdEnMXN = rate ? subtotalUSD * rate : 0;
-      const baseMXN_Mixed = subtotalMXN + usdEnMXN;
-      const totalMXN_Mixed = baseMXN_Mixed + iva16(baseMXN_Mixed);
-      const totalUSD_only = subtotalUSD + iva16(subtotalUSD);
-      const totalMXN_only = subtotalMXN + iva16(subtotalMXN);
-
+  
+      // Rounded FX math
+      const usdEnMXN = rate ? round2(round2(subtotalUSD) * rate) : 0;
+      const baseMXN_Mixed = rate ? round2(usdEnMXN + subtotalMXN) : subtotalMXN;
+      const totalMXN_Mixed = round2(baseMXN_Mixed + iva16(baseMXN_Mixed));
+      const totalUSD_only = round2(subtotalUSD + iva16(subtotalUSD));
+      const totalMXN_only = round2(subtotalMXN + iva16(subtotalMXN));
+  
       const measureSummary = () => {
         let y = cursorY + boxPad;
         y += lineH; // moneda
@@ -710,10 +716,10 @@ export default function ExpressQuote() {
         }
         return y + boxPad;
       };
-
+  
       const boxBottom = measureSummary();
       const boxHeight = Math.max(12, boxBottom - cursorY);
-
+  
       doc.setFillColor(241, 241, 241);
       doc.setDrawColor(200, 200, 200);
       if (typeof doc.roundedRect === "function") {
@@ -721,14 +727,14 @@ export default function ExpressQuote() {
       } else {
         doc.rect(boxX, cursorY, boxW, boxHeight, "FD");
       }
-
+  
       let y = cursorY + boxPad;
       doc.setFontSize(10);
       doc.setFont("helvetica", "bold");
       doc.text(`Moneda de pago seleccionada: ${preferredCurrency || "USD"}`, boxX + boxPad, y + 3);
       y += lineH;
       doc.setFont("helvetica", "normal");
-
+  
       if (wantsMXN) {
         if (isMixed) {
           if (!rate) {
@@ -745,14 +751,14 @@ export default function ExpressQuote() {
               y + 3
             );
             y += lineH;
-
+  
             doc.setFontSize(9);
             doc.setTextColor(120,120,120);
             const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
             const detLines = doc.splitTextToSize(det, textMaxW);
             doc.text(detLines, boxX + boxPad, y + 3);
             y += detLines.length * 5 + 3;
-
+  
             doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
             doc.setTextColor(0,0,0);
             doc.setFontSize(10);
@@ -767,18 +773,18 @@ export default function ExpressQuote() {
             doc.setTextColor(0, 0, 0);
             y += errLines.length * 5 + 3;
           } else {
-            const base = subtotalUSD * rate;
-            const total = base + iva16(base);
+            const base = usdEnMXN; // pre-rounded USD→MXN
+            const total = round2(base + iva16(base));
             doc.text(`Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
             y += lineH;
-
+  
             doc.setFontSize(9);
             doc.setTextColor(120,120,120);
             const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(base)}.`;
             const detLines = doc.splitTextToSize(det, textMaxW);
             doc.text(detLines, boxX + boxPad, y);
             y += detLines.length * 5 + 3;
-
+  
             doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
             doc.setTextColor(0,0,0);
             doc.setFontSize(10);
@@ -788,7 +794,7 @@ export default function ExpressQuote() {
           doc.text(`Total a pagar en MXN: ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
           y += lineH;
         }
-
+  
         if (isMixed) {
           doc.setTextColor(180, 0, 0);
           doc.setFont("helvetica", "bold");
@@ -845,32 +851,32 @@ export default function ExpressQuote() {
           y += noteLines.length * 5 + 3;
         }
       }
-
+  
       cursorY = cursorY + boxHeight + 4;
     }
-
+  
     {
       const last = doc.internal.getNumberOfPages();
       doc.setPage(last);
-
+  
       const boxPad = 4;
       const boxX = 12;
       const boxW = 186;
       const lineH = 5.2;
-
+  
       const bullets = [
         "1) Disponibilidad inmediata.",
         "2) Precios LAB Guadalajara, Jalisco.",
         "3) Precios en dólares americanos, pagaderos al TC del DOF del día del pago.",
         "4) Precios sujetos a cambio sin previo aviso.",
       ];
-
+  
       const textLines = bullets.flatMap((b) => doc.splitTextToSize(b, boxW - boxPad * 2));
       const boxH = boxPad * 2 + textLines.length * lineH;
-
+  
       const bottomMargin = 10;
       const boxY = pageHeight - boxH - bottomMargin;
-
+  
       doc.setFillColor(241, 241, 241);
       doc.setDrawColor(200, 200, 200);
       if (typeof doc.roundedRect === "function") {
@@ -878,7 +884,7 @@ export default function ExpressQuote() {
       } else {
         doc.rect(boxX, boxY, boxW, boxH, "FD");
       }
-
+  
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
       let y = boxY + boxPad + 3;
@@ -887,12 +893,12 @@ export default function ExpressQuote() {
         y += lineH;
       });
     }
-
+  
     const pdfBlob = doc.output("blob");
-
+  
     try {
       if (!navigator.onLine) throw new Error("Sin conexión a Internet.");
-
+  
       const formData = new FormData();
       formData.append("pdf", pdfBlob, "Cotización_Express.pdf");
       formData.append(
@@ -900,6 +906,7 @@ export default function ExpressQuote() {
         JSON.stringify({
           userEmail: userCreds?.correo,
           createdAt: new Date().toISOString(),
+          // Persist raw totals as-is if you prefer, or also round if desired:
           totals: {
             totalUSD,
             totalMXN,
@@ -916,9 +923,9 @@ export default function ExpressQuote() {
           billingAddr,
         })
       );
-
+  
       const useKeepalive = pdfBlob.size <= 60 * 1024;
-
+  
       let res;
       try {
         res = await fetch(`${API}/save-pdf`, {
@@ -935,12 +942,12 @@ export default function ExpressQuote() {
         });
         res = new Response(JSON.stringify(axiosRes.data), { status: 200 });
       }
-
+  
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson?.error || `Error ${res.status}`);
       }
-
+  
       await new Promise((r) => setTimeout(r, 50));
       doc.save("Cotización_Express.pdf");
       alert("PDF generado y guardado exitosamente.");
@@ -949,6 +956,509 @@ export default function ExpressQuote() {
       alert(`No se pudo guardar el PDF.\n${err?.message || "Revisa tu conexión y vuelve a intentar."}`);
     }
   };
+  // const downloadPDF = async () => {
+  //   const doc = new jsPDF();
+
+  //   // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+  //   const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+  //   const fmtMXN = (v) =>
+  //     `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+  //   const pageWidth = doc.internal.pageSize.getWidth();
+  //   const pageHeight = doc.internal.pageSize.getHeight();
+
+  //   const drawBg = () => doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+  //   drawBg();
+
+  //   doc.setFontSize(10);
+  //   doc.setFont("custom", "bold");
+  //   doc.text(`Fecha de Elaboración: ${new Date().toLocaleDateString("es-MX")}`, 195, 15, { align: "right" });
+  //   doc.text(`Cotización Válida Hasta: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString("es-MX")}`, 195, 20, { align: "right" });
+
+  //   doc.setLineWidth(0.1);
+  //   doc.setDrawColor(200, 200, 200);
+  //   doc.line(10, 45, 200, 45);
+
+  //   // === Address sections from Mongo ===
+  //   const userCreds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+
+  //   // Shipping
+  //   doc.setFontSize(11);
+  //   doc.setFont("custom", "bold");
+  //   doc.text("Información de Envío", 13, 51);
+
+  //   doc.setFontSize(10);
+  //   doc.addImage(iconBuilding, 13, 53, 5, 5);
+  //   // We don't have company name in shipping; leave blank or use billing razonSocial if needed
+  //   doc.text(`${billingAddr?.razonSocial || ""}`, 19, 57);
+
+  //   doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+  //   doc.text(`${shippingAddr?.apodo || ""}`, 19, 63);
+
+  //   doc.addImage(iconLocation, 13.7, 65, 3, 4);
+  //   doc.text(
+  //     `${shippingAddr?.calleEnvio || ""}  # ${shippingAddr?.exteriorEnvio || ""}  Int. ${shippingAddr?.interiorEnvio || ""}`,
+  //     19,
+  //     68
+  //   );
+  //   doc.text(`Col. ${shippingAddr?.coloniaEnvio || ""}`, 19, 72);
+  //   doc.text(
+  //     `${shippingAddr?.ciudadEnvio || ""}, ${shippingAddr?.estadoEnvio || ""}. C.P. ${shippingAddr?.cpEnvio || ""}`,
+  //     19,
+  //     76
+  //   );
+
+  //   doc.addImage(iconPhone, 13.7, 78, 3, 4);
+  //   // If you have phone stored elsewhere, render here; else leave blank
+  //   doc.text(``, 19, 81.5);
+
+  //   doc.addImage(iconEmail, 13.7, 84, 4, 3);
+  //   doc.text(`${userCreds?.correo || shippingAddr?.userEmail || ""}`, 19, 87);
+
+  //   // Billing
+  //   doc.setFontSize(11);
+  //   doc.setFont("custom", "bold");
+  //   doc.text("Información Fiscal", 100, 51);
+
+  //   doc.setFontSize(10);
+  //   doc.text(`Razón Social: ${billingAddr?.razonSocial || ""}`, 106, 57);
+  //   doc.text(`RFC: ${billingAddr?.rfcEmpresa || ""}`, 106, 63);
+
+  //   doc.addImage(iconEmail, 100, 65, 4, 3);
+  //   doc.text(`${billingAddr?.correoFiscal || ""}`, 106, 68);
+
+  //   doc.addImage(iconLocation, 100.5, 70, 3, 4);
+  //   doc.text(
+  //     `${billingAddr?.calleFiscal || ""}  # ${billingAddr?.exteriorFiscal || ""}  Int. ${billingAddr?.interiorFiscal || ""}`,
+  //     106,
+  //     73
+  //   );
+  //   doc.text(`Col. ${billingAddr?.coloniaFiscal || ""}`, 106, 77);
+  //   doc.text(
+  //     `${billingAddr?.ciudadFiscal || ""}, ${billingAddr?.estadoFiscal || ""}. C.P. ${billingAddr?.cpFiscal || ""}`,
+  //     106,
+  //     81
+  //   );
+
+  //   doc.setLineWidth(0.1);
+  //   doc.setDrawColor(200, 200, 200);
+  //   doc.line(10, 92, 200, 92);
+
+  //   const tableData = items.map((it) => [
+  //     it.product,
+  //     it.presentation,
+  //     it.packPresentation || "-",
+  //     it.amount,
+  //     `$${Number(it.price).toFixed(2)} ${it.currency || "USD"}`,
+  //     `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${it.currency || "USD"}`,
+  //   ]);
+
+  //   // --- Currency sections (unchanged logic) ---
+  //   const toCur = (v) => String(v ?? "").trim().toUpperCase();
+  //   const itemCur = (it) => toCur(it.currency ?? it.priceCurrency);
+  //   const isMXN = (it) => itemCur(it) === "MXN";
+  //   const isUSD = (it) => itemCur(it) === "USD";
+  //   const normCur = (v) => String(v ?? "").trim().toUpperCase();
+  //   const getCur = (it) => {
+  //     const c = normCur(it.currency || it.priceCurrency);
+  //     return c === "MXN" ? "MXN" : "USD";
+  //   };
+
+  //   const usdItemsPDF = items.filter(isUSD);
+  //   const mxnItemsPDF = items.filter(isMXN);
+
+  //   const sectionTitle = (text, y) => {
+  //     doc.setFontSize(12);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(text, 13, y);
+  //   };
+
+  //   const makeBody = (arr) =>
+  //     arr.map((it) => {
+  //       const cur = itemCur(it) || "—";
+  //       const unit = Number(it.price) || 0;
+  //       const qty = Number(it.amount) || 0;
+  //       return [
+  //         it.product,
+  //         it.presentation,
+  //         it.packPresentation || "-",
+  //         String(qty),
+  //         `$${unit.toFixed(2)} ${cur}`,
+  //         `$${(qty * unit).toFixed(2)} ${cur}`,
+  //       ];
+  //     });
+
+  //   let cursorY = 105;
+
+  //   if (usdItemsPDF.length) {
+  //     doc.setTextColor(24, 144, 69);
+  //     sectionTitle("Artículos en USD", cursorY - 6);
+
+  //     autoTable(doc, {
+  //       head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+  //       body: makeBody(usdItemsPDF),
+  //       startY: cursorY,
+  //       headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+  //       styles: { fontSize: 9 },
+  //       margin: { top: 100, right: 10, bottom: 20, left: 10 },
+  //       didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+  //     });
+
+  //     cursorY = doc.lastAutoTable.finalY + 6;
+  //     const subtotalUSD = usdItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  //     doc.setFontSize(11);
+  //     doc.setTextColor(0, 0, 0);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(`Subtotal USD: $${subtotalUSD.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`, 140, cursorY);
+  //     cursorY += 12;
+  //   }
+
+  //   if (mxnItemsPDF.length) {
+  //     doc.setTextColor(24, 144, 69);
+  //     sectionTitle("Artículos en MXN", cursorY - 6);
+
+  //     autoTable(doc, {
+  //       head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+  //       body: makeBody(mxnItemsPDF),
+  //       startY: cursorY,
+  //       headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+  //       styles: { fontSize: 9 },
+  //       margin: { top: 100, right: 10, bottom: 20, left: 10 },
+  //       didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+  //     });
+
+  //     cursorY = doc.lastAutoTable.finalY + 6;
+  //     const subtotalMXN = mxnItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  //     doc.setFontSize(11);
+  //     doc.setTextColor(0, 0, 0);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(
+  //       `Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`,
+  //       140,
+  //       cursorY
+  //     );
+  //     cursorY += 12;
+  //   }
+
+  //   {
+  //     const usdItems = usdItemsPDF;
+  //     const mxnItems = mxnItemsPDF;
+
+  //     const subtotalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  //     const subtotalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+
+  //     const rateRaw = Number(dofRate) || 0;
+  //     const rate = rateRaw ? round2(rateRaw) : 0;
+
+  //     // const rate = Number(dofRate) || 0;
+  //     const iva16 = (v) => (isActive ? round2(v * 0.16) : 0);
+  //     // const iva16 = (v) => (isActive ? +(v * 0.16).toFixed(2) : 0);
+  //     const hasUSD = usdItems.length > 0;
+  //     const hasMXN = mxnItems.length > 0;
+  //     const isMixed = hasUSD && hasMXN;
+  //     const wantsMXN = (preferredCurrency || "USD").toUpperCase() === "MXN";
+
+  //     doc.setFontSize(12);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text("Resumen Financiero", 13, cursorY);
+  //     cursorY += 6;
+
+  //     const boxX = 12;
+  //     const boxW = 186;
+  //     const boxPad = 4;
+  //     const textMaxW = boxW - boxPad * 2;
+  //     const lineH = 6;
+
+  //     // const usdEnMXN = rate ? subtotalUSD * rate : 0;
+  //     // const baseMXN_Mixed = subtotalMXN + usdEnMXN;
+  //     // const totalMXN_Mixed = baseMXN_Mixed + iva16(baseMXN_Mixed);
+  //     // const totalUSD_only = subtotalUSD + iva16(subtotalUSD);
+  //     // const totalMXN_only = subtotalMXN + iva16(subtotalMXN);
+
+  //     const usdEnMXN = rate ? round2(round2(subtotalUSD) * rate) : 0;
+  //     const baseMXN_Mixed = rate ? round2(usdEnMXN + subtotalMXN) : subtotalMXN;
+  //     const totalMXN_Mixed = round2(baseMXN_Mixed + iva16(baseMXN_Mixed));
+  //     const totalUSD_only = round2(subtotalUSD + iva16(subtotalUSD));
+  //     const totalMXN_only = round2(subtotalMXN + iva16(subtotalMXN));
+
+
+  //     const measureSummary = () => {
+  //       let y = cursorY + boxPad;
+  //       y += lineH; // moneda
+  //       if (wantsMXN) {
+  //         y += lineH; // total MXN
+  //         if (isMixed || hasUSD) {
+  //           const det = rate
+  //             ? (isMixed
+  //                 ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
+  //                 : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}.`)
+  //             : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+  //           const detLines = doc.splitTextToSize(det, textMaxW);
+  //           y += detLines.length * 5 + 3;
+  //         }
+  //         if ((isMixed || hasUSD) && rate) y += 5;
+  //         if (isMixed) {
+  //           const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+  //           const legendLines = doc.splitTextToSize(legend, textMaxW);
+  //           y += legendLines.length * 5 + 5;
+  //         }
+  //       } else {
+  //         if (hasUSD) y += lineH;
+  //         if (hasMXN) y += lineH;
+  //         if (isMixed && rate) y += 5;
+  //         if (isMixed) {
+  //           const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+  //           const legendLines = doc.splitTextToSize(legend, textMaxW);
+  //           y += legendLines.length * 5 + 5;
+  //         }
+  //         if (!hasUSD && hasMXN) {
+  //           y += lineH;
+  //           const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+  //           const noteLines = doc.splitTextToSize(note, textMaxW);
+  //           y += noteLines.length * 5 + 3;
+  //         }
+  //       }
+  //       return y + boxPad;
+  //     };
+
+  //     const boxBottom = measureSummary();
+  //     const boxHeight = Math.max(12, boxBottom - cursorY);
+
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.setDrawColor(200, 200, 200);
+  //     if (typeof doc.roundedRect === "function") {
+  //       doc.roundedRect(boxX, cursorY, boxW, boxHeight, 2.5, 2.5, "FD");
+  //     } else {
+  //       doc.rect(boxX, cursorY, boxW, boxHeight, "FD");
+  //     }
+
+  //     let y = cursorY + boxPad;
+  //     doc.setFontSize(10);
+  //     doc.setFont("helvetica", "bold");
+  //     doc.text(`Moneda de pago seleccionada: ${preferredCurrency || "USD"}`, boxX + boxPad, y + 3);
+  //     y += lineH;
+  //     doc.setFont("helvetica", "normal");
+
+  //     if (wantsMXN) {
+  //       if (isMixed) {
+  //         if (!rate) {
+  //           doc.setTextColor(180, 0, 0);
+  //           const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+  //           const errLines = doc.splitTextToSize(err, textMaxW);
+  //           doc.text(errLines, boxX + boxPad, y);
+  //           doc.setTextColor(0, 0, 0);
+  //           y += errLines.length * 5 + 3;
+  //         } else {
+  //           doc.text(
+  //             `Total a pagar en MXN: ${fmtMXN(totalMXN_Mixed)}` + (isActive ? " (incluye IVA 16%)" : ""),
+  //             boxX + boxPad,
+  //             y + 3
+  //           );
+  //           y += lineH;
+
+  //           doc.setFontSize(9);
+  //           doc.setTextColor(120,120,120);
+  //           const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
+  //           const detLines = doc.splitTextToSize(det, textMaxW);
+  //           doc.text(detLines, boxX + boxPad, y + 3);
+  //           y += detLines.length * 5 + 3;
+
+  //           doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
+  //           doc.setTextColor(0,0,0);
+  //           doc.setFontSize(10);
+  //           y += 5;
+  //         }
+  //       } else if (hasUSD) {
+  //         if (!rate) {
+  //           doc.setTextColor(180, 0, 0);
+  //           const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total en MXN.";
+  //           const errLines = doc.splitTextToSize(err, textMaxW);
+  //           doc.text(errLines, boxX + boxPad, y);
+  //           doc.setTextColor(0, 0, 0);
+  //           y += errLines.length * 5 + 3;
+  //         } else {
+  //           const base = subtotalUSD * rate;
+  //           const total = base + iva16(base);
+  //           doc.text(`Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+  //           y += lineH;
+
+  //           doc.setFontSize(9);
+  //           doc.setTextColor(120,120,120);
+  //           const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(base)}.`;
+  //           const detLines = doc.splitTextToSize(det, textMaxW);
+  //           doc.text(detLines, boxX + boxPad, y);
+  //           y += detLines.length * 5 + 3;
+
+  //           doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
+  //           doc.setTextColor(0,0,0);
+  //           doc.setFontSize(10);
+  //           y += 5;
+  //         }
+  //       } else {
+  //         doc.text(`Total a pagar en MXN: ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+  //         y += lineH;
+  //       }
+
+  //       if (isMixed) {
+  //         doc.setTextColor(180, 0, 0);
+  //         doc.setFont("helvetica", "bold");
+  //         const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+  //         const legendLines = doc.splitTextToSize(legend, textMaxW);
+  //         doc.text(legendLines, boxX + boxPad, y + 3);
+  //         y += legendLines.length * 5 + 5;
+  //         doc.setTextColor(0, 0, 0);
+  //         doc.setFont("helvetica", "normal");
+  //       }
+  //     } else {
+  //       if (hasUSD) {
+  //         doc.text(
+  //           `A pagar en USD (artículos en USD): ${fmtUSD(totalUSD_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+  //           boxX + boxPad,
+  //           y + 3
+  //         );
+  //         y += lineH;
+  //       }
+  //       if (hasMXN) {
+  //         doc.text(
+  //           `A pagar en MXN (artículos en MXN): ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+  //           boxX + boxPad,
+  //           y + 3
+  //         );
+  //         y += lineH;
+  //       }
+  //       if (isMixed && rate) {
+  //         doc.setFontSize(9);
+  //         doc.setTextColor(120,120,120);
+  //         doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
+  //         doc.setTextColor(0,0,0);
+  //         doc.setFontSize(10);
+  //         y += 5;
+  //       }
+  //       if (isMixed) {
+  //         doc.setTextColor(180, 0, 0);
+  //         doc.setFont("helvetica", "bold");
+  //         const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+  //         const legendLines = doc.splitTextToSize(legend, textMaxW);
+  //         doc.text(legendLines, boxX + boxPad, y + 5);
+  //         y += legendLines.length * 5 + 5;
+  //         doc.setTextColor(0, 0, 0);
+  //         doc.setFont("helvetica", "normal");
+  //       }
+  //       if (!hasUSD && hasMXN) {
+  //         doc.setFontSize(9);
+  //         doc.setTextColor(120,120,120);
+  //         const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+  //         const noteLines = doc.splitTextToSize(note, textMaxW);
+  //         doc.text(noteLines, boxX + boxPad, y);
+  //         doc.setTextColor(0,0,0);
+  //         doc.setFontSize(10);
+  //         y += noteLines.length * 5 + 3;
+  //       }
+  //     }
+
+  //     cursorY = cursorY + boxHeight + 4;
+  //   }
+
+  //   {
+  //     const last = doc.internal.getNumberOfPages();
+  //     doc.setPage(last);
+
+  //     const boxPad = 4;
+  //     const boxX = 12;
+  //     const boxW = 186;
+  //     const lineH = 5.2;
+
+  //     const bullets = [
+  //       "1) Disponibilidad inmediata.",
+  //       "2) Precios LAB Guadalajara, Jalisco.",
+  //       "3) Precios en dólares americanos, pagaderos al TC del DOF del día del pago.",
+  //       "4) Precios sujetos a cambio sin previo aviso.",
+  //     ];
+
+  //     const textLines = bullets.flatMap((b) => doc.splitTextToSize(b, boxW - boxPad * 2));
+  //     const boxH = boxPad * 2 + textLines.length * lineH;
+
+  //     const bottomMargin = 10;
+  //     const boxY = pageHeight - boxH - bottomMargin;
+
+  //     doc.setFillColor(241, 241, 241);
+  //     doc.setDrawColor(200, 200, 200);
+  //     if (typeof doc.roundedRect === "function") {
+  //       doc.roundedRect(boxX, boxY, boxW, boxH, 2.5, 2.5, "FD");
+  //     } else {
+  //       doc.rect(boxX, boxY, boxW, boxH, "FD");
+  //     }
+
+  //     doc.setFont("helvetica", "normal");
+  //     doc.setFontSize(9.5);
+  //     let y = boxY + boxPad + 3;
+  //     textLines.forEach((ln) => {
+  //       doc.text(ln, boxX + boxPad, y);
+  //       y += lineH;
+  //     });
+  //   }
+
+  //   const pdfBlob = doc.output("blob");
+
+  //   try {
+  //     if (!navigator.onLine) throw new Error("Sin conexión a Internet.");
+
+  //     const formData = new FormData();
+  //     formData.append("pdf", pdfBlob, "Cotización_Express.pdf");
+  //     formData.append(
+  //       "metadata",
+  //       JSON.stringify({
+  //         userEmail: userCreds?.correo,
+  //         createdAt: new Date().toISOString(),
+  //         totals: {
+  //           totalUSD,
+  //           totalMXN,
+  //           allUSD,
+  //           allMXN,
+  //           allUSDWithIVA,
+  //           allMXNWithIVA,
+  //           dofRate,
+  //           dofDate,
+  //           ivaApplied: !!isActive,
+  //         },
+  //         items,
+  //         shippingAddr,
+  //         billingAddr,
+  //       })
+  //     );
+
+  //     const useKeepalive = pdfBlob.size <= 60 * 1024;
+
+  //     let res;
+  //     try {
+  //       res = await fetch(`${API}/save-pdf`, {
+  //         method: "POST",
+  //         body: formData,
+  //         ...(useKeepalive ? { keepalive: true } : {}),
+  //         headers: { Accept: "application/json" },
+  //         cache: "no-store",
+  //       });
+  //     } catch (e) {
+  //       const axiosRes = await axios.post(`${API}/save-pdf`, formData, {
+  //         headers: { Accept: "application/json" },
+  //         withCredentials: false,
+  //       });
+  //       res = new Response(JSON.stringify(axiosRes.data), { status: 200 });
+  //     }
+
+  //     if (!res.ok) {
+  //       const errJson = await res.json().catch(() => ({}));
+  //       throw new Error(errJson?.error || `Error ${res.status}`);
+  //     }
+
+  //     await new Promise((r) => setTimeout(r, 50));
+  //     doc.save("Cotización_Express.pdf");
+  //     alert("PDF generado y guardado exitosamente.");
+  //   } catch (err) {
+  //     console.error("Error saving PDF:", err);
+  //     alert(`No se pudo guardar el PDF.\n${err?.message || "Revisa tu conexión y vuelve a intentar."}`);
+  //   }
+  // };
   
   const submitOrder = () => {
     localStorage.setItem("discountTotal", "0");
@@ -1152,6 +1662,7 @@ export default function ExpressQuote() {
             const mixed = hasUSD && hasMXN;
 
             const fx = Number.isFinite(dofRate) ? Number(dofRate) : null;
+            const fxRounded = fx != null ? round2(fx) : null;
 
             const withIVA = (v) => (isActive ? v * 1.16 : v);
 
@@ -1161,8 +1672,14 @@ export default function ExpressQuote() {
             const usdSubtotalIVA = withIVA(usdSubtotal);
             const mxnSubtotalIVA = withIVA(mxnSubtotal);
 
-            const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
-            const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
+            // const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
+            // const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
+
+            // Force 2-dec rounding on every FX step
+            const combinedMXN =
+              fxRounded != null ? round2(round2(usdSubtotal) * fxRounded + mxnSubtotal) : null;
+            const combinedMXNIVA =
+              combinedMXN != null ? round2(withIVA(combinedMXN)) : null;
 
             if (onlyUSD) {
               return (
@@ -1179,11 +1696,13 @@ export default function ExpressQuote() {
                     <>
                       <label className="summary-Label">
                         <b>Tipo de cambio:</b>{" "}
-                        {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                        {fxRounded != null ? `$${fxRounded.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                        {/* {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")} */}
                       </label>
                       <label className="summaryTotal-Label">
                         <b>Total a pagar en MXN:</b>{' '}
-                        {fx ? fmtMXN(usdSubtotalIVA * fx) : "—"}
+                        {fxRounded != null ? fmtMXN(round2(round2(usdSubtotalIVA) * fxRounded)) : "—"}
+                        {/* {fx ? fmtMXN(usdSubtotalIVA * fx) : "—"} */}
                       </label>
                     </>
                   )}
@@ -1225,12 +1744,14 @@ export default function ExpressQuote() {
                     </label>
                     <label className="summary-Label">
                       <b>Tipo de cambio:</b>{" "}
-                      {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                      {fxRounded != null ? `$${fxRounded.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+                      {/* {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")} */}
                     </label>
 
                     <label className="summaryTotal-Label">
                       <b>Total a pagar (MXN):</b>{" "}
-                      {fx ? fmtMXN(combinedMXNIVA) : "—"}
+                      {fxRounded != null ? fmtMXN(combinedMXNIVA) : "—"}
+                      {/* {fx ? fmtMXN(combinedMXNIVA) : "—"} */}
                     </label>
                   </div>
                 );
