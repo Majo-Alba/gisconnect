@@ -36,10 +36,11 @@ export default function GeneralLogin() {
     "logistica@greenimportsol.com",
     "almacen@greenimportsol.com",
     "almacen2@greenimportsol.com",
+    "almacen3@greenimportsol.com",
   ]);
 
   const ALMACEN_LIMITADO = new Set([
-    "almacen3@greenimportsol.com",
+    // "almacen3@greenimportsol.com",
   ]);
 
   // Build scopes as route prefixes (use base path for dynamic routes)
