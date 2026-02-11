@@ -11,6 +11,7 @@ import { API } from "/src/lib/api";
 
 const ALLOWED_ADMIN_EMAILS = new Set([
   "ventas@greenimportsol.com",
+  "info@greenimportsol.com",
   "majo_test@gmail.com",
 ]);
 
