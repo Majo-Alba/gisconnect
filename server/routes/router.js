@@ -136,6 +136,41 @@ router.post('/register', (req, res) => {
   });
 });
 
+// POST /users/upsert
+router.post('/users/upsert', async (req, res) => {
+  try {
+    const { nombre = "", apellido = "", empresa = "", correo = "" } = req.body || {};
+    const email = String(correo).trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: "correo requerido" });
+
+    // Upsert by email; don't require contrasena
+    const update = {
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      empresa: empresa.trim(),
+      correo: email,
+      origen: 'captura_admin',
+      updatedAt: new Date()
+    };
+
+    const doc = await newUserModel.findOneAndUpdate(
+      { correo: email },
+      {
+        $setOnInsert: { contrasena: null, createdAt: new Date() },
+        $set: update
+      },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+
+    return res.status(200).json({ ok: true, id: doc._id });
+  } catch (e) {
+    // If there's a rare race-condition duplicate
+    if (e.code === 11000) return res.status(200).json({ ok: true, duplicate: true });
+    console.error(e);
+    return res.status(500).json({ error: "error upserting user" });
+  }
+});
+
 // Login
 router.post('/login', async (req, res) => {
   try {

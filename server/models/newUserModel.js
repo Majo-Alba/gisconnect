@@ -19,26 +19,25 @@ const ShippingPreferencesSchema = new mongoose.Schema({
 const newUserSchema = mongoose.Schema({
     nombre: {
         type: String,
-        // required:[true, "Campo obligatorio"],
+        trim: true
     },
     apellido: {
         type: String,
-        // required:[true, "Campo obligatorio"],  
+        trim: true
     },
     empresa: {
         type: String,
-        // required: true
+        trim: true
     },
     correo: {
         type: String,
         trim: true,
         lowercase: true,
         index: true
-        // required: true
     },
     contrasena: {
         type: String, 
-        // required: true
+        default: null,
     },
     // sep06
     shippingPreferences: {
@@ -60,6 +59,15 @@ const newUserSchema = mongoose.Schema({
     resetPasswordToken: String,
     resetPasswordExpires: Date,
 }, {timestamps: true})
+
+newUserSchema.index(
+    { correo: 1 },
+    {
+      unique: true,
+      partialFilterExpression: { correo: { $type: 'string' } }, // only enforce when correo is a string
+      name: 'uniq_correo_if_string'
+    }
+  );
 
 const newUserModel = mongoose.model("newUsers", newUserSchema)
 
