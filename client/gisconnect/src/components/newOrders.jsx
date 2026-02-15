@@ -1,4 +1,5 @@
-// following on that flow, in newOrders.jsx, if an order has been bought through credit (mongodb paymentOption is "Crédito"), then I'd like for a text to show this. As available option on mongodb regarding credit, we have "paymentOption", "creditTermDays" (shows for how long the client has this credit line), and "creditDueDate". So add some message that includes those pieces of info insidde the orders div (maybe in slight bold letters or red)
+// ✅ Updated newOrders.jsx — added auto-refresh every 30s (with cleanup)
+
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -20,7 +21,6 @@ export default function NewOrders() {
 
   const [orders, setOrders] = useState([]);
   const [filteredOrders, setFilteredOrders] = useState([]);
-  const [filter, setFilter] = useState("today");
   const [searchName, setSearchName] = useState("");
 
   // ===== Client DB (Google Sheets CSV) =====
@@ -42,10 +42,20 @@ export default function NewOrders() {
     fetchCSVData();
   }, []);
 
+  // ✅ Auto-refresh orders every 30 seconds
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchOrders();
+    }, 30_000);
+
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     applyFilters();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, filter, searchName, csvData, namesByEmail]);
+  }, [orders, searchName, csvData, namesByEmail]);
 
   // After orders load/update, fetch missing names from Mongo once per unique email
   useEffect(() => {
@@ -154,47 +164,17 @@ export default function NewOrders() {
   };
 
   const applyFilters = () => {
-    const now = new Date();
-    const current = new Date();
-    const startOfDay = new Date(current.setHours(0, 0, 0, 0));
-
     let filtered = [...orders];
 
     // Only orders waiting validation: "Evidencia Subida"
     filtered = filtered.filter((order) => order.orderStatus === "Evidencia Subida");
 
-    // Time filter
-    if (filter !== "all") {
-      filtered = filtered.filter((order) => {
-        const orderDate = new Date(order.orderDate);
-        switch (filter) {
-          case "today":
-            return orderDate >= startOfDay;
-          case "week": {
-            const startOfWeek = new Date();
-            startOfWeek.setDate(now.getDate() - now.getDay());
-            return orderDate >= startOfWeek;
-          }
-          case "month":
-            return (
-              orderDate.getMonth() === now.getMonth() &&
-              orderDate.getFullYear() === now.getFullYear()
-            );
-          case "bimester": {
-            const twoMonthsAgo = new Date();
-            twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-            return orderDate >= twoMonthsAgo;
-          }
-          case "semester": {
-            const sixMonthsAgo = new Date();
-            sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-            return orderDate >= sixMonthsAgo;
-          }
-          default:
-            return true;
-        }
-      });
-    }
+    // ✅ Always newest first
+    filtered.sort((a, b) => {
+      const da = new Date(a.orderDate || a.createdAt || 0).getTime();
+      const db = new Date(b.orderDate || b.createdAt || 0).getTime();
+      return db - da;
+    });
 
     // Search by client (name/company/email)
     if (searchName) {
@@ -322,6 +302,7 @@ export default function NewOrders() {
           )}
         </div>
 
+        {/* Search only */}
         <div className="searchFilters-Div">
           <input
             className="sectionFilter-Client"
@@ -330,70 +311,56 @@ export default function NewOrders() {
             value={searchName}
             onChange={(e) => setSearchName(e.target.value)}
           />
-          <select
-            className="sectionFilter-Date"
-            required
-            onChange={(e) => setFilter(e.target.value)}
-            value={filter}
-          >
-            <option value="today">Hoy</option>
-            <option value="week">Esta semana</option>
-            <option value="month">Este mes</option>
-            <option value="bimester">Bimestre</option>
-            <option value="semester">Semestre</option>
-            <option value="all">Todo</option>
-          </select>
         </div>
 
         <ul>
-        {filteredOrders.map((order) => {
-          const { finalUSD, finalMXN } = computeDisplayTotals(order);
-          const displayName = displayForEmail(order.userEmail);
+          {filteredOrders.map((order) => {
+            const { finalUSD, finalMXN } = computeDisplayTotals(order);
+            const displayName = displayForEmail(order.userEmail);
 
-          const fmtDate = (v) => {
-            try { return new Date(v).toLocaleDateString("es-MX"); }
-            catch { return "—"; }
-          };
+            const fmtDate = (v) => {
+              try { return new Date(v).toLocaleDateString("es-MX"); }
+              catch { return "—"; }
+            };
 
-          const isCredit = String(order.paymentOption || "").toLowerCase() === "crédito";
+            const isCredit = String(order.paymentOption || "").toLowerCase() === "crédito";
 
-          return (
-            <li
-              key={order._id}
-              onClick={() => navigate(`/newOrders/${order._id}`)}
-            >
-              <div className="orderQuickDetails-Div">
-                <label className="orderQuick-Label">
-                  No. {String(order._id).slice(-5)}
-                </label>
-
-                <label className="orderQuick-Label">
-                  {order.orderDate
-                    ? (() => {
-                        const d = new Date(order.orderDate);
-                        const day = d.getDate().toString().padStart(2, "0");
-                        const month = d.toLocaleString("es-MX", { month: "short" });
-                        const year = d.getFullYear();
-                        return `${day}/${month}/${year}`;
-                      })()
-                    : "Sin fecha"}
-                </label>
-
-                <label className="orderQuick-Label">
-                  {displayName}
-                </label>
-
-                {/* one-liner credit info sitting at bottom */}
-                {isCredit && (
-                  <label style={{marginLeft: "-185%", marginTop: "20%", fontSize: 12, color: "#B91C1C", fontWeight: 600, lineHeight: 1.2,}}>
-                    Compra a crédito, válido por {Number(order.creditTermDays || 0)} día(s). Vigencia:{" "}
-                    {order.creditDueDate ? fmtDate(order.creditDueDate) : "—"}
+            return (
+              <li
+                key={order._id}
+                onClick={() => navigate(`/newOrders/${order._id}`)}
+              >
+                <div className="orderQuickDetails-Div">
+                  <label className="orderQuick-Label">
+                    No. {String(order._id).slice(-5)}
                   </label>
-                )}
-              </div>
-            </li>
-          );
-        })}
+
+                  <label className="orderQuick-Label">
+                    {order.orderDate
+                      ? (() => {
+                          const d = new Date(order.orderDate);
+                          const day = d.getDate().toString().padStart(2, "0");
+                          const month = d.toLocaleString("es-MX", { month: "short" });
+                          const year = d.getFullYear();
+                          return `${day}/${month}/${year}`;
+                        })()
+                      : "Sin fecha"}
+                  </label>
+
+                  <label className="orderQuick-Label">
+                    {displayName}
+                  </label>
+
+                  {isCredit && (
+                    <label style={{ marginLeft: "-185%", marginTop: "20%", fontSize: 12, color: "#B91C1C", fontWeight: 600, lineHeight: 1.2 }}>
+                      Compra a crédito, válido por {Number(order.creditTermDays || 0)} día(s). Vigencia:{" "}
+                      {order.creditDueDate ? fmtDate(order.creditDueDate) : "—"}
+                    </label>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -420,11 +387,12 @@ export default function NewOrders() {
   );
 }
 
+// // hey chatgpt, we originally wanted to have a filter to look up for orders placed previously, allowing user to filter by hoy, esta semana, este mes, bimestre, remestre, or todo. However, since this is a fast moving flow (as soon as an order comes in, it should be worked upon), this filter feature is proving to be kind of useless, more because it sort of "hides" orders that might have been placed overnight. Help me correctly remove the filter so all existing orders are immediatly displayed, obviouly keeping the order of newest order placed on the top and oldest one on the bottom. Here is my current newOrders.jsx
 // import { useState, useEffect, useMemo } from "react";
 // import { useNavigate } from "react-router-dom";
 // import axios from "axios";
 
-// import { faHouse, faCheckToSlot, faCartShopping, faPlus } from "@fortawesome/free-solid-svg-icons";
+// import { faHouse, faCheckToSlot, faCartShopping, faPlus, faFileCircleCheck } from "@fortawesome/free-solid-svg-icons";
 // import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 // import Logo from "/src/assets/images/GIS_Logo.png";
@@ -432,6 +400,7 @@ export default function NewOrders() {
 
 // const ALLOWED_ADMIN_EMAILS = new Set([
 //   "ventas@greenimportsol.com",
+//   "info@greenimportsol.com",
 //   "majo_test@gmail.com",
 // ]);
 
@@ -449,7 +418,7 @@ export default function NewOrders() {
 //   // NEW: cache for mongo lookups: email -> "Nombre Apellido"
 //   const [namesByEmail, setNamesByEmail] = useState({});
 
-//   // current user (to show Add button conditionally)
+//   // current user (to show Add/Evidence buttons conditionally)
 //   const [currentUserEmail, setCurrentUserEmail] = useState("");
 
 //   useEffect(() => {
@@ -496,11 +465,10 @@ export default function NewOrders() {
 //             const full = [nombre, apellido].filter(Boolean).join(" ");
 //             if (full) updates[email] = full;
 //           } catch (_err) {
-//             // ignore (404 or other), we'll fall back to CSV/email
+//             // ignore (404 or other)
 //           }
 //         })
 //       );
-
 //       if (!cancelled && Object.keys(updates).length > 0) {
 //         setNamesByEmail((prev) => ({ ...prev, ...updates }));
 //       }
@@ -601,7 +569,6 @@ export default function NewOrders() {
 //               orderDate.getMonth() === now.getMonth() &&
 //               orderDate.getFullYear() === now.getFullYear()
 //             );
-          
 //           case "bimester": {
 //             const twoMonthsAgo = new Date();
 //             twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
@@ -641,8 +608,9 @@ export default function NewOrders() {
 //   const goToPackageReady = () => navigate("/deliverReady");
 //   const goHomeLogo = () => navigate("/adminHome");
 
-//   const canAddAdminOrder = ALLOWED_ADMIN_EMAILS.has(currentUserEmail);
-//   const handleAddOrder = () => navigate("/adminOrder"); // <-- Route for newAdminOrder.jsx
+//   const canUseAdminTools = ALLOWED_ADMIN_EMAILS.has(currentUserEmail);
+//   const handleAddOrder = () => navigate("/adminOrder");
+//   const handleEvidence = () => navigate("/pendingEvidence");
 
 //   // (kept) Computes final totals in USD/MXN
 //   const computeDisplayTotals = (order) => {
@@ -651,7 +619,7 @@ export default function NewOrders() {
 //     const t = order.totals || {};
 //     const dofRate = Number(t.dofRate) || null;          // MXN per USD
 //     const requestBill = !!order.requestBill;            // IVA?
-//     const discountUSD = Number(t.discountUSD || 0);     // discount tracked in USD
+//     const discountUSD = Number(t.discountUSD || 0);     // discount in USD
 
 //     if (Number.isFinite(t.finalAllUSD) || Number.isFinite(t.finalAllMXN)) {
 //       return {
@@ -712,21 +680,34 @@ export default function NewOrders() {
 //       </div>
 
 //       <div>
+//         {/* Header row with actions */}
 //         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
 //           <label className="sectionHeader-Label">Nuevas Ordenes</label>
 
-//           {canAddAdminOrder && (
-//             <button
-//               className="submitOrder-Btn"
-//               type="button"
-//               onClick={handleAddOrder}
-//               title="Crear orden en nombre de un cliente"
-//               style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", marginRight: "8%" }}
-//             >
-//               {/* <FontAwesomeIcon icon={faPlus} /> */}
-//               <FontAwesomeIcon />
-//               Agregar
-//             </button>
+//           {canUseAdminTools && (
+//             <div style={{ display: "flex", gap: 8, marginRight: "8%" }}>
+//               <button
+//                 className="submitOrder-Btn"
+//                 type="button"
+//                 onClick={handleEvidence}
+//                 title="Pedidos en 'Pedido Realizado' para cargar evidencia"
+//                 style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px" }}
+//               >
+//                 <FontAwesomeIcon icon={faFileCircleCheck} />
+//                 {/* Evidencia */}
+//               </button>
+
+//               <button
+//                 className="submitOrder-Btn"
+//                 type="button"
+//                 onClick={handleAddOrder}
+//                 title="Crear orden en nombre de un cliente"
+//                 style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px" }}
+//               >
+//                 <FontAwesomeIcon icon={faPlus} />
+//                 {/* Agregar */}
+//               </button>
+//             </div>
 //           )}
 //         </div>
 
@@ -754,46 +735,54 @@ export default function NewOrders() {
 //         </div>
 
 //         <ul>
-//           {filteredOrders.map((order) => {
-//             const { finalUSD, finalMXN } = computeDisplayTotals(order);
-//             const displayName = displayForEmail(order.userEmail);
-//             return (
-//               <li
-//                 key={order._id}
-//                 onClick={() => navigate(`/newOrders/${order._id}`)}
-//               >
-//                 <div className="orderQuickDetails-Div">
-//                   <label className="orderQuick-Label">
-//                     No. {String(order._id).slice(-5)}
-//                   </label>
-//                   <label className="orderQuick-Label">
-//                     {order.orderDate
-//                       ? (() => {
-//                           const date = new Date(order.orderDate);
-//                           const day = date.getDate().toString().padStart(2, "0");
-//                           const month = date.toLocaleString("en-MX", { month: "short" });
-//                           const year = date.getFullYear();
-//                           return `${day}/${month}/${year}`;
-//                         })()
-//                       : "Sin fecha"}
-//                   </label>
-//                   <label className="orderQuick-Label">
-//                     {displayName}
-//                   </label>
+//         {filteredOrders.map((order) => {
+//           const { finalUSD, finalMXN } = computeDisplayTotals(order);
+//           const displayName = displayForEmail(order.userEmail);
 
-//                   {/* Optional totals display
-//                   <label className="orderQuick-Label">
-//                     {finalUSD != null ? `$${finalUSD.toFixed(2)} USD` : "—"}
+//           const fmtDate = (v) => {
+//             try { return new Date(v).toLocaleDateString("es-MX"); }
+//             catch { return "—"; }
+//           };
+
+//           const isCredit = String(order.paymentOption || "").toLowerCase() === "crédito";
+
+//           return (
+//             <li
+//               key={order._id}
+//               onClick={() => navigate(`/newOrders/${order._id}`)}
+//             >
+//               <div className="orderQuickDetails-Div">
+//                 <label className="orderQuick-Label">
+//                   No. {String(order._id).slice(-5)}
+//                 </label>
+
+//                 <label className="orderQuick-Label">
+//                   {order.orderDate
+//                     ? (() => {
+//                         const d = new Date(order.orderDate);
+//                         const day = d.getDate().toString().padStart(2, "0");
+//                         const month = d.toLocaleString("es-MX", { month: "short" });
+//                         const year = d.getFullYear();
+//                         return `${day}/${month}/${year}`;
+//                       })()
+//                     : "Sin fecha"}
+//                 </label>
+
+//                 <label className="orderQuick-Label">
+//                   {displayName}
+//                 </label>
+
+//                 {/* one-liner credit info sitting at bottom */}
+//                 {isCredit && (
+//                   <label style={{marginLeft: "-185%", marginTop: "20%", fontSize: 12, color: "#B91C1C", fontWeight: 600, lineHeight: 1.2,}}>
+//                     Compra a crédito, válido por {Number(order.creditTermDays || 0)} día(s). Vigencia:{" "}
+//                     {order.creditDueDate ? fmtDate(order.creditDueDate) : "—"}
 //                   </label>
-//                   {finalMXN != null && (
-//                     <label className="orderQuick-Label" style={{ display: "block", opacity: 0.8 }}>
-//                       {`$${finalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`}
-//                     </label>
-//                   )} */}
-//                 </div>
-//               </li>
-//             );
-//           })}
+//                 )}
+//               </div>
+//             </li>
+//           );
+//         })}
 //         </ul>
 //       </div>
 
@@ -819,9 +808,3 @@ export default function NewOrders() {
 //     </body>
 //   );
 // }
-
-
-
-
-
-
