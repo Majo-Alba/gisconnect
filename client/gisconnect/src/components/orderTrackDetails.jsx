@@ -452,84 +452,85 @@ export default function OrderTrackDetails() {
   //   }
   // };
 
-  const handleDownloadSelected = async () => {
-    if (!order) return;
+  // FEB16 - 13:46
+  // const handleDownloadSelected = async () => {
+  //   if (!order) return;
   
-    const chosenDocs = selectedDocs.size ? Array.from(selectedDocs) : [];
-    const chosenProducts = selectedProducts.size ? Array.from(selectedProducts) : [];
+  //   const chosenDocs = selectedDocs.size ? Array.from(selectedDocs) : [];
+  //   const chosenProducts = selectedProducts.size ? Array.from(selectedProducts) : [];
   
-    if (chosenDocs.length === 0) return alert("Selecciona al menos un documento para descargar.");
-    if (chosenProducts.length === 0) return alert("Selecciona al menos un producto para descargar.");
+  //   if (chosenDocs.length === 0) return alert("Selecciona al menos un documento para descargar.");
+  //   if (chosenProducts.length === 0) return alert("Selecciona al menos un producto para descargar.");
   
-    const items = Array.isArray(order.items) ? order.items : [];
+  //   const items = Array.isArray(order.items) ? order.items : [];
   
-    const selectedItems = items.filter((it) => {
-      const k = makeKey((it?.product || "").trim(), (it?.presentation || "").trim());
-      return chosenProducts.includes(k);
-    });
+  //   const selectedItems = items.filter((it) => {
+  //     const k = makeKey((it?.product || "").trim(), (it?.presentation || "").trim());
+  //     return chosenProducts.includes(k);
+  //   });
   
-    const downloadList = [];
-    selectedItems.forEach((it) => {
-      const d = docsForItem(it);
-      if (!d) return;
+  //   const downloadList = [];
+  //   selectedItems.forEach((it) => {
+  //     const d = docsForItem(it);
+  //     if (!d) return;
   
-      chosenDocs.forEach((docId) => {
-        const rawUrl = (d?.[docId] || "").trim();
-        if (!rawUrl) return;
+  //     chosenDocs.forEach((docId) => {
+  //       const rawUrl = (d?.[docId] || "").trim();
+  //       if (!rawUrl) return;
   
-        const productName = safeFileName(it?.product || "Producto");
-        const pres = safeFileName(it?.presentation || "");
-        const docName = safeFileName(docLabel(docId));
+  //       const productName = safeFileName(it?.product || "Producto");
+  //       const pres = safeFileName(it?.presentation || "");
+  //       const docName = safeFileName(docLabel(docId));
   
-        const filename = pres
-          ? `${productName} - ${pres} - ${docName}.pdf`
-          : `${productName} - ${docName}.pdf`;
+  //       const filename = pres
+  //         ? `${productName} - ${pres} - ${docName}.pdf`
+  //         : `${productName} - ${docName}.pdf`;
   
-        downloadList.push({ url: rawUrl, filename });
-      });
-    });
+  //       downloadList.push({ url: rawUrl, filename });
+  //     });
+  //   });
   
-    if (downloadList.length === 0) {
-      alert("No se encontraron documentos disponibles para tu selección.");
-      return;
-    }
+  //   if (downloadList.length === 0) {
+  //     alert("No se encontraron documentos disponibles para tu selección.");
+  //     return;
+  //   }
   
-    // de-dup
-    const uniq = new Map();
-    downloadList.forEach((x) => {
-      const key = `${x.filename}__${x.url}`;
-      if (!uniq.has(key)) uniq.set(key, x);
-    });
-    const files = Array.from(uniq.values());
+  //   // de-dup
+  //   const uniq = new Map();
+  //   downloadList.forEach((x) => {
+  //     const key = `${x.filename}__${x.url}`;
+  //     if (!uniq.has(key)) uniq.set(key, x);
+  //   });
+  //   const files = Array.from(uniq.values());
   
-    try {
-      const orderNo = String(order?._id || "").slice(-5) || "pedido";
+  //   try {
+  //     const orderNo = String(order?._id || "").slice(-5) || "pedido";
   
-      // If only 1 file, download single PDF (nice UX)
-      if (files.length === 1) {
-        const f = files[0];
-        const apiUrl = `${API}/drive/pdf?url=${encodeURIComponent(f.url)}&filename=${encodeURIComponent(f.filename)}`;
-        const r = await fetch(apiUrl, { credentials: "include" });
-        if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
-        const blob = await r.blob();
-        downloadBlobAsFile(blob, f.filename);
-        return;
-      }
+  //     // If only 1 file, download single PDF (nice UX)
+  //     if (files.length === 1) {
+  //       const f = files[0];
+  //       const apiUrl = `${API}/drive/pdf?url=${encodeURIComponent(f.url)}&filename=${encodeURIComponent(f.filename)}`;
+  //       const r = await fetch(apiUrl, { credentials: "include" });
+  //       if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
+  //       const blob = await r.blob();
+  //       downloadBlobAsFile(blob, f.filename);
+  //       return;
+  //     }
   
-      // If multiple, download ZIP from server
-      const zipName = `Documentos_Pedido_${orderNo}.zip`;
-      const r = await postJSON(`${API}/drive/zip`, { files, zipName });
-      const blob = await r.blob();
-      downloadBlobAsFile(blob, zipName);
-    } catch (e) {
-      console.warn("Download via proxy failed:", e);
-      alert(
-        "No se pudieron descargar los documentos. " +
-        "Verifica que los PDFs estén en Drive con permiso: 'Cualquiera con el enlace' y que sean PDFs reales."
-      );
-    }
-  };
-  
+  //     // If multiple, download ZIP from server
+  //     const zipName = `Documentos_Pedido_${orderNo}.zip`;
+  //     const r = await postJSON(`${API}/drive/zip`, { files, zipName });
+  //     const blob = await r.blob();
+  //     downloadBlobAsFile(blob, zipName);
+  //   } catch (e) {
+  //     console.warn("Download via proxy failed:", e);
+  //     alert(
+  //       "No se pudieron descargar los documentos. " +
+  //       "Verifica que los PDFs estén en Drive con permiso: 'Cualquiera con el enlace' y que sean PDFs reales."
+  //     );
+  //   }
+  // };
+  // FEB16 - 13:46
 
 
 
@@ -676,9 +677,8 @@ export default function OrderTrackDetails() {
             </label>
 
             {/* ✅ NEW: Download docs UI (only when "Preparando Pedido" or later) */}
-            {canDownloadDocs && (
+            {/* {canDownloadDocs && (
               <div style={{ marginTop: 10, width: "100%" }}>
-                {/* Dropdown 1: Documents */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ position: "relative" }}>
                     <span  style={{ textAlign: "left", lineHeight: 1.2 }}>
@@ -745,10 +745,8 @@ export default function OrderTrackDetails() {
                     )}
                   </div>
 
-                  {/* Dropdown 2: Products */}
                   <div style={{ position: "relative" }}>
                     <span style={{ textAlign: "left", lineHeight: 1.2 }}>
-                      {/* <b className="orderNumber-Label">Productos:</b> {selectedProductsLabel} */}
                       <b className="orderNumber-Label">Productos:</b>
                     </span>
 
@@ -768,9 +766,6 @@ export default function OrderTrackDetails() {
                         setDocsOpen(false);
                       }}
                     >
-                      {/* <span style={{ textAlign: "left", lineHeight: 1.2 }}>
-                        <b>Productos:</b> {selectedProductsLabel}
-                      </span> */}
                       <span style={{ marginLeft: 5 }}>Selecciona productos  {productsOpen ? "▲" : "▼"}</span>
                     </button>
 
@@ -823,7 +818,6 @@ export default function OrderTrackDetails() {
                     )}
                   </div>
 
-                  {/* Download button */}
                   <button
                     className="uploadPaymentEvidence-Btn"
                     type="button"
@@ -840,7 +834,7 @@ export default function OrderTrackDetails() {
                   </div>
                 </div>
               </div>
-            )}
+            )} */}
           </div>
 
           {/* sep06 */}
