@@ -1,3 +1,4 @@
+// in deliveredSummary.jsx, under "Detalles Entrega" let's have to modifs: 1) if shippingInfo on mongodb is "Recoger en Matriz", then lets not have a "Monto asegurado" (since package isn't being shipped, this field wouldnt make sense), and 2) under same section, lets add person in charge of handling delivery. Add field "Entregado por:" and this info lives on mongodb under "deliveryWork" and more specifically "claimedBy" 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -366,6 +367,14 @@ export default function DeliveredSummary() {
     order?.packedBy ||
     order?.packingManager ||
     "";
+  
+  // ===== Delivery person (who handled delivery) =====
+  const deliveredBy =
+  order?.deliveryWork?.claimedBy ||
+  order?.delivery?.claimedBy ||
+  order?.deliveryWork?.deliverer ||
+  order?.deliverer ||
+  "";
 
   const items = useMemo(() => (Array.isArray(order?.items) ? order.items : []), [order]);
 
@@ -743,13 +752,23 @@ export default function DeliveredSummary() {
               <div className="existingQuote-Div">
                 <div className="quoteAndFile-Div">
                   <label className="productDetail-Label">
-                    Fecha de entrega: <label>{formatDate(order?.deliveryDateYMD || order?.deliveryDate)}</label>
+                    <b>Fecha de entrega:</b> <label>{formatDate(order?.deliveryDateYMD || order?.deliveryDate)}</label>
                   </label>
+                  {deliveredBy && (
+                    <label className="productDetail-Label">
+                      <b>Entregado por:</b> {deliveredBy}
+                    </label>
+                  )}
                   {order?.trackingNumber && (
                     <label className="productDetail-Label">Número de guía: {order.trackingNumber}</label>
                   )}
-                  {order?.insuredAmount != null && order?.insuredAmount !== "" && (
+                  {/* {order?.insuredAmount != null && order?.insuredAmount !== "" && (
                     <label className="productDetail-Label"><b>Monto asegurado:</b> ${fmtMoney(order.insuredAmount, "es-MX")} MXN</label>
+                  )} */}
+                  {!isPickupOrder && order?.insuredAmount != null && order?.insuredAmount !== "" && (
+                    <label className="productDetail-Label">
+                      <b>Monto asegurado:</b> ${fmtMoney(order.insuredAmount, "es-MX")} MXN
+                    </label>
                   )}
                   {order?.deliveryEvidenceExt && (
                     <div style={{ marginTop: 10 }}>

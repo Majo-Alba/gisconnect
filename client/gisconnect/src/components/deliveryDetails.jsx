@@ -1,3 +1,4 @@
+// same thing going on on deliveryDetails.jsx. We're getting the order date rather than pick-up date under "Detalles de entega - Fecha"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -342,15 +343,39 @@ export default function DeliveryDetails() {
 
   // Pickup details (date/time)
   const pickupDetails = order?.pickupDetails || null;
-  const fmtDMY = (isoLike) => {
-    if (!isoLike) return "";
-    const d = new Date(isoLike);
-    if (Number.isNaN(d.getTime())) return String(isoLike);
+
+  // const fmtDMY = (isoLike) => {
+  //   if (!isoLike) return "";
+  //   const d = new Date(isoLike);
+  //   if (Number.isNaN(d.getTime())) return String(isoLike);
+  //   const dd = String(d.getDate()).padStart(2, "0");
+  //   const mm = String(d.getMonth() + 1).padStart(2, "0");
+  //   const yyyy = d.getFullYear();
+  //   return `${dd}/${mm}/${yyyy}`;
+  // };
+  // const pickupDate = pickupDetails?.date ? fmtDMY(pickupDetails.date) : "";
+  // ✅ Parse "YYYY-MM-DD" as LOCAL date (no TZ shift), otherwise fallback to Date()
+  const fmtDMY = (value) => {
+    if (!value) return "";
+    const s = String(value).trim();
+
+    // Exact YYYY-MM-DD → force local midnight
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    let d;
+    if (m) {
+      d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+    } else {
+      d = new Date(s); // ISO timestamps etc.
+    }
+
+    if (Number.isNaN(d.getTime())) return s;
+
     const dd = String(d.getDate()).padStart(2, "0");
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
     return `${dd}/${mm}/${yyyy}`;
   };
+
   const pickupDate = pickupDetails?.date ? fmtDMY(pickupDetails.date) : "";
   const pickupTime = (pickupDetails?.time || "").trim();
 

@@ -1,8 +1,4 @@
-// ✅ Updated deliverReady.jsx
-// - Removed time filter UI (dropdown) so nothing gets hidden
-// - Sorts newest -> oldest
-// - Auto-refresh every 30 seconds (with cleanup)
-
+// in deliverReady.jsx under "Recoger en Matriz" im getting the date that the order was placed on, rather than using the pickup date. On mongodb we have field "pickupDetails" umder which we have "date" & "time", can you help me fix this 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -188,10 +184,42 @@ export default function DeliverReady() {
     return fromString || fromObject;
   };
 
-  const fmtDMY = (isoLike) => {
-    if (!isoLike) return "";
-    const d = new Date(isoLike);
-    if (Number.isNaN(d.getTime())) return String(isoLike);
+  // const fmtDMY = (isoLike) => {
+  //   if (!isoLike) return "";
+  //   const d = new Date(isoLike);
+  //   if (Number.isNaN(d.getTime())) return String(isoLike);
+  //   const dd = String(d.getDate()).padStart(2, "0");
+  //   const mm = String(d.getMonth() + 1).padStart(2, "0");
+  //   const yyyy = d.getFullYear();
+  //   return `${dd}/${mm}/${yyyy}`;
+  // };
+
+  // const pickupLineFor = (order) => {
+  //   const p = order?.pickupDetails || null;
+  //   if (!p) return "";
+  //   const d = fmtDMY(p.date);
+  //   const t = (p.time || "").trim();
+  //   if (d && t) return `${d} • ${t}`;
+  //   return d || t || "";
+  // };
+
+  // ✅ Date formatter that correctly handles "YYYY-MM-DD" as LOCAL date (no TZ shift)
+  const fmtDMY = (value) => {
+    if (!value) return "";
+    const s = String(value).trim();
+
+    // If it's exactly YYYY-MM-DD, parse as local midnight
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    let d;
+    if (m) {
+      d = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`);
+    } else {
+      // Otherwise let Date try (e.g. full ISO timestamps)
+      d = new Date(s);
+    }
+
+    if (Number.isNaN(d.getTime())) return s;
+
     const dd = String(d.getDate()).padStart(2, "0");
     const mm = String(d.getMonth() + 1).padStart(2, "0");
     const yyyy = d.getFullYear();
@@ -201,8 +229,8 @@ export default function DeliverReady() {
   const pickupLineFor = (order) => {
     const p = order?.pickupDetails || null;
     if (!p) return "";
-    const d = fmtDMY(p.date);
-    const t = (p.time || "").trim();
+    const d = fmtDMY(p.date);          // ✅ now uses pickupDetails.date correctly
+    const t = String(p.time || "").trim();
     if (d && t) return `${d} • ${t}`;
     return d || t || "";
   };
