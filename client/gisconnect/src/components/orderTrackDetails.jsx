@@ -77,6 +77,47 @@ export default function OrderTrackDetails() {
   const [selectedDocs, setSelectedDocs] = useState(() => new Set());
   const [selectedProducts, setSelectedProducts] = useState(() => new Set());
 
+  // FEB16
+  const downloadBlobAsFile = (blob, filename) => {
+    const blobUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename || "documento.pdf";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(blobUrl);
+  };
+  
+  const postJSON = async (url, body) => {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "include", // ok with your CORS config
+    });
+    if (!r.ok) {
+      const msg = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status} ${msg}`);
+    }
+    return r;
+  };
+  
+  const getFileExt = (name = "") => {
+    const n = String(name).toLowerCase();
+    if (n.endsWith(".pdf")) return "pdf";
+    if (n.endsWith(".zip")) return "zip";
+    return "";
+  };  
+
+  const safeFileName = (s) =>
+    String(s || "")
+      .trim()
+      .replace(/[\/\\?%*:|"<>]/g, "-")
+      .replace(/\s+/g, " ")
+      .slice(0, 140);
+  // FEB16
+
   // Load order (fresh)
   useEffect(() => {
     loadOrder();
@@ -302,56 +343,56 @@ export default function OrderTrackDetails() {
   // ================================
   // ✅ Download helpers (Drive -> blob -> download)
   // ================================
-  const extractDriveFileId = (rawUrl) => {
-    const url = String(rawUrl || "").trim();
-    if (!url) return "";
+  // const extractDriveFileId = (rawUrl) => {
+  //   const url = String(rawUrl || "").trim();
+  //   if (!url) return "";
 
-    // /file/d/<id>/
-    const m1 = url.match(/\/file\/d\/([^/]+)/);
-    if (m1?.[1]) return m1[1];
+  //   // /file/d/<id>/
+  //   const m1 = url.match(/\/file\/d\/([^/]+)/);
+  //   if (m1?.[1]) return m1[1];
 
-    // ?id=<id>
-    const m2 = url.match(/[?&]id=([^&]+)/);
-    if (m2?.[1]) return m2[1];
+  //   // ?id=<id>
+  //   const m2 = url.match(/[?&]id=([^&]+)/);
+  //   if (m2?.[1]) return m2[1];
 
-    // uc?id=<id>
-    const m3 = url.match(/drive\.google\.com\/uc\?id=([^&]+)/);
-    if (m3?.[1]) return m3[1];
+  //   // uc?id=<id>
+  //   const m3 = url.match(/drive\.google\.com\/uc\?id=([^&]+)/);
+  //   if (m3?.[1]) return m3[1];
 
-    return "";
-  };
+  //   return "";
+  // };
 
-  const toDirectDownloadUrl = (rawUrl) => {
-    const url = String(rawUrl || "").trim();
-    if (!url) return "";
+  // const toDirectDownloadUrl = (rawUrl) => {
+  //   const url = String(rawUrl || "").trim();
+  //   if (!url) return "";
 
-    // If already a direct download, keep it
-    if (url.includes("drive.google.com/uc?export=download")) return url;
+  //   // If already a direct download, keep it
+  //   if (url.includes("drive.google.com/uc?export=download")) return url;
 
-    const fileId = extractDriveFileId(url);
-    if (fileId) return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  //   const fileId = extractDriveFileId(url);
+  //   if (fileId) return `https://drive.google.com/uc?export=download&id=${fileId}`;
 
-    // Not drive (or unknown format) – return as-is
-    return url;
-  };
+  //   // Not drive (or unknown format) – return as-is
+  //   return url;
+  // };
 
-  const safeFileName = (s) =>
-    String(s || "")
-      .trim()
-      .replace(/[\/\\?%*:|"<>]/g, "-")
-      .replace(/\s+/g, " ")
-      .slice(0, 140);
+  // const safeFileName = (s) =>
+  //   String(s || "")
+  //     .trim()
+  //     .replace(/[\/\\?%*:|"<>]/g, "-")
+  //     .replace(/\s+/g, " ")
+  //     .slice(0, 140);
 
-  const downloadBlobAsFile = (blob, filename) => {
-    const blobUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = blobUrl;
-    a.download = filename || "documento.pdf";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(blobUrl);
-  };
+  // const downloadBlobAsFile = (blob, filename) => {
+  //   const blobUrl = window.URL.createObjectURL(blob);
+  //   const a = document.createElement("a");
+  //   a.href = blobUrl;
+  //   a.download = filename || "documento.pdf";
+  //   document.body.appendChild(a);
+  //   a.click();
+  //   a.remove();
+  //   window.URL.revokeObjectURL(blobUrl);
+  // };
 
   // ✅ NEW: Download action
   // const handleDownloadSelected = async () => {
@@ -411,67 +452,84 @@ export default function OrderTrackDetails() {
   //   }
   // };
 
-  // ✅ Download via browser navigation (NO fetch => NO CORS)
-  const downloadByAnchor = async (url, filename) => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    // "download" is ignored cross-origin often, but harmless
-    a.download = filename || "";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    // small delay so browsers don't suppress rapid opens
-    await new Promise((r) => setTimeout(r, 350));
-  };
-
   const handleDownloadSelected = async () => {
     if (!order) return;
-
+  
     const chosenDocs = selectedDocs.size ? Array.from(selectedDocs) : [];
     const chosenProducts = selectedProducts.size ? Array.from(selectedProducts) : [];
-
+  
     if (chosenDocs.length === 0) return alert("Selecciona al menos un documento para descargar.");
     if (chosenProducts.length === 0) return alert("Selecciona al menos un producto para descargar.");
-
+  
     const items = Array.isArray(order.items) ? order.items : [];
+  
     const selectedItems = items.filter((it) => {
       const k = makeKey((it?.product || "").trim(), (it?.presentation || "").trim());
       return chosenProducts.includes(k);
     });
-
+  
     const downloadList = [];
     selectedItems.forEach((it) => {
       const d = docsForItem(it);
       if (!d) return;
-
+  
       chosenDocs.forEach((docId) => {
         const rawUrl = (d?.[docId] || "").trim();
         if (!rawUrl) return;
-
-        // keep your existing converter if you have it
-        const directUrl = toDirectDownloadUrl(rawUrl);
-
-        downloadList.push({ url: directUrl });
+  
+        const productName = safeFileName(it?.product || "Producto");
+        const pres = safeFileName(it?.presentation || "");
+        const docName = safeFileName(docLabel(docId));
+  
+        const filename = pres
+          ? `${productName} - ${pres} - ${docName}.pdf`
+          : `${productName} - ${docName}.pdf`;
+  
+        downloadList.push({ url: rawUrl, filename });
       });
     });
-
+  
     if (downloadList.length === 0) {
       alert("No se encontraron documentos disponibles para tu selección.");
       return;
     }
-
-    // IMPORTANT: browsers may still block multiple downloads unless user allows it once.
-    // This will open them sequentially.
-    for (let i = 0; i < downloadList.length; i++) {
-      await downloadByAnchor(downloadList[i].url, "");
+  
+    // de-dup
+    const uniq = new Map();
+    downloadList.forEach((x) => {
+      const key = `${x.filename}__${x.url}`;
+      if (!uniq.has(key)) uniq.set(key, x);
+    });
+    const files = Array.from(uniq.values());
+  
+    try {
+      const orderNo = String(order?._id || "").slice(-5) || "pedido";
+  
+      // If only 1 file, download single PDF (nice UX)
+      if (files.length === 1) {
+        const f = files[0];
+        const apiUrl = `${API}/drive/pdf?url=${encodeURIComponent(f.url)}&filename=${encodeURIComponent(f.filename)}`;
+        const r = await fetch(apiUrl, { credentials: "include" });
+        if (!r.ok) throw new Error(`No se pudo descargar (HTTP ${r.status})`);
+        const blob = await r.blob();
+        downloadBlobAsFile(blob, f.filename);
+        return;
+      }
+  
+      // If multiple, download ZIP from server
+      const zipName = `Documentos_Pedido_${orderNo}.zip`;
+      const r = await postJSON(`${API}/drive/zip`, { files, zipName });
+      const blob = await r.blob();
+      downloadBlobAsFile(blob, zipName);
+    } catch (e) {
+      console.warn("Download via proxy failed:", e);
+      alert(
+        "No se pudieron descargar los documentos. " +
+        "Verifica que los PDFs estén en Drive con permiso: 'Cualquiera con el enlace' y que sean PDFs reales."
+      );
     }
-
-    // optional: inform user if browser blocks
-    // alert("Si tu navegador bloquea múltiples descargas, habilita 'Permitir múltiples descargas' para este sitio.");
   };
+  
 
 
 
@@ -584,7 +642,8 @@ export default function OrderTrackDetails() {
     userEmail === "mj_albanes@kangaroocacti.com" || getCurrentPosition(order.orderStatus) >= 2;
 
   return (
-    <body className="app-shell body-BG-Gradient">
+    <div className="app-shell body-BG-Gradient" style={{ minHeight: "100vh", overflow: "hidden" }}>
+    {/* <body className="app-shell body-BG-Gradient"> */}
       <div className="app-header loginLogo-ParentDiv">
         <img
           className="secondaryPages-GISLogo"
@@ -595,9 +654,11 @@ export default function OrderTrackDetails() {
           onClick={() => navigate("/userHome")}
         />
       </div>
-
-      <div className="app-main">
-        <div className="orderTracker-LimitedScroll">
+      
+      <div className="app-main" style={{ height: "calc(100vh - 90px)", overflowY: "auto", paddingBottom: 120 }}>
+        <div className="orderTracker-LimitedScroll" style={{ height: "auto", overflow: "visible" }}>
+      {/* <div className="app-main">
+        <div className="orderTracker-LimitedScroll"> */}
           <div className="edit-titleIcon-Div">
             <label className="editAddress-headerLabel">Rastrea tu orden</label>
             <img src={pedidoIcon} alt="Pedido" width="35" height="35" />
@@ -621,7 +682,6 @@ export default function OrderTrackDetails() {
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   <div style={{ position: "relative" }}>
                     <span  style={{ textAlign: "left", lineHeight: 1.2 }}>
-                      {/* <b>Documentos:</b> {selectedDocsLabel} */}
                       <b className="orderNumber-Label">Documentos:</b> 
                     </span>
                     
@@ -787,7 +847,7 @@ export default function OrderTrackDetails() {
           {/* ✅ Show tracking number only when delivered and present */}
           {order?.orderStatus === "Pedido Entregado" && (
             <div className="orderNumberAndDate-Div">
-              <div className="trackingNumber-Div" style={{ marginTop: 4, marginLeft: 1 }}>
+              <div className="trackingNumber-Div" style={{ marginTop: -2, marginLeft: 1 }}>
                 <span className="orderDate-Label" style={{ fontWeight: 600 }}>
                   No. de rastreo:
                 </span>{" "}
@@ -839,6 +899,168 @@ export default function OrderTrackDetails() {
               ))}
             </ProgressBar>
           </div>
+
+          {/* HERE */}
+          {/* ✅ NEW: Download docs UI (only when "Preparando Pedido" or later) */}
+            {/* {canDownloadDocs && (
+              <div style={{ marginTop: 10, marginLeft: "5%",width: "90%" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ position: "relative" }}>
+                    <span  style={{ textAlign: "left", lineHeight: 1.2 }}>
+                      <b className="orderNumber-Label">Documentos:</b> 
+                    </span>
+                    
+                    <button
+                      type="button"  
+                      className="productInfo-Input"
+                      style={{
+                        width: "70%",
+                        padding: "10px 12px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginLeft: "-1%"
+                      }}
+                      onClick={() => {
+                        setDocsOpen((v) => !v);
+                        setProductsOpen(false);
+                      }}
+                    >
+                      <span style={{ marginLeft: 5 }}>Selecciona documentos  {docsOpen ? "▲" : "▼"}</span>
+                    </button>
+
+                    {docsOpen && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          zIndex: 50,
+                          width: "90%",
+                          top: "90%",
+                          left: 0,
+                          right: 0,
+                          background: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 10,
+                          padding: 10,
+                          boxShadow: "0 10px 20px rgba(0,0,0,0.12)",
+                        }}
+                      >
+                        <label style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 4px" }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDocs.size === allDocIds.length && allDocIds.length > 0}
+                            onChange={(e) => (e.target.checked ? selectAllDocs() : clearAllDocs())}
+                          />
+                          <b>Descargar todos</b>
+                        </label>
+
+                        <div style={{ height: 1, background: "#eee", margin: "6px 0" }} />
+
+                        {DOC_OPTIONS.map((d) => (
+                          <label key={d.id} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 4px" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedDocs.has(d.id)}
+                              onChange={() => toggleDoc(d.id)}
+                            />
+                            {d.label}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ position: "relative" }}>
+                    <span style={{ textAlign: "left", lineHeight: 1.2 }}>
+                      <b className="orderNumber-Label">Productos:</b>
+                    </span>
+
+                    <button
+                      type="button"
+                      className="productInfo-Input"
+                      style={{
+                        width: "70%",
+                        padding: "10px 12px",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginLeft: "-1%"
+                      }}
+                      onClick={() => {
+                        setProductsOpen((v) => !v);
+                        setDocsOpen(false);
+                      }}
+                    >
+                      <span style={{ marginLeft: 5 }}>Selecciona productos  {productsOpen ? "▲" : "▼"}</span>
+                    </button>
+
+                    {productsOpen && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          zIndex: 50,
+                          width: "90%",
+                          top: "90%",
+                          left: 0,
+                          right: 0,
+                          background: "#fff",
+                          border: "1px solid #e5e7eb",
+                          borderRadius: 10,
+                          padding: 10,
+                          boxShadow: "0 10px 20px rgba(0,0,0,0.12)",
+                          maxHeight: 260,
+                          overflowY: "auto",
+                        }}
+                      >
+                        <label style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 4px" }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedProducts.size === allProductKeys.length && allProductKeys.length > 0}
+                            onChange={(e) => (e.target.checked ? selectAllProducts() : clearAllProducts())}
+                          />
+                          <b>Todos los productos</b>
+                        </label>
+
+                        <div style={{ height: 1, background: "#eee", margin: "6px 0" }} />
+
+                        {productOptions.map((p) => (
+                          <label key={p.key} style={{ display: "flex", gap: 10, alignItems: "center", padding: "6px 4px" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedProducts.has(p.key)}
+                              onChange={() => toggleProduct(p.key)}
+                            />
+                            {p.label}
+                          </label>
+                        ))}
+
+                        {productOptions.length === 0 && (
+                          <div style={{ fontSize: 12, color: "#6b7280", padding: 6 }}>
+                            No se encontraron productos en esta orden.
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="uploadPaymentEvidence-Btn"
+                    type="button"
+                    onClick={handleDownloadSelected}
+                    disabled={false}
+                    style={{ width: "35%", padding: "10px 12px", marginTop: 2 }}
+                    title="Descarga los documentos disponibles según tu selección"
+                  >
+                    Descargar
+                  </button>
+
+                  <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4, lineHeight: 1.3 }}>
+                    * Algunos productos no cuentan con todos los documentos. Solo se descargarán los disponibles.
+                  </div>
+                </div>
+              </div>
+            )} */}
+          {/* HERE END */}
 
           <div className="orderTracker-Scroll">
             <div className="orderNumberAndDate-Div">
@@ -979,7 +1201,8 @@ export default function OrderTrackDetails() {
           </div>
         </div>
       </div>
-    </body>
+    {/* </body> */}
+    </div>
   );
 }
 
