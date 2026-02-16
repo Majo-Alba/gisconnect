@@ -30,6 +30,7 @@ const { admin } = require("../notifications/fcm");
 
 const WebPushSubscription = require("../models/WebPushSubscription");
 
+const archiver = require("archiver");
 
 // sep16
 
@@ -2190,6 +2191,162 @@ router.post("/orders/:id/release-delivery", async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+
+// FEB16
+// -----------------------------
+// Drive helpers
+// -----------------------------
+function extractDriveFileId(rawUrl = "") {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+
+  // /file/d/<id>/
+  const m1 = url.match(/\/file\/d\/([^/]+)/);
+  if (m1?.[1]) return m1[1];
+
+  // ?id=<id>
+  const m2 = url.match(/[?&]id=([^&]+)/);
+  if (m2?.[1]) return m2[1];
+
+  // uc?id=<id>
+  const m3 = url.match(/drive\.google\.com\/uc\?id=([^&]+)/);
+  if (m3?.[1]) return m3[1];
+
+  return "";
+}
+
+function toDriveDirectDownloadUrl(rawUrl = "") {
+  const url = String(rawUrl || "").trim();
+  if (!url) return "";
+
+  // Already direct-ish
+  if (url.includes("drive.google.com/uc?")) {
+    // ensure export=download
+    if (!url.includes("export=download")) {
+      const id = extractDriveFileId(url);
+      if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
+    }
+    return url;
+  }
+
+  const id = extractDriveFileId(url);
+  if (id) return `https://drive.google.com/uc?export=download&id=${id}`;
+
+  // Not Drive
+  return url;
+}
+
+function safeName(s) {
+  return String(s || "")
+    .trim()
+    .replace(/[\/\\?%*:|"<>]/g, "-")
+    .replace(/\s+/g, " ")
+    .slice(0, 140) || "documento.pdf";
+}
+
+// -----------------------------
+// ✅ Single PDF proxy
+// GET /drive/pdf?url=<driveUrl>&filename=<optional>
+// -----------------------------
+router.get("/drive/pdf", async (req, res) => {
+  try {
+    const rawUrl = req.query.url;
+    if (!rawUrl) return res.status(400).json({ error: "Missing url" });
+
+    const filename = safeName(req.query.filename || "documento.pdf");
+    const direct = toDriveDirectDownloadUrl(rawUrl);
+
+    const r = await fetch(direct, { redirect: "follow" });
+    if (!r.ok) {
+      return res.status(502).json({ error: `Drive fetch failed ${r.status}` });
+    }
+
+    const contentType = r.headers.get("content-type") || "application/pdf";
+    const buf = Buffer.from(await r.arrayBuffer());
+
+    // If Drive returns HTML, it’s usually a permissions/viewer page
+    if (String(contentType).includes("text/html")) {
+      return res.status(403).json({
+        error:
+          "Drive devolvió HTML en lugar de PDF. Revisa que el archivo esté público (Cualquiera con el link) y sea PDF.",
+      });
+    }
+
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    res.send(buf);
+  } catch (e) {
+    console.error("drive/pdf error:", e);
+    res.status(500).json({ error: "Proxy error" });
+  }
+});
+
+// -----------------------------
+// ✅ ZIP proxy
+// POST /drive/zip  body: { files: [{ url, filename }] }
+// -----------------------------
+router.post("/drive/zip", async (req, res) => {
+  try {
+    const files = req.body?.files;
+    if (!Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ error: "Missing files[]" });
+    }
+
+    const zipName = safeName(req.body?.zipName || "documentos.zip");
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="${zipName}"`);
+
+    const archive = archiver("zip", { zlib: { level: 9 } });
+
+    archive.on("error", (err) => {
+      console.error("archiver error:", err);
+      try { res.status(500).end(); } catch {}
+    });
+
+    archive.pipe(res);
+
+    let added = 0;
+
+    for (const f of files) {
+      const rawUrl = f?.url;
+      const fname = safeName(f?.filename || "documento.pdf");
+      if (!rawUrl) continue;
+
+      const direct = toDriveDirectDownloadUrl(rawUrl);
+
+      try {
+        const r = await fetch(direct, { redirect: "follow" });
+        if (!r.ok) continue;
+
+        const ct = r.headers.get("content-type") || "";
+        const buf = Buffer.from(await r.arrayBuffer());
+
+        // Skip HTML responses (Drive viewer pages)
+        if (String(ct).includes("text/html")) continue;
+
+        archive.append(buf, { name: fname.endsWith(".pdf") ? fname : `${fname}.pdf` });
+        added++;
+      } catch (e) {
+        console.warn("zip file fetch failed:", fname, e?.message);
+      }
+    }
+
+    if (added === 0) {
+      // create a small readme instead of empty zip
+      archive.append(
+        "No se pudo descargar ningún PDF. Revisa permisos en Drive (Cualquiera con el link).\n",
+        { name: "README.txt" }
+      );
+    }
+
+    await archive.finalize();
+  } catch (e) {
+    console.error("drive/zip error:", e);
+    res.status(500).json({ error: "ZIP proxy error" });
+  }
+});
+// FEB16
 
 // // Claim delivery
 // router.post("/orders/:id/claim-delivery", async (req, res) => {

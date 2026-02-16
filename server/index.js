@@ -49,6 +49,8 @@ const corsOptions = {
   credentials: true,              // ok because we never send "*" as ACAO
   maxAge: 86400,
   optionsSuccessStatus: 204,
+
+  exposedHeaders: ["Content-Disposition"],
 };
 
 app.use(cors(corsOptions));
