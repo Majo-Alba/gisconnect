@@ -1,8 +1,4 @@
-// ✅ Updated manageDelivery.jsx
-// - Removed time filter UI (dropdown) + related state
-// - Always sorts newest -> oldest
-// - Auto-refresh every 30 seconds (with cleanup)
-
+// In manageDelivery.jsx, if shippingInfo on mongodb is set to "Recoger en Matriz", then under "Instrucción" replace "Paquetería" & "Mercancía Asegurada" for "Recoger en matriz", followed by pickupDetails (we have that field in Mongodb) "Día" (date on mongodb) and "Hora" (time on mongodb)
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -243,13 +239,33 @@ export default function ManageDelivery() {
       <label className="sectionHeader-Label">Gestionar Entrega</label>
 
       <div className="newQuotesScroll-Div">
-        {sortedOrders.map((order) => {
+        {/* {sortedOrders.map((order) => {
           const displayName = nameForEmail(order.userEmail);
           const companyName = companyForEmail(order.userEmail);
           const carrierName = carrierForEmail(order.userEmail);
-          const insurancePref = insuranceForEmail(order.userEmail);
+          const insurancePref = insuranceForEmail(order.userEmail); */}
+          {sortedOrders.map((order) => {
+            const displayName = nameForEmail(order.userEmail);
+            const companyName = companyForEmail(order.userEmail);
+            const carrierName = carrierForEmail(order.userEmail);
+            const insurancePref = insuranceForEmail(order.userEmail);
 
-          return (
+            const isPickup =
+              typeof order?.shippingInfo === "string" &&
+              normalize(order.shippingInfo) === "recoger en matriz";
+
+            const pickupDay = order?.pickupDetails?.date || "";
+            const pickupTime = order?.pickupDetails?.time || "";
+
+            // Friendly formatting for YYYY-MM-DD -> DD/MM/YYYY (if it matches)
+            const pickupDayLabel = (() => {
+              const s = String(pickupDay || "").trim();
+              const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+              if (!m) return s;
+              return `${m[3]}/${m[2]}/${m[1]}`;
+            })();
+
+            return (
             <div className="existingQuote-Div" key={order._id}>
               <div className="quoteAndFile-Div" onClick={() => handleOrderClick(order._id)}>
                 <label className="orderQuick-Label">{displayName}</label>
@@ -258,10 +274,25 @@ export default function ManageDelivery() {
                   <strong>Pedido: </strong>
                   {String(order._id).slice(-5)}
                 </label>
-                <label className="orderQuick-Label">
+                {/* <label className="orderQuick-Label">
                   <b>Instrucción:</b><br />
                   Paquetería: {carrierName || "Sin preferencia especificada"}<br />
                   Mercancía Asegurada: {insurancePref || "Sin preferencia especificada"}
+                </label> */}
+                <label className="orderQuick-Label">
+                  <b>Instrucción:</b><br />
+                  {isPickup ? (
+                    <>
+                      Recoger en matriz<br />
+                      Día: {pickupDayLabel || "Sin día especificado"}<br />
+                      Hora: {pickupTime || "Sin hora especificada"}
+                    </>
+                  ) : (
+                    <>
+                      Paquetería: {carrierName || "Sin preferencia especificada"}<br />
+                      Mercancía Asegurada: {insurancePref || "Sin preferencia especificada"}
+                    </>
+                  )}
                 </label>
               </div>
             </div>

@@ -1,4 +1,4 @@
-// ok, continuing in orderNow.jsx, if the user does select "Crédito" as payment option (stored as paymentOption on mongodb), then I'd like for the orderStatus to be "Evidencia Subida", rather than "Pedido Realizado", since technically these orders wont have an immediat payment requirement.  
+// ok, continuing in orderNow.jsx, just as on expressQupte.jsx we will be using the currency dictated by the admin on our "Tipo_de_Cambio" database rather than the previous DOF rate. Help me update my current orderNow.jsx, as well as the pdf that is being generated, and remember that this value also gets stored to mongodb as dofRate 
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -71,6 +71,10 @@ export default function OrderNow() {
   const [dofRate, setDofRate] = useState(null);
   const [dofDate, setDofDate] = useState(null);
   const [fxError, setFxError] = useState(null);
+
+  const [fxSource, setFxSource] = useState("manual"); // "manual"
+  const [fxDebug, setFxDebug] = useState(null);
+
 
   // NEW: helper to truncate to 2 decimals (not round)
   const trunc2 = (n) => {
@@ -155,22 +159,162 @@ export default function OrderNow() {
   };
 
   // DOF rate
+  // useEffect(() => {
+  //   const getDofRate = async () => {
+  //     try {
+  //       const res = await fetch(`${API}/fx/usd-dof`);
+  //       const data = await res.json();
+  //       if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
+  //       setDofRate(Number(data.rate));
+  //       setDofDate(data.date);
+  //       setFxError(null);
+  //     } catch (err) {
+  //       console.error("DOF fetch error:", err);
+  //       setFxError("No se pudo obtener el tipo de cambio DOF.");
+  //     }
+  //   };
+  //   getDofRate();
+  // }, []);
+
+  // ===== Manual FX from Google Sheets ("Tipo_de_Cambio") with effective 00:00:01 =====
   useEffect(() => {
-    const getDofRate = async () => {
+    const TIPO_CAMBIO_CSV_URL =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=2061823272&single=true&output=csv";
+
+    const pad2 = (x) => String(x).padStart(2, "0");
+
+    const addOneDay = (yyyy_mm_dd) => {
+      const [y, m, d] = (yyyy_mm_dd || "").split("-").map((v) => parseInt(v, 10));
+      if (!y || !m || !d) return null;
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + 1);
+      return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+    };
+
+    const toEpochMexico = (dateStr, timeStr) => {
+      // Guadalajara/CDMX effectively UTC-06 year-round
+      const t = (timeStr || "").length === 5 ? `${timeStr}:00` : (timeStr || "00:00:00");
+      const iso = `${dateStr}T${t}-06:00`;
+      const ms = Date.parse(iso);
+      return Number.isFinite(ms) ? ms : null;
+    };
+
+    const parseCSV = (csvText) => {
+      const rows = String(csvText || "").split(/\r?\n/).filter(Boolean);
+      if (!rows.length) return [];
+      const headers = rows[0].split(",").map((h) => h.trim());
+      return rows.slice(1).map((line) => {
+        const cols = line.split(",");
+        const obj = {};
+        headers.forEach((h, i) => (obj[h] = (cols[i] || "").trim()));
+        return obj;
+      });
+    };
+
+    const n = (v) => {
+      if (v === null || v === undefined) return null;
+      const s = String(v).trim().replace(/\s+/g, "");
+      if (!s) return null;
+      const cleaned = s.replace(/(?<=\d)[,\s](?=\d{3}\b)/g, "").replace(/,/g, ".");
+      const x = Number(cleaned);
+      return Number.isFinite(x) ? x : null;
+    };
+
+    const getManualFx = async () => {
       try {
-        const res = await fetch(`${API}/fx/usd-dof`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
-        setDofRate(Number(data.rate));
-        setDofDate(data.date);
-        setFxError(null);
+        const res = await axios.get(TIPO_CAMBIO_CSV_URL, { responseType: "text" });
+        const rows = parseCSV(res.data);
+
+        const dataRows = rows
+          .map((r) => {
+            const rateRaw = (r.TIPO_DE_CAMBIO ?? "").toString().trim();
+            const fecha = (r.FECHA_CAPTURA ?? "").toString().trim(); // YYYY-MM-DD
+            const hora = (r.HORA_CAPTURA ?? "").toString().trim() || "17:00";
+            const captureEpoch = fecha ? toEpochMexico(fecha, hora) : null;
+            return { rateRaw, fecha, hora, captureEpoch };
+          })
+          .filter((r) => r.rateRaw !== "");
+
+        if (dataRows.length < 1) {
+          setDofRate(null);
+          setDofDate(null);
+          setFxError("La hoja Tipo_de_Cambio no tiene datos.");
+          setFxDebug(null);
+          return;
+        }
+
+        // Sort by capture datetime, then treat newest as "next"
+        const sorted = [...dataRows].sort((a, b) => (a.captureEpoch ?? 0) - (b.captureEpoch ?? 0));
+        const next = sorted[sorted.length - 1];
+        const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+
+        const nextRate = n(next.rateRaw);
+        const prevRate = prev ? n(prev.rateRaw) : null;
+
+        if (!Number.isFinite(nextRate) || nextRate <= 0) {
+          setDofRate(null);
+          setDofDate(null);
+          setFxError(`TIPO_DE_CAMBIO inválido: "${next.rateRaw}"`);
+          setFxDebug({ sorted });
+          return;
+        }
+
+        // Effective moment: (FECHA_CAPTURA + 1 day) @ 00:00:01
+        const effectiveDate = addOneDay(next.fecha);
+        const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+
+        const now = Date.now();
+
+        setFxSource("manual");
+        setFxDebug({
+          nowISO: new Date(now).toISOString(),
+          next: { ...next, nextRate },
+          prev: prev ? { ...prev, prevRate } : null,
+          effectiveDate,
+          effectiveEpochISO: effectiveEpoch ? new Date(effectiveEpoch).toISOString() : null,
+          decision: effectiveEpoch ? (now >= effectiveEpoch ? "USE_NEXT" : "USE_PREV") : "NO_EFFECTIVE_EPOCH",
+        });
+
+        // If metadata missing, fallback to latest
+        if (!effectiveEpoch) {
+          setDofRate(nextRate);
+          setDofDate(null);
+          setFxError("Faltan FECHA_CAPTURA/HORA_CAPTURA; usando el último tipo de cambio.");
+          return;
+        }
+
+        if (now >= effectiveEpoch) {
+          // already effective -> use next
+          setDofRate(nextRate);
+          setDofDate(effectiveDate); // effective date
+          setFxError(null);
+          return;
+        }
+
+        // not effective yet -> use prev
+        if (Number.isFinite(prevRate) && prevRate > 0) {
+          setDofRate(prevRate);
+          setDofDate(effectiveDate); // date when next becomes effective
+          setFxError(null);
+          return;
+        }
+
+        // no prev -> warn fallback
+        setDofRate(nextRate);
+        setDofDate(effectiveDate);
+        setFxError("Aún no entra en vigor el tipo de cambio nuevo y no hay valor anterior válido. Usando el último.");
       } catch (err) {
-        console.error("DOF fetch error:", err);
-        setFxError("No se pudo obtener el tipo de cambio DOF.");
+        console.error("Manual FX fetch error:", err);
+        setDofRate(null);
+        setDofDate(null);
+        setFxError("No se pudo obtener el tipo de cambio desde Tipo_de_Cambio.");
+        setFxDebug(null);
       }
     };
-    getDofRate();
+
+    getManualFx();
   }, []);
+
 
   // localStorage bits
   useEffect(() => {
@@ -1094,7 +1238,7 @@ export default function OrderNow() {
           y += 8;
 
           doc.text(
-            `Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
+            `Tipo de cambio: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
             boxX + boxPad,
             y + 2
           );
@@ -1146,7 +1290,7 @@ export default function OrderNow() {
         doc.setFontSize(9);
         doc.setTextColor(120, 120, 120);
         doc.text(
-          `Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
+          `Tipo de cambio: ${rate.toFixed(2)} MXN/USD${dofDate ? `  (Fecha: ${dofDate})` : ""}`,
           boxX + boxPad,
           y + 2
         );
@@ -1825,7 +1969,8 @@ export default function OrderNow() {
                         labelClass: "muted",
                         valueClass: dofRate ? "muted" : "",
                         value: dofRate
-                          ? `${dofRate.toFixed(2)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                          // ? `${dofRate.toFixed(2)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
+                          ? `${dofRate.toFixed(2)} MXN/USD`
                           : fxError
                           ? "—"
                           : "Cargando...",
