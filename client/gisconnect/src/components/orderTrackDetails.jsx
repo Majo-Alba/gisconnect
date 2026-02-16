@@ -1,4 +1,3 @@
-// changed my google drive files so that they are PDF files stored in drive. So now links on the database lead to PDF files. Now, when hitting "Descargar" I would like to fetch the desired pdf files and directly download since currently when clickiung "Descargar" I navigate to the files' URL which is not what I want
 import { useEffect, useState, useMemo } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { ProgressBar, Step } from "react-step-progress-bar";
@@ -21,9 +20,6 @@ import fallbackImg from "../assets/images/Product_GISSample.png";
 import axios from "axios";
 import Papa from "papaparse";
 import { API } from "/src/lib/api"; //
-
-import JSZip from "jszip";
-import { saveAs } from "file-saver";
 
 
 export default function OrderTrackDetails() {
@@ -412,100 +408,6 @@ export default function OrderTrackDetails() {
   //     } catch (_) {}
   //     // eslint-disable-next-line no-await-in-loop
   //     await new Promise((r) => setTimeout(r, 200));
-  //   }
-  // };
-
-  // ✅ NEW: Download action (ZIP all PDFs into one download)
-  // const handleDownloadSelected = async () => {
-  //   if (!order) return;
-
-  //   const chosenDocs = selectedDocs.size ? Array.from(selectedDocs) : [];
-  //   const chosenProducts = selectedProducts.size ? Array.from(selectedProducts) : [];
-
-  //   if (chosenDocs.length === 0) {
-  //     alert("Selecciona al menos un documento para descargar.");
-  //     return;
-  //   }
-  //   if (chosenProducts.length === 0) {
-  //     alert("Selecciona al menos un producto para descargar.");
-  //     return;
-  //   }
-
-  //   const items = Array.isArray(order.items) ? order.items : [];
-
-  //   const selectedItems = items.filter((it) => {
-  //     const k = makeKey((it?.product || "").trim(), (it?.presentation || "").trim());
-  //     return chosenProducts.includes(k);
-  //   });
-
-  //   const downloadList = [];
-  //   selectedItems.forEach((it) => {
-  //     const d = docsForItem(it);
-  //     if (!d) return;
-
-  //     chosenDocs.forEach((docId) => {
-  //       const rawUrl = (d?.[docId] || "").trim();
-  //       if (!rawUrl) return;
-
-  //       const directUrl = toDirectDownloadUrl(rawUrl);
-
-  //       const productName = safeFileName(it?.product || "Producto");
-  //       const pres = safeFileName(it?.presentation || "");
-  //       const docName = safeFileName(docLabel(docId));
-
-  //       const filename = pres
-  //         ? `${productName} - ${pres} - ${docName}.pdf`
-  //         : `${productName} - ${docName}.pdf`;
-
-  //       downloadList.push({ url: directUrl, filename });
-  //     });
-  //   });
-
-  //   if (downloadList.length === 0) {
-  //     alert("No se encontraron documentos disponibles para tu selección.");
-  //     return;
-  //   }
-
-  //   // Optional: prevent duplicates (same file linked multiple times)
-  //   const uniq = new Map();
-  //   downloadList.forEach((x) => {
-  //     const key = `${x.filename}__${x.url}`;
-  //     if (!uniq.has(key)) uniq.set(key, x);
-  //   });
-  //   const files = Array.from(uniq.values());
-
-  //   try {
-  //     const zip = new JSZip();
-
-  //     // Fetch sequentially to reduce rate limits / CORS weirdness (safe + predictable)
-  //     for (let i = 0; i < files.length; i++) {
-  //       const { url, filename } = files[i];
-
-  //       const resp = await fetch(url, { method: "GET" });
-  //       if (!resp.ok) throw new Error(`No se pudo bajar "${filename}" (HTTP ${resp.status})`);
-
-  //       const blob = await resp.blob();
-
-  //       // If Drive returns HTML, this is usually permissions/viewer issue
-  //       if (blob.type.includes("text/html")) {
-  //         throw new Error(`Drive no devolvió PDF para "${filename}" (probable permisos).`);
-  //       }
-
-  //       const arrBuf = await blob.arrayBuffer();
-  //       zip.file(filename, arrBuf);
-  //     }
-
-  //     const zipBlob = await zip.generateAsync({ type: "blob" });
-
-  //     const orderNo = String(order?._id || "").slice(-5) || "pedido";
-  //     saveAs(zipBlob, `Documentos_Pedido_${orderNo}.zip`);
-  //   } catch (e) {
-  //     console.warn("ZIP download failed:", e);
-  //     alert(
-  //       "No pude generar el ZIP automáticamente. " +
-  //         "Esto suele pasar si algún PDF no es accesible públicamente en Drive. " +
-  //         "Revisa permisos o pásame un link ejemplo y lo ajustamos."
-  //     );
   //   }
   // };
 
