@@ -22,7 +22,6 @@ const Order = require("../models/orderEvidenceModel"); // if used elsewhere
 const ShippingAddress = require("../models/ShippingAddress");
 const BillingAddress = require("../models/BillingAddress");
 const PdfQuote = require("../models/pdfQuoteModel");
-// sep16
 const AdminPushToken = require("../models/AdminPushToken");
 const { notifyStage } = require("./notify");
 const { STAGES } = require("../notifications/roles"); 
@@ -30,7 +29,6 @@ const { admin } = require("../notifications/fcm");
 
 const WebPushSubscription = require("../models/WebPushSubscription");
 
-// sep16
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
 let sendToTopic;
@@ -64,7 +62,6 @@ const upload = multer({
   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
 });
 
-// dec21
 // --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
 const CLIENT_DB_URL = process.env.CLIENT_DB_URL || ""; // optional published CSV
 
@@ -110,7 +107,6 @@ async function resolveDisplayNameByEmail(email) {
     return email || "cliente";
   }
 }
-// dec21
 
 // feb17
 // =========================== PROJECTIONS (avoid Buffers) ===========================
@@ -513,29 +509,6 @@ router.post('/orderDets', upload.single('pdf'), async (req, res) => {
   }
 });
 
-// router.post('/orderDets', upload.single('pdf'), async (req, res) => {
-//   try {
-//     const raw = req.body.order;
-//     if (!raw) return res.status(400).json({ error: 'Missing order JSON in "order" field' });
-
-//     const order = JSON.parse(raw);
-//     if (order && order.userEmail) {
-//       order.userEmail = String(order.userEmail).trim().toLowerCase();
-//     }
-
-//     if (req.file) {
-//       const { originalname, mimetype, buffer } = req.file;
-//       order.quotePdf = { filename: originalname, contentType: mimetype, data: buffer };
-//     }
-
-//     const created = await newOrderModel.create(order);
-//     res.status(201).json({ data: created, message: "Nueva orden registrada exitosamente" });
-//   } catch (err) {
-//     console.error("Error creating order:", err);
-//     res.status(500).json({ error: "Failed to create order" });
-//   }
-// });
-
 // Update order status (simple)
 // Update order status (simple) + 🔔 notifications
 router.patch("/order/:id/status", async (req, res) => {
@@ -601,35 +574,21 @@ router.patch("/order/:id/status", async (req, res) => {
   }
 });
 
-// router.patch("/order/:id/status", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { orderStatus } = req.body;
-//     if (!orderStatus) return res.status(400).json({ message: "orderStatus requerido" });
 
-//     const updated = await newOrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true });
-//     if (!updated) return res.status(404).json({ message: "Orden no encontrada" });
-
-//     res.json({ message: "Estatus actualizado", order: updated });
-//   } catch (e) {
-//     console.error(e);
-//     res.status(500).json({ message: "Error interno" });
-//   }
-// });
 
 // OFF ON FEB17
-router.get('/userOrders', async (req, res) => {
-  try {
-    const email = String(req.query.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'email is required' });
+// router.get('/userOrders', async (req, res) => {
+//   try {
+//     const email = String(req.query.email || '').trim().toLowerCase();
+//     if (!email) return res.status(400).json({ error: 'email is required' });
 
-    const orders = await newOrderModel.find({ userEmail: email }).sort({ orderDate: -1 }).lean();
-    res.json(Array.isArray(orders) ? orders : []);
-  } catch (err) {
-    console.error('Error fetching user orders:', err);
-    res.status(500).json({ error: 'Failed to fetch user orders' });
-  }
-});
+//     const orders = await newOrderModel.find({ userEmail: email }).sort({ orderDate: -1 }).lean();
+//     res.json(Array.isArray(orders) ? orders : []);
+//   } catch (err) {
+//     console.error('Error fetching user orders:', err);
+//     res.status(500).json({ error: 'Failed to fetch user orders' });
+//   }
+// });
 
 // SWITCH FEB17
 router.get('/userOrders', async (req, res) => {
@@ -668,46 +627,6 @@ function buildPackableFilter() {
     ]
   };
 }
-
-// OFF ON FEB17 
-// Admin list orders (enhanced with packing filters)
-// router.get('/orders', async (req, res) => {
-//   try {
-//     const email = (req.query.email || "").trim();
-//     const packable = String(req.query.packable || "").toLowerCase() === "true";
-//     const packingStatus = (req.query.packingStatus || "").trim(); // e.g. "in_progress"
-//     const claimedBy = (req.query.claimedBy || "").trim();         // e.g. "Oswaldo"
-//     const status = (req.query.status || "").trim();               // e.g. "Pago Verificado"
-
-//     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-//     res.setHeader("Pragma", "no-cache");
-//     res.setHeader("Expires", "0");
-//     res.setHeader("Surrogate-Control", "no-store");
-
-//     // Base find
-//     const findQuery = {};
-//     if (email) findQuery.userEmail = email;
-//     if (status) findQuery.orderStatus = status;
-
-//     // packable takes precedence (used by PendingPack list)
-//     if (packable) {
-//       Object.assign(findQuery, buildPackableFilter());
-//     } else {
-//       // explicit packing status / claimedBy filters if provided
-//       if (packingStatus) findQuery["packing.status"] = packingStatus;
-//       if (claimedBy)     findQuery["packing.claimedBy"] = claimedBy;
-//     }
-
-//     const orders = await newOrderModel
-//       .find(findQuery)
-//       .sort({ orderDate: -1, _id: -1 });
-
-//     return res.json(orders);
-//   } catch (err) {
-//     console.error("Error fetching orders:", err);
-//     return res.status(500).json({ error: "Error fetching orders" });
-//   }
-// });
 
 // SWITCH FEB17
 router.get('/orders', async (req, res) => {
@@ -751,19 +670,6 @@ router.get('/orders', async (req, res) => {
   }
 });
 
-// OFF ON FEB 17
-// router.get("/orders/packable", async (_req, res) => {
-//   try {
-//     const orders = await newOrderModel
-//       .find(buildPackableFilter())
-//       .sort({ orderDate: -1, _id: -1 });
-//     res.json(orders);
-//   } catch (e) {
-//     console.error("GET /orders/packable error:", e);
-//     res.status(500).json({ error: "Error fetching packable orders" });
-//   }
-// });
-
 // SWITCH FEB 17
 router.get("/orders/packable", async (req, res) => {
   try {
@@ -782,40 +688,6 @@ router.get("/orders/packable", async (req, res) => {
     res.status(500).json({ error: "Error fetching packable orders" });
   }
 });
-// nov25
-
-// OFF NOV25: Admin list orders
-// router.get('/orders', async (req, res) => {
-//   try {
-//     const email = (req.query.email || "").trim();
-
-//     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-//     res.setHeader("Pragma", "no-cache");
-//     res.setHeader("Expires", "0");
-//     res.setHeader("Surrogate-Control", "no-store");
-
-//     const findQuery = email ? { userEmail: email } : {};
-//     const orders = await newOrderModel.find(findQuery).sort({ orderDate: -1, _id: -1 });
-
-//     return res.json(orders);
-//   } catch (err) {
-//     console.error("Error fetching orders:", err);
-//     return res.status(500).json({ error: "Error fetching orders" });
-//   }
-// });
-// OFF NOV25
-
-// OFF ON FEB17
-// router.get('/orders/:orderId', async (req, res) => {
-//   try {
-//     const order = await newOrderModel.findById(req.params.orderId);
-//     if (!order) return res.status(404).json({ message: "Order not found" });
-//     res.json(order);
-//   } catch (err) {
-//     console.error("Error fetching order by ID:", err);
-//     res.status(500).json({ message: "Error retrieving order data" });
-//   }
-// });
 
 // SWITCH FEB17
 router.get('/orders/:orderId', async (req, res) => {
@@ -990,144 +862,6 @@ router.put(
   }
 );
 
-// router.put(
-//   "/orders/:orderId",
-//   // upload.fields([
-//   //   { name: "evidenceImage", maxCount: 1 },
-//   //   { name: "packingImages", maxCount: 3 },
-//   //   { name: "deliveryImage", maxCount: 1 },
-//   // ]),
-//   upload.fields([
-//     { name: "evidenceImage",  maxCount: 1 },
-//     { name: "paymentEvidence",maxCount: 1 }, // NEW alias
-//     { name: "evidenceFile",   maxCount: 1 }, // NEW alias
-//     { name: "packingImages",  maxCount: 3 },
-//     { name: "deliveryImage",  maxCount: 1 },
-//   ]),
-//   async (req, res) => {
-//     const { orderId } = req.params;
-//     const {
-//       paymentMethod,
-//       paymentAccount,
-//       orderStatus,
-//       packerName,
-//       insuredAmount,
-//       deliveryDate,
-//       trackingNumber,
-//     } = req.body;
-
-//     const fileToDoc = (file) => {
-//       if (!file) return null;
-//       const buffer = file.buffer || null;
-//       if (!buffer) return null;
-//       return {
-//         filename: file.originalname || file.filename || "evidence",
-//         mimetype: file.mimetype || "application/octet-stream",
-//         data: buffer,
-//         uploadedAt: new Date(),
-//       };
-//     };
-
-//     try {
-//       const prevOrder = await newOrderModel.findById(orderId);
-//       if (!prevOrder) return res.status(404).json({ message: "Order not found" });
-
-//       const paymentEvidenceDoc = fileToDoc((req.files?.evidenceImage || [])[0]);
-//       const packingDocs = (req.files?.packingImages || []).map(fileToDoc).filter(Boolean);
-//       const deliveryDoc = fileToDoc((req.files?.deliveryImage || [])[0]);
-
-//       const numericInsured = insuredAmount ? Number(insuredAmount) : undefined;
-//       const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
-
-//       const $set = {
-//         ...(paymentMethod && { paymentMethod }),
-//         ...(paymentAccount && { paymentAccount }),
-//         ...(orderStatus && { orderStatus }),
-//         ...(packerName && { packerName }),
-//         ...(numericInsured !== undefined && { insuredAmount: numericInsured }),
-//         ...(parsedDeliveryDate && { deliveryDate: parsedDeliveryDate }),
-//         ...(trackingNumber && { trackingNumber }),
-//       };
-
-//       if (paymentEvidenceDoc) $set.evidenceFile = paymentEvidenceDoc;
-//       if (deliveryDoc) $set.deliveryEvidence = deliveryDoc;
-
-//       const update = { $set };
-//       if (packingDocs.length > 0) update.$push = { packingEvidence: { $each: packingDocs } };
-
-//       const updatedOrder = await newOrderModel.findByIdAndUpdate(orderId, update, { new: true });
-//       if (!updatedOrder) return res.status(404).json({ message: "Order not found after update" });
-//       // ---------- Notifications ----------
-//       const triggeredStages = [];
-
-//       // A) Evidence newly uploaded?
-//       // Place this right after you've computed `paymentEvidenceDoc` and have `prevOrder` available.
-//       if (paymentEvidenceDoc && !prevOrder?.evidenceFile) {
-//         triggeredStages.push(STAGES.EVIDENCIA_DE_PAGO); // <-- THIS IS THE LINE
-//       }
-
-//       // B) Status changed?
-//       const prevStatus = (prevOrder?.orderStatus || "").trim().toLowerCase();
-//       const nextStatus = (updatedOrder?.orderStatus || prevStatus || "").trim().toLowerCase();
-//       if (orderStatus && nextStatus !== prevStatus) {
-//         if (nextStatus === "pago verificado")   triggeredStages.push(STAGES.PAGO_VERIFICADO);
-//         if (nextStatus === "preparando pedido") triggeredStages.push(STAGES.PREPARANDO_PEDIDO);
-//         if (nextStatus === "pedido entregado")  triggeredStages.push(STAGES.PEDIDO_ENTREGADO);
-//       }
-
-//       // C) Tracking label added/changed?
-//       const prevTracking = (prevOrder?.trackingNumber || "").trim();
-//       const nextTracking = (updatedOrder?.trackingNumber || "").trim();
-//       if (nextTracking && nextTracking !== prevTracking) {
-//         triggeredStages.push(STAGES.ETIQUETA_GENERADA);
-//       }
-
-//       // D) Send notifications
-//       if (triggeredStages.length > 0) {
-//         const shortId = String(updatedOrder._id || "").slice(-5);
-//         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
-
-//         const messageForStage = (stage) => {
-//           switch (stage) {
-//             case STAGES.EVIDENCIA_DE_PAGO:
-//               return { title: "Evidencia de pago recibida", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-//             case STAGES.PAGO_VERIFICADO:
-//               return { title: "Pago verificado", body: `Pedido #${shortId} listo para logística/almacén` };
-//             case STAGES.PREPARANDO_PEDIDO:
-//               return { title: "Preparando pedido", body: `Pedido #${shortId} en empaque` };
-//             case STAGES.ETIQUETA_GENERADA:
-//               return { title: "Etiqueta generada", body: `Pedido #${shortId} — Tracking: ${nextTracking}` };
-//             case STAGES.PEDIDO_ENTREGADO:
-//               return { title: "Pedido entregado", body: `Pedido #${shortId} marcado como entregado` };
-//             case STAGES.PEDIDO_REALIZADO:
-//               return { title: "Nuevo pedido recibido", body: `Pedido #${shortId} — Cliente: ${userEmail}` };
-//             default:
-//               return { title: "Actualización de pedido", body: `Pedido #${shortId}` };
-//           }
-//         };
-
-//         for (const stage of triggeredStages) {
-//           const { title, body } = messageForStage(stage);
-//           await notifyStage(stage, title, body, {
-//             orderId: String(updatedOrder._id),
-//             stage,
-//             email: userEmail,
-//             orderStatus: updatedOrder.orderStatus || "",
-//             trackingNumber: nextTracking || "",
-//             deepLink: "https://gisconnect-web.onrender.com/adminHome",
-//           });
-//         }
-//       }
-//       // ---------- End notifications ----------
-
-//       res.json(updatedOrder);
-//     } catch (error) {
-//       console.error("Error updating order:", error);
-//       res.status(500).json({ message: "Failed to update order" });
-//     }
-//   }
-// );
-
 // JSON-only partial updates
 router.patch("/orders/:orderId", async (req, res) => {
   try {
@@ -1237,45 +971,6 @@ router.patch("/orders/:orderId", async (req, res) => {
   }
 });
 
-// router.patch("/orders/:orderId", async (req, res) => {
-//   try {
-//     const { orderId } = req.params;
-//     const {
-//       paymentMethod,
-//       paymentAccount,
-//       orderStatus,
-//       packerName,
-//       insuredAmount,
-//       deliveryDate,
-//       trackingNumber,
-//     } = req.body || {};
-
-//     const numericInsured =
-//       insuredAmount !== undefined && insuredAmount !== null ? Number(insuredAmount) : undefined;
-//     const parsedDeliveryDate = deliveryDate ? new Date(deliveryDate) : undefined;
-
-//     const $set = {
-//       ...(typeof paymentMethod === "string" && paymentMethod.trim() && { paymentMethod: paymentMethod.trim() }),
-//       ...(typeof paymentAccount === "string" && paymentAccount.trim() && { paymentAccount: paymentAccount.trim() }),
-//       ...(typeof orderStatus === "string" && orderStatus.trim() && { orderStatus: orderStatus.trim() }),
-//       ...(typeof packerName === "string" && packerName.trim() && { packerName: packerName.trim() }),
-//       ...(numericInsured !== undefined && Number.isFinite(numericInsured) && { insuredAmount: numericInsured }),
-//       ...(parsedDeliveryDate instanceof Date && !isNaN(parsedDeliveryDate) && { deliveryDate: parsedDeliveryDate }),
-//       ...(typeof trackingNumber === "string" && trackingNumber.trim() && { trackingNumber: trackingNumber.trim() }),
-//     };
-
-//     if (Object.keys($set).length === 0) return res.status(400).json({ error: "No fields to update" });
-
-//     const updated = await newOrderModel.findByIdAndUpdate(orderId, { $set }, { new: true });
-//     if (!updated) return res.status(404).json({ error: "Order not found" });
-
-//     res.json({ data: updated, message: "Order updated" });
-//   } catch (err) {
-//     console.error("PATCH /orders/:orderId error:", err);
-//     res.status(500).json({ error: "Failed to update order" });
-//   }
-// });
-
 // =========================== EVIDENCE (FILES) ===========================
 
 function sendFileFromDoc(res, fileDoc, fallbackName) {
@@ -1287,8 +982,6 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 }
 
 // Upload payment evidence (memory)
-// Upload payment evidence (memory)
-// router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
   router.post("/upload-evidence", upload.any(), async (req, res) => {
     const pickFile = () =>
       (req.files || []).find(f =>
@@ -1355,51 +1048,6 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
       return res.status(500).json({ message: "Internal Server Error" });
     }
   });
-  
-
-// router.post("/upload-evidence", upload.single("evidenceImage"), async (req, res) => {
-//   try {
-//     const { orderId } = req.body;
-//     const file = req.file;
-//     if (!orderId) return res.status(400).json({ message: "Order ID not provided" });
-//     if (!file) return res.status(400).json({ message: "No file uploaded" });
-
-//     const order = await newOrderModel.findById(orderId);
-//     if (!order) return res.status(404).json({ message: "Order not found" });
-
-//     order.evidenceFile = {
-//       filename: file.originalname,
-//       mimetype: file.mimetype,
-//       data: file.buffer,
-//       uploadedAt: new Date()
-//     };
-
-//     await order.save();
-//     return res.status(200).json({ message: "Evidencia guardada en MongoDB correctamente" });
-//   } catch (error) {
-//     console.error("Upload Evidence Error:", error);
-//     return res.status(500).json({ message: "Internal Server Error" });
-//   }
-// });
-
-// OFF ON FEB17
-// router.get("/orders/:orderId/evidence/payment", async (req, res) => {
-//   console.log("[ENTER] PUT /orders/:orderId", {
-//     orderId: req.params.orderId,
-//     fields: Object.keys(req.body || {}),
-//     hasEvidence: !!(req.files?.evidenceImage?.length)
-//       || !!(req.files?.paymentEvidence?.length)
-//       || !!(req.files?.evidenceFile?.length),
-//   });
-//   try {
-//     const order = await newOrderModel.findById(req.params.orderId).lean();
-//     if (!order) return res.status(404).send("Order not found");
-//     return sendFileFromDoc(res, order.evidenceFile, "payment-evidence");
-//   } catch (e) {
-//     console.error(e);
-//     res.status(500).send("Server error");
-//   }
-// });
 
 // SWITCH FEB17
 router.get("/orders/:orderId/evidence/payment", async (req, res) => {
@@ -1417,18 +1065,6 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
   }
 });
 
-// OFF ON FEB17
-// router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
-//   try {
-//     const order = await newOrderModel.findById(req.params.orderId).lean();
-//     if (!order) return res.status(404).send("Order not found");
-//     return sendFileFromDoc(res, order.deliveryEvidence, "delivery-evidence");
-//   } catch (e) {
-//     console.error(e);
-//     res.status(500).send("Server error");
-//   }
-// });
-
 // SWITCH FEB17
 router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
   try {
@@ -1444,22 +1080,6 @@ router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
     res.status(500).send("Server error");
   }
 });
-
-// OFF ON FEB17
-// router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
-//   try {
-//     const order = await newOrderModel.findById(req.params.orderId).lean();
-//     if (!order) return res.status(404).send("Order not found");
-//     const idx = Number(req.params.index);
-//     if (!Array.isArray(order.packingEvidence) || !Number.isInteger(idx) || idx < 0 || idx >= order.packingEvidence.length) {
-//       return res.status(404).send("Packing evidence not found");
-//     }
-//     return sendFileFromDoc(res, order.packingEvidence[idx], `packing-${idx + 1}`);
-//   } catch (e) {
-//     console.error(e);
-//     res.status(500).send("Server error");
-//   }
-// });
 
 // SWITCH FEB17
 router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
@@ -1571,39 +1191,6 @@ router.patch('/shipping-address/:id', async (req,res) => {
     res.json(updated);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
-// router.patch('/shipping-address/:id', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const raw = req.body || {};
-//     const payload = {};
-//     const pick = (k) => {
-//       if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') payload[k] = raw[k];
-//     };
-
-//     pick('street'); pick('exteriorNumber'); pick('interiorNumber');
-//     pick('colony'); pick('city'); pick('state'); pick('postalCode');
-//     if (typeof raw.isDefault === 'boolean') payload.isDefault = !!raw.isDefault;
-
-//     const doc = await ShippingAddress.findById(id);
-//     if (!doc) return res.status(404).json({ error: 'Address not found' });
-
-//     Object.assign(doc, payload);
-//     await doc.save();
-
-//     if (payload.isDefault === true) {
-//       await ShippingAddress.updateMany(
-//         { userEmail: doc.userEmail, _id: { $ne: doc._id } },
-//         { $set: { isDefault: false } }
-//       );
-//     }
-
-//     res.json(doc);
-//   } catch (err) {
-//     console.error('PATCH /shipping-address/:id error:', err);
-//     res.status(500).json({ error: 'Failed to update address' });
-//   }
-// });
 
 // DELETE shipping address
 router.delete('/shipping-address/:id', async (req, res) => {
@@ -1653,42 +1240,6 @@ router.patch('/billing-address/:id', async (req,res) => {
     res.json(updated);
   } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
 });
-// router.patch('/billing-address/:id', async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const raw = req.body || {};
-//     const payload = {};
-//     const pick = (k) => {
-//       if (raw[k] !== undefined && raw[k] !== null && String(raw[k]).trim() !== '') payload[k] = raw[k];
-//     };
-
-//     // identity
-//     pick('businessName'); pick('rfc'); pick('email'); pick('taxRegime'); pick('cfdiUse');
-//     // address
-//     pick('street'); pick('exteriorNumber'); pick('interiorNumber');
-//     pick('colony'); pick('city'); pick('state'); pick('postalCode');
-//     if (typeof raw.isDefault === 'boolean') payload.isDefault = !!raw.isDefault;
-
-//     const doc = await BillingAddress.findById(id);
-//     if (!doc) return res.status(404).json({ error: 'Address not found' });
-
-//     Object.assign(doc, payload);
-//     await doc.save();
-
-//     if (payload.isDefault === true) {
-//       await BillingAddress.updateMany(
-//         { userEmail: doc.userEmail, _id: { $ne: doc._id } },
-//         { $set: { isDefault: false } }
-//       );
-//     }
-
-//     res.json(doc);
-//   } catch (err) {
-//     console.error('PATCH /billing-address/:id error:', err);
-//     res.status(500).json({ error: 'Failed to update address' });
-//   }
-// });
 
 // DELETE billing address
 router.delete('/billing-address/:id', async (req, res) => {
