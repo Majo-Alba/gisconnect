@@ -112,6 +112,31 @@ async function resolveDisplayNameByEmail(email) {
 }
 // dec21
 
+// feb17
+// =========================== PROJECTIONS (avoid Buffers) ===========================
+const ORDER_BUFFERS_OFF = {
+  "evidenceFile.data": 0,
+  "quotePdf.data": 0,
+  "packingEvidence.data": 0,
+  "deliveryEvidence.data": 0,
+};
+
+// For list screens (admin lists, user list)
+const ORDER_LIST_PROJECTION = {
+  ...ORDER_BUFFERS_OFF,
+
+  // Optional: if any screens don't need these, you can also drop them:
+  // shippingInfo: 0,
+  // billingInfo: 0,
+};
+
+// For details screen (OrderTrackDetails) — still exclude buffers; use stream endpoints for actual files
+const ORDER_DETAIL_PROJECTION = {
+  ...ORDER_BUFFERS_OFF,
+};
+
+// feb17
+
 // =========================== USER AUTH ===========================
 
 // Register
@@ -592,13 +617,35 @@ router.patch("/order/:id/status", async (req, res) => {
 //   }
 // });
 
-// User orders list
+// OFF ON FEB17
 router.get('/userOrders', async (req, res) => {
   try {
     const email = String(req.query.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'email is required' });
 
     const orders = await newOrderModel.find({ userEmail: email }).sort({ orderDate: -1 }).lean();
+    res.json(Array.isArray(orders) ? orders : []);
+  } catch (err) {
+    console.error('Error fetching user orders:', err);
+    res.status(500).json({ error: 'Failed to fetch user orders' });
+  }
+});
+
+// SWITCH FEB17
+router.get('/userOrders', async (req, res) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    const limit = Math.min(Number(req.query.limit || 200), 500);
+
+    const orders = await newOrderModel
+      .find({ userEmail: email })
+      .select(ORDER_LIST_PROJECTION)
+      .sort({ orderDate: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
     res.json(Array.isArray(orders) ? orders : []);
   } catch (err) {
     console.error('Error fetching user orders:', err);
@@ -622,58 +669,119 @@ function buildPackableFilter() {
   };
 }
 
+// OFF ON FEB17 
 // Admin list orders (enhanced with packing filters)
+// router.get('/orders', async (req, res) => {
+//   try {
+//     const email = (req.query.email || "").trim();
+//     const packable = String(req.query.packable || "").toLowerCase() === "true";
+//     const packingStatus = (req.query.packingStatus || "").trim(); // e.g. "in_progress"
+//     const claimedBy = (req.query.claimedBy || "").trim();         // e.g. "Oswaldo"
+//     const status = (req.query.status || "").trim();               // e.g. "Pago Verificado"
+
+//     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+//     res.setHeader("Pragma", "no-cache");
+//     res.setHeader("Expires", "0");
+//     res.setHeader("Surrogate-Control", "no-store");
+
+//     // Base find
+//     const findQuery = {};
+//     if (email) findQuery.userEmail = email;
+//     if (status) findQuery.orderStatus = status;
+
+//     // packable takes precedence (used by PendingPack list)
+//     if (packable) {
+//       Object.assign(findQuery, buildPackableFilter());
+//     } else {
+//       // explicit packing status / claimedBy filters if provided
+//       if (packingStatus) findQuery["packing.status"] = packingStatus;
+//       if (claimedBy)     findQuery["packing.claimedBy"] = claimedBy;
+//     }
+
+//     const orders = await newOrderModel
+//       .find(findQuery)
+//       .sort({ orderDate: -1, _id: -1 });
+
+//     return res.json(orders);
+//   } catch (err) {
+//     console.error("Error fetching orders:", err);
+//     return res.status(500).json({ error: "Error fetching orders" });
+//   }
+// });
+
+// SWITCH FEB17
 router.get('/orders', async (req, res) => {
   try {
-    const email = (req.query.email || "").trim();
+    const email = String(req.query.email || "").trim().toLowerCase();
     const packable = String(req.query.packable || "").toLowerCase() === "true";
-    const packingStatus = (req.query.packingStatus || "").trim(); // e.g. "in_progress"
-    const claimedBy = (req.query.claimedBy || "").trim();         // e.g. "Oswaldo"
-    const status = (req.query.status || "").trim();               // e.g. "Pago Verificado"
+    const packingStatus = String(req.query.packingStatus || "").trim();
+    const claimedBy = String(req.query.claimedBy || "").trim();
+    const status = String(req.query.status || "").trim();
+
+    // Safety limit (prevents runaway memory)
+    const limit = Math.min(Number(req.query.limit || 200), 500);
 
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
     res.setHeader("Surrogate-Control", "no-store");
 
-    // Base find
     const findQuery = {};
     if (email) findQuery.userEmail = email;
     if (status) findQuery.orderStatus = status;
 
-    // packable takes precedence (used by PendingPack list)
     if (packable) {
       Object.assign(findQuery, buildPackableFilter());
     } else {
-      // explicit packing status / claimedBy filters if provided
       if (packingStatus) findQuery["packing.status"] = packingStatus;
-      if (claimedBy)     findQuery["packing.claimedBy"] = claimedBy;
+      if (claimedBy) findQuery["packing.claimedBy"] = claimedBy;
     }
 
     const orders = await newOrderModel
       .find(findQuery)
-      .sort({ orderDate: -1, _id: -1 });
+      .select(ORDER_LIST_PROJECTION)     // ✅ don’t fetch Buffers
+      .sort({ orderDate: -1, _id: -1 })
+      .limit(limit)
+      .lean();
 
-    return res.json(orders);
+    return res.json(Array.isArray(orders) ? orders : []);
   } catch (err) {
     console.error("Error fetching orders:", err);
     return res.status(500).json({ error: "Error fetching orders" });
   }
 });
 
-// Convenience: explicit endpoint for "orders available to pack"
-router.get("/orders/packable", async (_req, res) => {
+// OFF ON FEB 17
+// router.get("/orders/packable", async (_req, res) => {
+//   try {
+//     const orders = await newOrderModel
+//       .find(buildPackableFilter())
+//       .sort({ orderDate: -1, _id: -1 });
+//     res.json(orders);
+//   } catch (e) {
+//     console.error("GET /orders/packable error:", e);
+//     res.status(500).json({ error: "Error fetching packable orders" });
+//   }
+// });
+
+// SWITCH FEB 17
+router.get("/orders/packable", async (req, res) => {
   try {
+    const limit = Math.min(Number(req.query.limit || 200), 500);
+
     const orders = await newOrderModel
       .find(buildPackableFilter())
-      .sort({ orderDate: -1, _id: -1 });
-    res.json(orders);
+      .select(ORDER_LIST_PROJECTION)
+      .sort({ orderDate: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(Array.isArray(orders) ? orders : []);
   } catch (e) {
     console.error("GET /orders/packable error:", e);
     res.status(500).json({ error: "Error fetching packable orders" });
   }
 });
-
 // nov25
 
 // OFF NOV25: Admin list orders
@@ -697,10 +805,26 @@ router.get("/orders/packable", async (_req, res) => {
 // });
 // OFF NOV25
 
-// Get order by id (single, canonical)
+// OFF ON FEB17
+// router.get('/orders/:orderId', async (req, res) => {
+//   try {
+//     const order = await newOrderModel.findById(req.params.orderId);
+//     if (!order) return res.status(404).json({ message: "Order not found" });
+//     res.json(order);
+//   } catch (err) {
+//     console.error("Error fetching order by ID:", err);
+//     res.status(500).json({ message: "Error retrieving order data" });
+//   }
+// });
+
+// SWITCH FEB17
 router.get('/orders/:orderId', async (req, res) => {
   try {
-    const order = await newOrderModel.findById(req.params.orderId);
+    const order = await newOrderModel
+      .findById(req.params.orderId)
+      .select(ORDER_DETAIL_PROJECTION)  // ✅ don’t fetch Buffers
+      .lean();
+
     if (!order) return res.status(404).json({ message: "Order not found" });
     res.json(order);
   } catch (err) {
@@ -1258,17 +1382,33 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
 //   }
 // });
 
-// Stream payment evidence
+// OFF ON FEB17
+// router.get("/orders/:orderId/evidence/payment", async (req, res) => {
+//   console.log("[ENTER] PUT /orders/:orderId", {
+//     orderId: req.params.orderId,
+//     fields: Object.keys(req.body || {}),
+//     hasEvidence: !!(req.files?.evidenceImage?.length)
+//       || !!(req.files?.paymentEvidence?.length)
+//       || !!(req.files?.evidenceFile?.length),
+//   });
+//   try {
+//     const order = await newOrderModel.findById(req.params.orderId).lean();
+//     if (!order) return res.status(404).send("Order not found");
+//     return sendFileFromDoc(res, order.evidenceFile, "payment-evidence");
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send("Server error");
+//   }
+// });
+
+// SWITCH FEB17
 router.get("/orders/:orderId/evidence/payment", async (req, res) => {
-  console.log("[ENTER] PUT /orders/:orderId", {
-    orderId: req.params.orderId,
-    fields: Object.keys(req.body || {}),
-    hasEvidence: !!(req.files?.evidenceImage?.length)
-      || !!(req.files?.paymentEvidence?.length)
-      || !!(req.files?.evidenceFile?.length),
-  });
   try {
-    const order = await newOrderModel.findById(req.params.orderId).lean();
+    const order = await newOrderModel
+      .findById(req.params.orderId)
+      .select({ evidenceFile: 1 })  // ✅ only this field
+      .lean();
+
     if (!order) return res.status(404).send("Order not found");
     return sendFileFromDoc(res, order.evidenceFile, "payment-evidence");
   } catch (e) {
@@ -1277,10 +1417,26 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
   }
 });
 
-// Stream delivery evidence
+// OFF ON FEB17
+// router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
+//   try {
+//     const order = await newOrderModel.findById(req.params.orderId).lean();
+//     if (!order) return res.status(404).send("Order not found");
+//     return sendFileFromDoc(res, order.deliveryEvidence, "delivery-evidence");
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send("Server error");
+//   }
+// });
+
+// SWITCH FEB17
 router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
   try {
-    const order = await newOrderModel.findById(req.params.orderId).lean();
+    const order = await newOrderModel
+      .findById(req.params.orderId)
+      .select({ deliveryEvidence: 1 })
+      .lean();
+
     if (!order) return res.status(404).send("Order not found");
     return sendFileFromDoc(res, order.deliveryEvidence, "delivery-evidence");
   } catch (e) {
@@ -1289,15 +1445,37 @@ router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
   }
 });
 
-// Stream packing evidence by index
+// OFF ON FEB17
+// router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
+//   try {
+//     const order = await newOrderModel.findById(req.params.orderId).lean();
+//     if (!order) return res.status(404).send("Order not found");
+//     const idx = Number(req.params.index);
+//     if (!Array.isArray(order.packingEvidence) || !Number.isInteger(idx) || idx < 0 || idx >= order.packingEvidence.length) {
+//       return res.status(404).send("Packing evidence not found");
+//     }
+//     return sendFileFromDoc(res, order.packingEvidence[idx], `packing-${idx + 1}`);
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send("Server error");
+//   }
+// });
+
+// SWITCH FEB17
 router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
   try {
-    const order = await newOrderModel.findById(req.params.orderId).lean();
+    const order = await newOrderModel
+      .findById(req.params.orderId)
+      .select({ packingEvidence: 1 })
+      .lean();
+
     if (!order) return res.status(404).send("Order not found");
+
     const idx = Number(req.params.index);
     if (!Array.isArray(order.packingEvidence) || !Number.isInteger(idx) || idx < 0 || idx >= order.packingEvidence.length) {
       return res.status(404).send("Packing evidence not found");
     }
+
     return sendFileFromDoc(res, order.packingEvidence[idx], `packing-${idx + 1}`);
   } catch (e) {
     console.error(e);
