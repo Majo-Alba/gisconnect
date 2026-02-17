@@ -1,3 +1,4 @@
+// this is already working wonders! my app is now being able to fetch data from cluster "new_orders" perfectly again! Here is my full router.js, please take a look to see if any other API should have limits or be optimized
 const express = require('express');
 const cors = require('cors');
 
@@ -131,6 +132,12 @@ const ORDER_DETAIL_PROJECTION = {
   ...ORDER_BUFFERS_OFF,
 };
 
+// =========================== LIMIT HELPERS ===========================
+function parseLimit(raw, def = 200, max = 500) {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return def;
+  return Math.min(n, max);
+}
 // feb17
 
 // =========================== USER AUTH ===========================
@@ -517,10 +524,18 @@ router.patch("/order/:id/status", async (req, res) => {
     const { orderStatus } = req.body;
     if (!orderStatus) return res.status(400).json({ message: "orderStatus requerido" });
 
-    const prev = await newOrderModel.findById(id);
+    // const prev = await newOrderModel.findById(id);
+    const prev = await newOrderModel
+      .findById(id)
+      .select({ orderStatus: 1, userEmail: 1, email: 1, trackingNumber: 1 })
+      .lean();
     if (!prev) return res.status(404).json({ message: "Orden no encontrada" });
 
-    const updated = await newOrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true });
+    // const updated = await newOrderModel.findByIdAndUpdate(id, { orderStatus }, { new: true });
+    const updated = await newOrderModel
+      .findByIdAndUpdate(id, { orderStatus }, { new: true })
+      .select({ orderStatus: 1, userEmail: 1, email: 1, trackingNumber: 1 })
+      .lean();
     if (!updated) return res.status(404).json({ message: "Orden no encontrada" });
 
     // 🔔 stage mapping
@@ -574,29 +589,14 @@ router.patch("/order/:id/status", async (req, res) => {
   }
 });
 
-
-
-// OFF ON FEB17
-// router.get('/userOrders', async (req, res) => {
-//   try {
-//     const email = String(req.query.email || '').trim().toLowerCase();
-//     if (!email) return res.status(400).json({ error: 'email is required' });
-
-//     const orders = await newOrderModel.find({ userEmail: email }).sort({ orderDate: -1 }).lean();
-//     res.json(Array.isArray(orders) ? orders : []);
-//   } catch (err) {
-//     console.error('Error fetching user orders:', err);
-//     res.status(500).json({ error: 'Failed to fetch user orders' });
-//   }
-// });
-
 // SWITCH FEB17
 router.get('/userOrders', async (req, res) => {
   try {
     const email = String(req.query.email || '').trim().toLowerCase();
     if (!email) return res.status(400).json({ error: 'email is required' });
 
-    const limit = Math.min(Number(req.query.limit || 200), 500);
+    // const limit = Math.min(Number(req.query.limit || 200), 500);
+    const limit = parseLimit(req.query.limit);
 
     const orders = await newOrderModel
       .find({ userEmail: email })
@@ -638,7 +638,8 @@ router.get('/orders', async (req, res) => {
     const status = String(req.query.status || "").trim();
 
     // Safety limit (prevents runaway memory)
-    const limit = Math.min(Number(req.query.limit || 200), 500);
+    // const limit = Math.min(Number(req.query.limit || 200), 500);
+    const limit = parseLimit(req.query.limit);
 
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -673,8 +674,9 @@ router.get('/orders', async (req, res) => {
 // SWITCH FEB 17
 router.get("/orders/packable", async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit || 200), 500);
-
+    // const limit = Math.min(Number(req.query.limit || 200), 500);
+    const limit = parseLimit(req.query.limit);
+    
     const orders = await newOrderModel
       .find(buildPackableFilter())
       .select(ORDER_LIST_PROJECTION)
@@ -1171,11 +1173,31 @@ router.post("/shipping-address", async (req, res) => {
 });
 
 // List shipping addresses for email
+// OFF FEB17
+// router.get('/shipping-address/:email', async (req, res) => {
+//   try {
+//     const email = req.params.email;
+//     const addresses = await ShippingAddress.find({ userEmail: email });
+//     res.json(addresses);
+//   } catch (error) {
+//     console.error("Error fetching shipping addresses:", error);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+// SWITCH FEB17
 router.get('/shipping-address/:email', async (req, res) => {
   try {
-    const email = req.params.email;
-    const addresses = await ShippingAddress.find({ userEmail: email });
-    res.json(addresses);
+    const email = String(req.params.email || "").trim().toLowerCase();
+    const limit = parseLimit(req.query.limit, 50, 200);
+
+    const addresses = await ShippingAddress
+      .find({ userEmail: email })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(Array.isArray(addresses) ? addresses : []);
   } catch (error) {
     console.error("Error fetching shipping addresses:", error);
     res.status(500).json({ error: "Server error" });
@@ -1220,11 +1242,31 @@ router.post("/billing-address", async (req, res) => {
 });
 
 // List billing addresses for email
+// OFF FEB17
+// router.get('/billing-address/:email', async (req, res) => {
+//   try {
+//     const email = req.params.email;
+//     const addresses = await BillingAddress.find({ userEmail: email });
+//     res.json(addresses);
+//   } catch (error) {
+//     console.error("Error fetching billing addresses:", error);
+//     res.status(500).json({ error: "Server error" });
+//   }
+// });
+
+// SWITCH FEB17
 router.get('/billing-address/:email', async (req, res) => {
   try {
-    const email = req.params.email;
-    const addresses = await BillingAddress.find({ userEmail: email });
-    res.json(addresses);
+    const email = String(req.params.email || "").trim().toLowerCase();
+    const limit = parseLimit(req.query.limit, 50, 200);
+
+    const addresses = await BillingAddress
+      .find({ userEmail: email })
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(Array.isArray(addresses) ? addresses : []);
   } catch (error) {
     console.error("Error fetching billing addresses:", error);
     res.status(500).json({ error: "Server error" });
@@ -1305,23 +1347,50 @@ router.post("/save-pdf", cors(), upload.single("pdf"), async (req, res) => {
 });
 
 // List quotes (no buffer)
+// OFF FEB17
+// router.get('/pdfquotes', async (req, res) => {
+//   try {
+//     const { since } = req.query;
+//     const find = {};
+//     if (since) {
+//       const d = new Date(since);
+//       if (!isNaN(+d)) find.createdAt = { $gte: d };
+//     }
+//     const docs = await PdfQuote.find(find)
+//       .select('_id filename contentType createdAt metadata')
+//       .sort({ createdAt: -1 });
+//     res.json(docs);
+//   } catch (e) {
+//     console.error('GET /pdfquotes error:', e);
+//     res.status(500).json({ error: 'Failed to list quotes' });
+//   }
+// });
+
+// SWITCH FEB17
 router.get('/pdfquotes', async (req, res) => {
   try {
     const { since } = req.query;
+    const limit = parseLimit(req.query.limit, 50, 200);
+
     const find = {};
     if (since) {
       const d = new Date(since);
       if (!isNaN(+d)) find.createdAt = { $gte: d };
     }
+
     const docs = await PdfQuote.find(find)
       .select('_id filename contentType createdAt metadata')
-      .sort({ createdAt: -1 });
-    res.json(docs);
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit)
+      .lean();
+
+    res.json(Array.isArray(docs) ? docs : []);
   } catch (e) {
     console.error('GET /pdfquotes error:', e);
     res.status(500).json({ error: 'Failed to list quotes' });
   }
 });
+
 
 // Quote details (no buffer)
 router.get('/pdfquotes/:id', async (req, res) => {
@@ -1738,8 +1807,11 @@ router.post("/orders/:id/claim-pack", async (req, res) => {
     if (!packer) return res.status(400).json({ ok:false, error: "packer is required" });
 
     // Load the current order first
-    // const order = await NewOrder.findById(id).lean();
-    const order = await newOrderModel.findById(id).lean();
+    // const order = await newOrderModel.findById(id).lean();
+    const order = await newOrderModel
+      .findById(id)
+      .select({ orderStatus: 1, packing: 1 })
+      .lean();
 
     if (!order) return res.status(404).json({ ok:false, error: "Order not found" });
     if ((order.orderStatus || "").toLowerCase() !== "pago verificado") {
@@ -1918,75 +1990,6 @@ router.post("/orders/:id/release-delivery", async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
-
-
-
-
-
-
-
-
-
-
-
-
-// // Claim delivery
-// router.post("/orders/:id/claim-delivery", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { deliverer } = req.body || {};
-//     if (!deliverer) return res.status(400).json({ error: "Missing deliverer" });
-
-//     const order = await newOrderModel.findById(id).lean();
-//     if (!order) return res.status(404).json({ error: "Order not found" });
-
-//     // Ensure subdoc exists
-//     order.deliveryWork = order.deliveryWork || { status: "idle", claimedBy: "" };
-
-//     // If someone else already has it, block
-//     if (order.deliveryWork.status === "in_progress" &&
-//         order.deliveryWork.claimedBy &&
-//         order.deliveryWork.claimedBy !== deliverer) {
-//       return res.status(409).json({ error: `Este pedido está siendo entregado por ${order.deliveryWork.claimedBy}.` });
-//     }
-
-//     // Claim it
-//     order.deliveryWork.status = "in_progress";
-//     order.deliveryWork.claimedBy = deliverer;
-//     await newOrderModel.save();
-
-//     return res.json({ ok: true, order });
-//   } catch (e) {
-//     console.error("claim-delivery error:", e);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
-
-// // Release delivery
-// router.post("/orders/:id/release-delivery", async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { deliverer } = req.body || {};
-//     const order = await Order.findById(id);
-//     if (!order) return res.status(404).json({ error: "Order not found" });
-
-//     order.deliveryWork = newOrderModel.deliveryWork || { status: "idle", claimedBy: "" };
-
-//     // Only the current holder can release
-//     if (order.deliveryWork.claimedBy && order.deliveryWork.claimedBy !== deliverer) {
-//       return res.status(403).json({ error: "Solo quien tomó el pedido puede liberarlo." });
-//     }
-
-//     order.deliveryWork.status = "idle";
-//     order.deliveryWork.claimedBy = "";
-//     await newOrderModel.save();
-
-//     return res.json({ ok: true, order });
-//   } catch (e) {
-//     console.error("release-delivery error:", e);
-//     return res.status(500).json({ error: "Server error" });
-//   }
-// });
 
 module.exports = router;
 
