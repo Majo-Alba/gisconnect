@@ -50,7 +50,6 @@ const corsOptions = {
   maxAge: 86400,
   optionsSuccessStatus: 204,
 
-  exposedHeaders: ["Content-Disposition"],
 };
 
 app.use(cors(corsOptions));
