@@ -96,8 +96,18 @@ export default function NewAdminOrder() {
   const [dofDate, setDofDate] = useState(null);
   const [fxError, setFxError] = useState(null);
 
+  const [fxSource, setFxSource] = useState("manual");
+  const [fxDebug, setFxDebug] = useState(null);
+
   // Preferred currency for summary
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+
+  // feb19
+  // Special prices (by client column)
+  const [specialPrices, setSpecialPrices] = useState([]);
+  const [specialHeaders, setSpecialHeaders] = useState([]); // headers present in SPECIAL_PRICES sheet
+  const [specialApplied, setSpecialApplied] = useState(false);
+  // feb19
 
   // Utils
   const normalize = (s) =>
@@ -126,23 +136,83 @@ export default function NewAdminOrder() {
     Array.isArray(arr) && arr.length
       ? [...arr].sort((a,b) => _idToMs(b?._id) - _idToMs(a?._id))[0]
       : null;
+  
+  // feb19
+  const toClientHeader = (name) => {
+    if (!name) return "";
+    const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  };
+  
+  // Clean common MX company suffixes for better matches
+  const stripCompanySuffixes = (s) => {
+    if (!s) return s;
+    let t = s.toString();
+    t = t.replace(/\bS\.?A\.?\s*D?E?\s*C\.?V\.?\b/gi, "");
+    t = t.replace(/\bS\.? DE R\.?L\.? DE C\.?V\.?\b/gi, "");
+    t = t.replace(/\bS\.?C\.?A\.??\b/gi, "");
+    t = t.replace(/\bS\.?C\.?\b/gi, "");
+    t = t.replace(/\bA\.?C\.?\b/gi, "");
+    t = t.replace(/\bDE\s+M[EÉ]XICO\b/gi, "");
+    t = t.replace(/\s+/g, " ").trim();
+    return t;
+  };
+  
+  // Build a prioritized list of client columns to try in SPECIAL_PRICES
+  const getCandidateClientCols = () => {
+    const candidates = [];
+  
+    const fullName = [customerNombre, customerApellido].filter(Boolean).join(" ");
+    const empresa = customerCompany || "";
+    const razonSocial = billing?.razonSocial || "";
+  
+    const empresaClean = stripCompanySuffixes(empresa);
+    const razonClean = stripCompanySuffixes(razonSocial);
+  
+    [fullName, empresa, empresaClean, razonSocial, razonClean].forEach((s) => {
+      const h = toClientHeader(s);
+      if (h) candidates.push(h);
+    });
+  
+    // Dedup while preserving order
+    const uniq = [];
+    const seen = new Set();
+    for (const c of candidates) {
+      if (!seen.has(c)) { seen.add(c); uniq.push(c); }
+    }
+  
+    // Only keep those that exist in the SPECIAL_PRICES sheet
+    const allowed = new Set((specialHeaders || []).map(String));
+    return uniq.filter((c) => allowed.has(c));
+  };  
+  // feb19
 
   // CSV URLs
   const PRODUCTS_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
   const INVENTORY_LATEST_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3w6YJjBrIDz56fkcJmjeBNlsfI55v9ilSXOzmnJBLi4h97ePj433ibiqXIRQ1KHOae-mYb21zydwS/pub?gid=0&single=true&output=csv";
+  const SPECIAL_PRICES_URL =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=231220133&single=true&output=csv";
 
   // Stock by product (sum)
   const [stockByKey, setStockByKey] = useState({});
 
+  // SWITCH FEB19
   useEffect(() => {
     // products
     axios.get(PRODUCTS_CSV_URL).then((res) => {
       const rows = parseCSV(res.data);
       setCsvProducts(rows);
     }).catch((err) => console.error("Error fetching products CSV:", err));
-
+  
+    // ✅ special prices
+    axios.get(SPECIAL_PRICES_URL).then((res) => {
+      const rows = parseCSV(res.data);
+      setSpecialPrices(rows);
+      setSpecialHeaders(rows?.length ? Object.keys(rows[0] || {}) : []);
+    }).catch((err) => console.error("Error fetching SPECIAL_PRICES CSV:", err));
+  
     // inventory latest
     axios.get(INVENTORY_LATEST_CSV_URL).then((res) => {
       const rows = parseCSV(res.data);
@@ -157,22 +227,121 @@ export default function NewAdminOrder() {
     }).catch((err) => console.error("Error fetching inventory CSV:", err));
   }, []);
 
-  useEffect(() => {
-    const getDofRate = async () => {
-      try {
-        const res = await fetch(`${API}/fx/usd-dof`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
-        setDofRate(Number(data.rate));
-        setDofDate(data.date);
-        setFxError(null);
-      } catch (err) {
-        console.error("DOF fetch error:", err);
-        setFxError("No se pudo obtener el tipo de cambio DOF.");
+  // SWITCH FEB19
+  // ===== Manual FX from Google Sheets ("Tipo_de_Cambio") =====
+useEffect(() => {
+  const TIPO_CAMBIO_CSV_URL =
+    "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=2061823272&single=true&output=csv";
+
+  const pad2 = (x) => String(x).padStart(2, "0");
+
+  const addOneDay = (yyyy_mm_dd) => {
+    const [y, m, d] = (yyyy_mm_dd || "").split("-").map((v) => parseInt(v, 10));
+    if (!y || !m || !d) return null;
+    const dt = new Date(Date.UTC(y, m - 1, d));
+    dt.setUTCDate(dt.getUTCDate() + 1);
+    return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+  };
+
+  const toEpochMexico = (dateStr, timeStr) => {
+    const t = (timeStr || "").length === 5 ? `${timeStr}:00` : (timeStr || "00:00:00");
+    const iso = `${dateStr}T${t}-06:00`; // MX (CDMX/GDL) for your business logic
+    const ms = Date.parse(iso);
+    return Number.isFinite(ms) ? ms : null;
+  };
+
+  const getManualFx = async () => {
+    try {
+      const res = await axios.get(TIPO_CAMBIO_CSV_URL, { responseType: "text" });
+      const rows = parseCSV(res.data);
+
+      const dataRows = (Array.isArray(rows) ? rows : [])
+        .map((r) => {
+          const rateRaw = (r.TIPO_DE_CAMBIO ?? "").toString().trim();
+          const fecha = (r.FECHA_CAPTURA ?? "").toString().trim(); // YYYY-MM-DD
+          const hora = (r.HORA_CAPTURA ?? "").toString().trim() || "17:00";
+          const captureEpoch = (fecha ? toEpochMexico(fecha, hora) : null);
+          return { rateRaw, fecha, hora, captureEpoch };
+        })
+        .filter((r) => r.rateRaw !== "");
+
+      if (dataRows.length < 1) {
+        setDofRate(null);
+        setDofDate(null);
+        setFxError("La hoja Tipo_de_Cambio no tiene datos.");
+        // setFxDebug(null);
+        return;
       }
-    };
-    getDofRate();
-  }, []);
+
+      const sorted = [...dataRows].sort((a, b) => (a.captureEpoch ?? 0) - (b.captureEpoch ?? 0));
+      const next = sorted[sorted.length - 1]; // newest capture
+      const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+
+      const nextRate = n(next.rateRaw);
+      const prevRate = prev ? n(prev.rateRaw) : null;
+
+      if (!Number.isFinite(nextRate) || nextRate <= 0) {
+        setDofRate(null);
+        setDofDate(null);
+        setFxError(`TIPO_DE_CAMBIO inválido: "${next.rateRaw}"`);
+        // setFxDebug({ sorted });
+        return;
+      }
+
+      // Effective moment: (FECHA_CAPTURA + 1 day) @ 00:00:01 MX
+      const effectiveDate = addOneDay(next.fecha);
+      const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+
+      const now = Date.now();
+
+      // setFxDebug({
+      //   nowISO: new Date(now).toISOString(),
+      //   next: { ...next, nextRate },
+      //   prev: prev ? { ...prev, prevRate } : null,
+      //   effectiveDate,
+      //   effectiveEpochISO: effectiveEpoch ? new Date(effectiveEpoch).toISOString() : null,
+      //   decision: effectiveEpoch ? (now >= effectiveEpoch ? "USE_NEXT" : "USE_PREV") : "NO_EFFECTIVE_EPOCH",
+      // });
+
+      if (!effectiveEpoch) {
+        setDofRate(nextRate);
+        setDofDate(null);
+        setFxError("Faltan FECHA_CAPTURA/HORA_CAPTURA; usando el último tipo de cambio.");
+        return;
+      }
+
+      if (now >= effectiveEpoch) {
+        setDofRate(nextRate);
+        setDofDate(effectiveDate);
+        setFxError(null);
+        return;
+      }
+
+      // Not effective yet → use previous
+      if (Number.isFinite(prevRate) && prevRate > 0) {
+        setDofRate(prevRate);
+        setDofDate(effectiveDate); // date when next will become effective
+        setFxError(null);
+        return;
+      }
+
+      // No prev → fallback to next but warn
+      setDofRate(nextRate);
+      setDofDate(effectiveDate);
+      setFxError("Aún no entra en vigor el tipo de cambio nuevo y no hay valor anterior válido. Usando el último.");
+    } catch (err) {
+      console.error("Manual FX fetch error:", err);
+      setDofRate(null);
+      setDofDate(null);
+      setFxError("No se pudo obtener el tipo de cambio desde Tipo_de_Cambio.");
+      // setFxDebug(null);
+    }
+  };
+
+  getManualFx();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
 
   function parseCSV(csvText) {
     const rows = String(csvText || "").split(/\r\n/).filter(Boolean);
@@ -257,45 +426,108 @@ export default function NewAdminOrder() {
   }, [customerEmail]);
 
   // Resolve presentation stock and price (general price only)
+  // SWITCH FEB19
   useEffect(() => {
     setStockReady(false);
+  
     const row = csvProducts.find(
       (r) =>
         r.NOMBRE_PRODUCTO === selectedProduct &&
         (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
     );
-
+  
     if (!row) {
       setPackPresentation("");
       setPrice("");
       setPriceCurrency("");
       setStock("");
       setStockReady(false);
+      setSpecialApplied(false);
       return;
     }
-
+  
     setPackPresentation(row.PRESENTACION_EMPAQUE || "");
-
-    const usd = n(row.PRECIO_PIEZA_DOLARES);
-    const mxn = n(row.PRECIO_PIEZA_MXN);
-    if (Number.isFinite(usd) && usd > 0) {
-      setPrice(String(usd));
-      setPriceCurrency("USD");
-    } else if (Number.isFinite(mxn) && mxn > 0) {
-      setPrice(String(mxn));
-      setPriceCurrency("MXN");
-    } else {
-      setPrice("");
-      setPriceCurrency("");
-    }
-
+  
+    // --- Stock (unchanged) ---
     const key = normalize(selectedProduct).toLowerCase();
     const latest = stockByKey[key];
     const fallback = n(row.CANTIDAD_EXISTENCIA) ?? 0;
     setStock(Number.isFinite(latest) ? String(latest) : String(fallback));
-
     setTimeout(() => setStockReady(true), 0);
-  }, [selectedProduct, presentation, csvProducts, stockByKey]);
+  
+    // --- Price (UPDATED: special first, fallback to general) ---
+    let resolvedPrice = null;
+    let resolvedCurrency = "";
+    let applied = false;
+  
+    // Find special-price row for this product/peso/unidad
+    const spRow = specialPrices.find(
+      (sr) =>
+        normalize(sr.NOMBRE_PRODUCTO) === normalize(selectedProduct) &&
+        normalize(sr.PESO_PRODUCTO) === normalize(row.PESO_PRODUCTO) &&
+        normalize(sr.UNIDAD_MEDICION) === normalize(row.UNIDAD_MEDICION)
+    );
+  
+    // Try client-specific columns (USD)
+    if (spRow) {
+      const candidates = getCandidateClientCols();
+      for (const col of candidates) {
+        const v = n(spRow[col]);
+        if (v && v > 0) {
+          resolvedPrice = v;
+          resolvedCurrency = "USD"; // client columns are USD in your setup
+          applied = true;
+          break;
+        }
+      }
+    }
+  
+    // Fallbacks (same idea as expressQuote)
+    if (resolvedPrice === null) {
+      const usdFallback =
+        n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+        n(spRow?.PRECIO_PIEZA_DOLARES) ??
+        n(row.PRECIO_PIEZA_DOLARES);
+  
+      if (usdFallback && usdFallback > 0) {
+        resolvedPrice = usdFallback;
+        resolvedCurrency = "USD";
+      }
+    }
+  
+    if (resolvedPrice === null) {
+      const mxnFallback =
+        n(spRow?.PRECIO_PIEZA_MXN) ??
+        n(row.PRECIO_PIEZA_MXN);
+  
+      if (mxnFallback && mxnFallback > 0) {
+        resolvedPrice = mxnFallback;
+        resolvedCurrency = "MXN";
+      }
+    }
+  
+    if (resolvedPrice === null) {
+      setPrice("");
+      setPriceCurrency("");
+      setSpecialApplied(false);
+      return;
+    }
+  
+    setPrice(String(resolvedPrice));
+    setPriceCurrency(resolvedCurrency);
+    setSpecialApplied(applied);
+  }, [
+    selectedProduct,
+    presentation,
+    csvProducts,
+    stockByKey,
+    specialPrices,
+    specialHeaders,
+    customerNombre,
+    customerApellido,
+    customerCompany,
+    billing?.razonSocial,
+  ]);  
 
   const qty = asQty(amount);
   const stockNum = n(stock);
@@ -575,20 +807,6 @@ export default function NewAdminOrder() {
           <label className="newUserData-Label">Datos del cliente</label>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 6, width: "82%", marginLeft: "9%", marginTop: "3%" }}>
-            {/* <input
-              className="productInfo-Input"
-              type="text"
-              placeholder="Nombre"
-              value={customerNombre}
-              onChange={(e) => setCustomerNombre(e.target.value)}
-            />
-            <input
-              className="productInfo-Input"
-              type="text"
-              placeholder="Apellido"
-              value={customerApellido}
-              onChange={(e) => setCustomerApellido(e.target.value)}
-            /> */}
           </div>
 
           <input
@@ -1000,6 +1218,8 @@ export default function NewAdminOrder() {
     </body>
   );
 }
+
+
 
 // import { useEffect, useMemo, useState } from "react";
 // import { useNavigate } from "react-router-dom";
