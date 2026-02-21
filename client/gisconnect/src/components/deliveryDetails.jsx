@@ -1,4 +1,3 @@
-// same thing going on on deliveryDetails.jsx. We're getting the order date rather than pick-up date under "Detalles de entega - Fecha"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -21,8 +20,14 @@ export default function DeliveryDetails() {
   const [deliveryDate, setDeliveryDate] = useState("");
   const [trackingNumber, setTrackingNumber] = useState("");
 
-  // delivery image upload
-  const [deliveryImage, setDeliveryImage] = useState(null);
+  // OFF FEB19 delivery image upload
+  // const [deliveryImage, setDeliveryImage] = useState(null);
+
+  // delivery images upload (up to 3)
+  const [deliveryImages, setDeliveryImages] = useState([]); // File[]
+  const [previewUrls, setPreviewUrls] = useState([]);       // string[] blob URLs
+
+
 
   // UI
   const [busy, setBusy] = useState(false);
@@ -210,36 +215,89 @@ export default function DeliveryDetails() {
   }, [deliverer, claimedByMe, claimDelivery]);
 
   // Release on unmount / refresh
+  // OFF FEB21
+  // useEffect(() => {
+  //   const beforeUnload = () => {
+  //     if (!finishedRef.current) releaseDelivery("unload");
+  //   };
+  //   window.addEventListener("beforeunload", beforeUnload);
+  //   return () => {
+  //     window.removeEventListener("beforeunload", beforeUnload);
+  //     if (!finishedRef.current) releaseDelivery("unmount");
+  //   };
+  // }, [releaseDelivery]);
+
+  // SWITCH FEB21
   useEffect(() => {
     const beforeUnload = () => {
       if (!finishedRef.current) releaseDelivery("unload");
     };
     window.addEventListener("beforeunload", beforeUnload);
+  
     return () => {
       window.removeEventListener("beforeunload", beforeUnload);
       if (!finishedRef.current) releaseDelivery("unmount");
+  
+      // cleanup previews
+      previewUrls.forEach((u) => URL.revokeObjectURL(u));
     };
-  }, [releaseDelivery]);
+  }, [releaseDelivery, previewUrls]);
+  
 
+  // OFF FEB19
+  // const handleFileChange = (e) => {
+  //   const f = e.target.files?.[0] || null;
+  //   if (f && !f.type.startsWith("image/")) { alert("Seleccione una imagen válida."); return; }
+  //   if (f && f.size > 25 * 1024 * 1024) { alert("La imagen no debe exceder 25MB."); return; }
+  //   setDeliveryImage(f);
+  //   setErrMsg("");
+  //   setOkMsg("");
+  // };
+
+  // SWITCH FEB21
   const handleFileChange = (e) => {
-    const f = e.target.files?.[0] || null;
-    if (f && !f.type.startsWith("image/")) { alert("Seleccione una imagen válida."); return; }
-    if (f && f.size > 25 * 1024 * 1024) { alert("La imagen no debe exceder 25MB."); return; }
-    setDeliveryImage(f);
+    const inputEl = e.target;
+    const list = inputEl?.files ? Array.from(inputEl.files) : [];
+    if (!list.length) {
+      // limpiar
+      setDeliveryImages([]);
+      setPreviewUrls((old) => {
+        old.forEach((u) => URL.revokeObjectURL(u));
+        return [];
+      });
+      return;
+    }
+  
+    const looksImage = (f) =>
+      (f.type && f.type.startsWith("image/")) || /\.(jpe?g|png|gif|webp|heic|heif)$/i.test(f.name || "");
+  
+    const bad = list.find((f) => !looksImage(f) || f.size > 25 * 1024 * 1024);
+    if (bad) {
+      alert("Solo imágenes y máximo 25MB por archivo.");
+      inputEl.value = "";
+      return;
+    }
+  
+    const trimmed = list.slice(0, 3);
+    if (list.length > 3) alert("Puedes subir máximo 3 imágenes.");
+  
+    setDeliveryImages(trimmed);
     setErrMsg("");
     setOkMsg("");
+  
+    setPreviewUrls((old) => {
+      old.forEach((u) => URL.revokeObjectURL(u));
+      return trimmed.map((f) => URL.createObjectURL(f));
+    });
+  
+    // permite re-seleccionar los mismos archivos después
+    setTimeout(() => {
+      if (inputEl && inputEl.type === "file") inputEl.value = "";
+    }, 200);
   };
-  const buildDeliveryMeta = () => {
-    const safeLocalNoonISO = deliveryDate ? new Date(`${deliveryDate}T12:00:00`).toISOString() : undefined;
-    return {
-      insuredAmount: insuredAmount != null ? Number(insuredAmount) : undefined,
-      // 👇 only persist when NOT pickup
-      trackingNumber: !isPickup && trackingNumber ? trackingNumber : undefined,
-      deliveryDateYMD: deliveryDate || undefined,
-      deliveryDate: safeLocalNoonISO,
-      deliverer: deliverer || undefined,
-    };
-  };
+  
+
+
   // const buildDeliveryMeta = () => {
   //   const safeLocalNoonISO = deliveryDate ? new Date(`${deliveryDate}T12:00:00`).toISOString() : undefined;
   //   return {
@@ -277,17 +335,32 @@ export default function DeliveryDetails() {
 
   const markAsDelivered = async () => {
     if (!order?._id) return;
-    if (!deliveryImage) { alert("Selecciona una imagen de entrega."); return; }
+    // if (!deliveryImage) { alert("Selecciona una imagen de entrega."); return; }
+    if (!deliveryImages.length) { alert("Selecciona 1 a 3 imágenes de entrega."); return; }
     if (!deliveryDate) { alert("Seleccione la fecha de entrega."); return; }
     if (!claimedByMe) { alert("Debes tomar el pedido para continuar (selecciona tu nombre)."); return; }
 
     setBusy(true); setProgress(0); setErrMsg(""); setOkMsg("");
     try {
+      // const form = new FormData();
+      // form.append("deliveryImage", deliveryImage);
+      // await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
+      //   onUploadProgress: (pe) => { if (!pe.total) return; setProgress(Math.round((pe.loaded / pe.total) * 100)); },
+      // });
+      // SWITCH FEB19
       const form = new FormData();
-      form.append("deliveryImage", deliveryImage);
-      await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
-        onUploadProgress: (pe) => { if (!pe.total) return; setProgress(Math.round((pe.loaded / pe.total) * 100)); },
+      deliveryImages.slice(0, 3).forEach((file) => {
+        form.append("deliveryImages", file); // 👈 importante: nombre del field para multer.array
       });
+
+      await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
+        onUploadProgress: (pe) => {
+          if (!pe.total) return;
+          setProgress(Math.round((pe.loaded / pe.total) * 100));
+        },
+      });
+      // SWITCH FEB19
+
       await axios.put(`${API}/orders/${order._id}`, buildDeliveryMeta());
       await fetch(`${API}/order/${order._id}/status`, {
         method: "PATCH",
@@ -551,16 +624,52 @@ export default function DeliveryDetails() {
                 <label htmlFor="deliveryImage" className="custom-file-upload" style={{ cursor: "pointer" }}>
                   Elegir archivo
                 </label>
-                <input
+                {/* <input
                   id="deliveryImage"
                   type="file"
                   accept="image/*"
                   onChange={handleFileChange}
                   style={{ display: "none" }}
+                /> */}
+                <input
+                  id="deliveryImage"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
                 />
-                <span className="file-selected-text">
+                {/* <span className="file-selected-text">
                   {deliveryImage ? deliveryImage.name : "Ningún archivo seleccionado"}
-                </span>
+                </span> */}
+                <div className="file-selected-text" style={{ display: "grid", gap: 4 }}>
+                  {deliveryImages.length ? (
+                    deliveryImages.map((f, idx) => (
+                      <div key={idx} style={{ fontSize: 12 }}>
+                        {idx + 1}. {f.name}
+                      </div>
+                    ))
+                  ) : (
+                    <span>Ningún archivo seleccionado</span>
+                  )}
+                  <div style={{ fontSize: 11, color: "#666" }}>Máximo 3 imágenes.</div>
+                  {/* FEB21 */}
+                  {previewUrls.length > 0 && (
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
+                    {previewUrls.map((src, i) => (
+                      <img
+                        key={i}
+                        src={src}
+                        alt={`Evidencia ${i + 1}`}
+                        width={85}
+                        height={85}
+                        style={{ objectFit: "cover", borderRadius: 8 }}
+                      />
+                    ))}
+                    {/* FEB21 */}
+                  </div>
+                )}
+                </div>
               </div>
               {busy && (
                 <div style={{ fontSize: 12, color: "#666", marginTop: 6 }}>
@@ -595,13 +704,20 @@ export default function DeliveryDetails() {
           className="packDetails-Btn"
           type="button"
           onClick={markAsDelivered}
-          disabled={busy || !deliveryImage || !deliveryDate || !deliverer || deliverer === "Encargado" || !claimedByMe}
+          // disabled={busy || !deliveryImage || !deliveryDate || !deliverer || deliverer === "Encargado" || !claimedByMe}
+          disabled={busy || !deliveryImages.length || !deliveryDate || !deliverer || deliverer === "Encargado" || !claimedByMe}
+          // title={
+          //   !claimedByMe ? "Toma el pedido para continuar" :
+          //   !deliveryImage ? "Seleccione la evidencia" :
+          //   !deliveryDate ? "Seleccione la fecha de entrega" :
+          //   (!deliverer || deliverer === "Encargado") ? "Seleccione el encargado" : ""
+          // }
           title={
             !claimedByMe ? "Toma el pedido para continuar" :
-            !deliveryImage ? "Seleccione la evidencia" :
+            !deliveryImages.length ? "Seleccione 1 a 3 evidencias" :
             !deliveryDate ? "Seleccione la fecha de entrega" :
             (!deliverer || deliverer === "Encargado") ? "Seleccione el encargado" : ""
-          }
+          }          
         >
           {busy ? `Procesando… ${progress || 0}%` : "Entregado"}
         </button>
@@ -627,6 +743,9 @@ export default function DeliveryDetails() {
     </body>
   );
 }
+
+
+
 
 // // in deliveryDetails.jsx, I'd like to perform something similar. If mongodb's "shippingInfo" is set to "Recoger en Matriz", then instead of having label "Enviado por:", switch to "Recoger en Matriz". Additionaly, when shippingInfo = "Recoger en Matriz" lets change label "Dirección de Envío" to "Detalles de Entrega" and inside the div (which is currently displaying a "#" since there is no shipping address available) lets display Fecha: (mongodb's date) & Hora (mongodb's time). Here is current deliveryDetails.jsx, please direct edit
 // import { useState, useEffect, useMemo, useCallback, useRef } from "react";

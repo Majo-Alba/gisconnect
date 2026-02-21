@@ -149,7 +149,7 @@ const orderSchema = new Schema(
     packingEvidence: [fileDocSchema],
 
     // Delivery evidence (legacy, buffer)
-    deliveryEvidence: fileDocSchema,
+    deliveryEvidence: [fileDocSchema],
 
     // NEW: S3-backed metadata (preferred)
     evidenceFileExt: fileExternalSchema,        // payment evidence (single)

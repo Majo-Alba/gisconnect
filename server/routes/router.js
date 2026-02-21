@@ -1,4 +1,3 @@
-// this is already working wonders! my app is now being able to fetch data from cluster "new_orders" perfectly again! Here is my full router.js, please take a look to see if any other API should have limits or be optimized
 const express = require('express');
 const cors = require('cors');
 
@@ -60,7 +59,7 @@ const rolesForStage = (stage) => {
 // --- Multer: memory storage (consistent across file routes) ---
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
 });
 
 // --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
@@ -715,7 +714,7 @@ router.put(
     { name: "paymentEvidence", maxCount: 1 }, // alias
     { name: "evidenceFile",    maxCount: 1 }, // alias
     { name: "packingImages",   maxCount: 3 },
-    { name: "deliveryImage",   maxCount: 1 },
+    { name: "deliveryImage",   maxCount: 3 },
   ]),
   async (req, res) => {
     const { orderId } = req.params;
@@ -1068,6 +1067,47 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
 });
 
 // SWITCH FEB17
+// POST /orders/:orderId/evidence/delivery  (up to 3 images)
+router.post(
+  "/orders/:orderId/evidence/delivery",
+  upload.array("deliveryImages", 3),
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const files = Array.isArray(req.files) ? req.files : [];
+
+      if (!files.length) {
+        return res.status(400).json({ error: "No files uploaded (deliveryImages)" });
+      }
+
+      // OPTIONAL: valida mimetype aquí también (extra seguro)
+      const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
+      if (bad) return res.status(400).json({ error: "Only image files are allowed" });
+
+      const order = await newOrderModel.findById(orderId);
+      if (!order) return res.status(404).json({ error: "Order not found" });
+
+      const docs = files.map((f) => ({
+        filename: f.originalname || "delivery-evidence",
+        mimetype: f.mimetype || "application/octet-stream",
+        data: f.buffer,
+        uploadedAt: new Date(),
+      }));
+
+      // ✅ aquí recomiendo REEMPLAZAR el set completo (la evidencia de entrega “final”)
+      order.deliveryEvidence = docs;
+
+      await order.save();
+
+      return res.json({ ok: true, count: docs.length });
+    } catch (e) {
+      console.error("POST /orders/:orderId/evidence/delivery error:", e);
+      res.status(500).json({ error: "Server error" });
+    }
+  }
+);
+
+// GET first delivery evidence (legacy convenience)
 router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
   try {
     const order = await newOrderModel
@@ -1076,12 +1116,56 @@ router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
       .lean();
 
     if (!order) return res.status(404).send("Order not found");
-    return sendFileFromDoc(res, order.deliveryEvidence, "delivery-evidence");
+    const first = Array.isArray(order.deliveryEvidence) ? order.deliveryEvidence[0] : null;
+    return sendFileFromDoc(res, first, "delivery-1");
   } catch (e) {
     console.error(e);
     res.status(500).send("Server error");
   }
 });
+
+// GET delivery evidence by index (0,1,2)
+router.get("/orders/:orderId/evidence/delivery/:index", async (req, res) => {
+  try {
+    const order = await newOrderModel
+      .findById(req.params.orderId)
+      .select({ deliveryEvidence: 1 })
+      .lean();
+
+    if (!order) return res.status(404).send("Order not found");
+
+    const idx = Number(req.params.index);
+    if (
+      !Array.isArray(order.deliveryEvidence) ||
+      !Number.isInteger(idx) ||
+      idx < 0 ||
+      idx >= order.deliveryEvidence.length
+    ) {
+      return res.status(404).send("Delivery evidence not found");
+    }
+
+    return sendFileFromDoc(res, order.deliveryEvidence[idx], `delivery-${idx + 1}`);
+  } catch (e) {
+    console.error(e);
+    res.status(500).send("Server error");
+  }
+});
+
+// OFF FEB21 - SWITH IS ABOVE ^
+// router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
+//   try {
+//     const order = await newOrderModel
+//       .findById(req.params.orderId)
+//       .select({ deliveryEvidence: 1 })
+//       .lean();
+
+//     if (!order) return res.status(404).send("Order not found");
+//     return sendFileFromDoc(res, order.deliveryEvidence, "delivery-evidence");
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send("Server error");
+//   }
+// });
 
 // SWITCH FEB17
 router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
