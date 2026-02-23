@@ -126,14 +126,20 @@ const orderSchema = new Schema(
       default: "Pedido Realizado",
     },
 
-    // AUG15
     paymentOption: String,
     creditTermDays: String,
     creditDueDate: String,
 
-    // AUG15
     paymentMethod: String,
     paymentAccount: String,
+
+    // feb22
+    invoiceNoteType: {
+      type: String,
+      enum: ["Factura", "Nota de Remisión", ""],
+      default: "",
+    },
+    // feb22
 
     // Payment evidence (legacy, buffer)
     evidenceFile: fileDocSchema,

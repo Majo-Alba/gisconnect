@@ -699,6 +699,15 @@ export default function DeliveredSummary() {
                   {order?.paymentAccount && (
                     <label className="productDetail-Label">Cuenta de recepción de pago: {order.paymentAccount}</label>
                   )}
+                  {/* Tipo de Nota */}
+                  <label className="productDetail-Label">
+                    <b>Tipo de Nota:</b>{" "}
+                    {order?.invoiceNoteType === "Factura"
+                      ? "Factura"
+                      : order?.invoiceNoteType === "Nota de Remisión"
+                        ? "Nota de Remisión"
+                        : "—"}
+                  </label>
                 </div>
               </div>
             </div>

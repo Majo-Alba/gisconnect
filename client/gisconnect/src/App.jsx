@@ -43,6 +43,7 @@ import PackInProcess from './components/packInProcess'
 import NewAdminOrder from './components/newAdminOrder'
 import PendingEvidence from './components/pendingEvidence'
 import PendingEvidenceAdmin from './components/pendingEvidenceAdmin'
+import InvoiceDetails from './components/invoiceDetails'
 // GISCONNECT - END
 
 function AdminRoute({ pathPrefix, Component }) {
@@ -133,6 +134,7 @@ function App() {
 
             {/* ADMIN ROUTES — now guarded by AdminRoute */}
             <Route path='/quotes' element={<AdminRoute pathPrefix="/quotes" Component={GeneratedQuotes} />}/>
+            <Route path='/invoiceDetails/:orderId' element={<AdminRoute pathPrefix="/invoiceDetails" Component={InvoiceDetails} />}/>
             <Route path='/toPack' element={<AdminRoute pathPrefix="/toPack" Component={PendingPack} />}/>
             <Route path='/packDetails/:orderId' element={<AdminRoute pathPrefix="/packDetails" Component={PackDetails} />}/>
             <Route path='/packing' element={<AdminRoute pathPrefix="/packing" Component={PackInProcess} />}/>

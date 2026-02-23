@@ -1357,6 +1357,22 @@ router.get('/billing-address/:email', async (req, res) => {
   }
 });
 
+// new feb22
+router.get("/by-email", async (req, res) => {
+  try {
+    const email = String(req.query.email || "").trim().toLowerCase();
+    if (!email) return res.status(400).json({ message: "email is required" });
+
+    const doc = await BillingAddress.findOne({ userEmail: email });
+    if (!doc) return res.status(404).json({ message: "No billing address found" });
+
+    return res.json(doc);
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 // PATCH billing address (edit; auto-unset other defaults)
 router.patch('/billing-address/:id', async (req,res) => {
   const { id } = req.params;
