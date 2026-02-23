@@ -15,6 +15,7 @@ const crypto = require("crypto");
 const nodemailer = require("nodemailer");
 
 const axios = require("axios");
+const sharp = require("sharp");
 
 const newUserModel = require("../models/newUserModel");
 const newOrderModel = require("../models/orderModel");
@@ -59,7 +60,7 @@ const rolesForStage = (stage) => {
 // --- Multer: memory storage (consistent across file routes) ---
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 25MB
 });
 
 // --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
@@ -1099,32 +1100,94 @@ router.post(
         return res.status(400).json({ error: "No files uploaded (deliveryImages)" });
       }
 
-      // OPTIONAL: valida mimetype aquí también (extra seguro)
+      // Validate image mimetype
       const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
       if (bad) return res.status(400).json({ error: "Only image files are allowed" });
 
       const order = await newOrderModel.findById(orderId);
       if (!order) return res.status(404).json({ error: "Order not found" });
 
-      const docs = files.map((f) => ({
-        filename: f.originalname || "delivery-evidence",
-        mimetype: f.mimetype || "application/octet-stream",
-        data: f.buffer,
-        uploadedAt: new Date(),
-      }));
+      // ✅ Compress/resize to keep Mongo doc under 16MB
+      const docs = [];
+      for (const f of files) {
+        const input = f.buffer;
 
-      // ✅ aquí recomiendo REEMPLAZAR el set completo (la evidencia de entrega “final”)
-      order.deliveryEvidence = docs;
+        // Convert everything to JPEG and resize (good balance)
+        const out = await sharp(input)
+          .rotate() // respects EXIF orientation
+          .resize({ width: 1600, withoutEnlargement: true })
+          .jpeg({ quality: 75 })
+          .toBuffer();
 
+        docs.push({
+          filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
+          mimetype: "image/jpeg",
+          data: out,
+          uploadedAt: new Date(),
+        });
+      }
+
+      // Additional safety: ensure doc won't exceed Mongo limits (rough check)
+      const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
+      if (totalBytes > 14 * 1024 * 1024) {
+        return res.status(413).json({
+          error: "Evidencia demasiado pesada. Sube fotos más ligeras (o toma captura / baja resolución).",
+          totalBytes,
+        });
+      }
+
+      order.deliveryEvidence = docs; // replace all
       await order.save();
 
-      return res.json({ ok: true, count: docs.length });
+      return res.json({ ok: true, count: docs.length, totalBytes });
     } catch (e) {
+      // ✅ log the real mongo error so you can confirm
       console.error("POST /orders/:orderId/evidence/delivery error:", e);
-      res.status(500).json({ error: "Server error" });
+      return res.status(500).json({
+        error: "Server error",
+        detail: e?.message, // helpful while debugging
+      });
     }
   }
 );
+// router.post(
+//   "/orders/:orderId/evidence/delivery",
+//   upload.array("deliveryImages", 3),
+//   async (req, res) => {
+//     try {
+//       const { orderId } = req.params;
+//       const files = Array.isArray(req.files) ? req.files : [];
+
+//       if (!files.length) {
+//         return res.status(400).json({ error: "No files uploaded (deliveryImages)" });
+//       }
+
+//       // OPTIONAL: valida mimetype aquí también (extra seguro)
+//       const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
+//       if (bad) return res.status(400).json({ error: "Only image files are allowed" });
+
+//       const order = await newOrderModel.findById(orderId);
+//       if (!order) return res.status(404).json({ error: "Order not found" });
+
+//       const docs = files.map((f) => ({
+//         filename: f.originalname || "delivery-evidence",
+//         mimetype: f.mimetype || "application/octet-stream",
+//         data: f.buffer,
+//         uploadedAt: new Date(),
+//       }));
+
+//       // ✅ aquí recomiendo REEMPLAZAR el set completo (la evidencia de entrega “final”)
+//       order.deliveryEvidence = docs;
+
+//       await order.save();
+
+//       return res.json({ ok: true, count: docs.length });
+//     } catch (e) {
+//       console.error("POST /orders/:orderId/evidence/delivery error:", e);
+//       res.status(500).json({ error: "Server error" });
+//     }
+//   }
+// );
 
 // GET first delivery evidence (legacy convenience)
 router.get("/orders/:orderId/evidence/delivery", async (req, res) => {
