@@ -1056,7 +1056,7 @@ router.delete("/orders/:orderId", async (req, res) => {
     const { orderId } = req.params;
 
     // Si tu modelo se llama Order, usa ese. (ajusta el nombre si es OrderModel, orderModel, etc.)
-    const deleted = await Order.findByIdAndDelete(orderId);
+    const deleted = await newOrderModel.findByIdAndDelete(orderId);
 
     if (!deleted) {
       return res.status(404).json({ message: "Order not found" });
