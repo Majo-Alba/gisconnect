@@ -1050,6 +1050,25 @@ function sendFileFromDoc(res, fileDoc, fallbackName) {
     }
   });
 
+// Delete an order
+router.delete("/orders/:orderId", async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    // Si tu modelo se llama Order, usa ese. (ajusta el nombre si es OrderModel, orderModel, etc.)
+    const deleted = await Order.findByIdAndDelete(orderId);
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    return res.json({ ok: true, deletedId: deleted._id });
+  } catch (error) {
+    console.error("Error deleting order:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+});
+
 // SWITCH FEB17
 router.get("/orders/:orderId/evidence/payment", async (req, res) => {
   try {

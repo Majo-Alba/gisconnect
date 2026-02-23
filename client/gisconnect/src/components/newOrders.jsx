@@ -1,5 +1,3 @@
-// ✅ Updated newOrders.jsx — added auto-refresh every 30s (with cleanup)
-
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";

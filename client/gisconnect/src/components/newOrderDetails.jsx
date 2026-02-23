@@ -1,4 +1,3 @@
-// and to conclude, the "Crédito", in newOrderDetails.jsx under the "Método de Pago", lets add "Crédito" to the options.Let me know if we need to make any modifictions so this also shows and gets stored correctly to mongodb's "paymentMethod". As well, for "Cuenta de Recepción" dropdown, add "Pendiente" as an option and, as well, tell me if anything else needs to be modified for it to be stored in mongodb's "paymentAccount". Here is my current newOrderDetails.jsx 
 import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
 import { API } from "/src/lib/api";
@@ -23,6 +22,9 @@ export default function NewOrderDetails() {
   const [receivingAccount, setReceivingAccount] = useState("");
   const [account, setAccount] = useState("");
   const [isValidated, setIsValidated] = useState(false);
+
+  // ✅ NEW: deleting state
+  const [deleting, setDeleting] = useState(false);
 
   // Evidence image url + lightbox
   const [evidenceUrl, setEvidenceUrl] = useState(null);
@@ -126,7 +128,6 @@ export default function NewOrderDetails() {
         }
       }
       if (!key) continue;
-      // If duplicates appear, first one wins (or last—doesn't matter much)
       if (!index.has(key)) index.set(key, row);
     }
     return { index, productsCsv };
@@ -137,7 +138,6 @@ export default function NewOrderDetails() {
     (item) => {
       const norm = (s) => String(s || "").trim().toLowerCase();
 
-      // Common item identifiers we have in orders
       const candidates = [
         norm(item.sku),
         norm(item.code),
@@ -146,12 +146,10 @@ export default function NewOrderDetails() {
         norm(`${item.product} ${item.presentation || ""}`),
       ].filter(Boolean);
 
-      // 1) try direct map hits
       for (const c of candidates) {
         if (c && productIndex.index.has(c)) return productIndex.index.get(c);
       }
 
-      // 2) fallback: loose contains search across name columns
       const NAME_KEYS = ["NOMBRE_PRODUCTO", "DESCRIPCION", "DESCRIPCIÓN", "NOMBRE", "PRODUCTO"];
       for (const row of productIndex.productsCsv) {
         for (const k of NAME_KEYS) {
@@ -169,9 +167,7 @@ export default function NewOrderDetails() {
   const clientInfo = useMemo(() => {
     if (!order?.userEmail || csvData.length === 0) return null;
     const norm = (s) => String(s || "").trim().toLowerCase();
-    return (
-      csvData.find((r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)) || null
-    );
+    return csvData.find((r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)) || null;
   }, [csvData, order?.userEmail]);
 
   const csvDisplayName = clientInfo?.NOMBRE_APELLIDO || "";
@@ -197,7 +193,7 @@ export default function NewOrderDetails() {
           setCompanyFromMongo(empresa);
         }
       } catch (_err) {
-        // ignore; fallbacks will be used
+        // ignore
       }
     })();
 
@@ -205,7 +201,6 @@ export default function NewOrderDetails() {
       cancelled = true;
     };
   }, [order?.userEmail]);
-  // ============================================================================
 
   const bufferToObjectUrl = (fileObj) => {
     try {
@@ -240,7 +235,6 @@ export default function NewOrderDetails() {
         if (data?.evidenceFile?.data) {
           url = bufferToObjectUrl(data.evidenceFile);
         } else if (data?.paymentEvidence?.data) {
-          // legacy field name fallback
           url = bufferToObjectUrl(data.paymentEvidence);
         }
 
@@ -307,21 +301,15 @@ export default function NewOrderDetails() {
           { value: "MONEX *8341", label: "USD: MONEX *8341" },
           { value: "INVEX *4234", label: "USD: INVEX *4234" },
         ]
-      : [
-          { value: "BBVA *4078", label: "MXN: BBVA *4078" },
-        ];
-  
-    // NEW: always include "Pendiente" at the top
+      : [{ value: "BBVA *4078", label: "MXN: BBVA *4078" }];
+
     return [{ value: "Pendiente", label: "Pendiente" }, ...base];
   }, [hasInvoiceBilling]);
 
-  // Keep selected account valid when options change; prefer order.receivingAccount if valid
   useEffect(() => {
     const allowed = receivingAccountOptions.map((o) => o.value);
     if (!allowed.includes(account)) {
-      const preferred = allowed.includes(order?.receivingAccount) 
-      ? order?.receivingAccount 
-      : "";
+      const preferred = allowed.includes(order?.receivingAccount) ? order?.receivingAccount : "";
       setAccount(preferred);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -359,13 +347,10 @@ export default function NewOrderDetails() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  // ⬅️ NEW: currency & price from PRODUCTS_CSV_URL when DB doesn't store currency
   const getItemCurrency = (it) => {
     const row = findProductRow(it);
-    const prefersUSD =
-      numOr0(row?.PRECIO_UNITARIO_DOLARES) > 0 || numOr0(row?.PRECIO_PIEZA_DOLARES) > 0;
-    const prefersMXN =
-      numOr0(row?.PRECIO_UNITARIO_MXN) > 0 || numOr0(row?.PRECIO_PIEZA_MXN) > 0;
+    const prefersUSD = numOr0(row?.PRECIO_UNITARIO_DOLARES) > 0 || numOr0(row?.PRECIO_PIEZA_DOLARES) > 0;
+    const prefersMXN = numOr0(row?.PRECIO_UNITARIO_MXN) > 0 || numOr0(row?.PRECIO_PIEZA_MXN) > 0;
 
     if (prefersUSD && !prefersMXN) return "USD";
     if (prefersMXN && !prefersUSD) return "MXN";
@@ -382,11 +367,9 @@ export default function NewOrderDetails() {
     return "MXN";
   };
 
-  // ⬅️ NEW: unit price preferring CSV when order item lacks a clean value
   const getUnitPrice = (it) => {
     const cur = getItemCurrency(it);
-    const fromItem =
-      cur === "USD" ? Number(it.priceUSD ?? it.price ?? 0) : Number(it.priceMXN ?? it.price ?? 0);
+    const fromItem = cur === "USD" ? Number(it.priceUSD ?? it.price ?? 0) : Number(it.priceMXN ?? it.price ?? 0);
     if (fromItem > 0) return fromItem;
 
     const row = findProductRow(it);
@@ -401,7 +384,6 @@ export default function NewOrderDetails() {
     }
   };
 
-  // --------- Legacy sums kept only for per-item display (not for totals box anymore) ----------
   const sums = useMemo(() => {
     const list = Array.isArray(order?.items) ? order.items : [];
     let usd = 0;
@@ -410,69 +392,38 @@ export default function NewOrderDetails() {
       const cur = getItemCurrency(it);
       const qty = Number(it.amount) || 0;
       const unit = getUnitPrice(it);
-      if (cur === "USD") {
-        usd += qty * unit;
-      } else {
-        mxn += qty * unit;
-      }
+      if (cur === "USD") usd += qty * unit;
+      else mxn += qty * unit;
     });
     return { usd, mxn };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order?.items, productsLoaded, productsCsv, account, order?.receivingAccount, receivingAccount]);
 
-  // ⬅️ NEW: normalize the latest totals snapshot from Mongo (array or object)
   const latestTotals = useMemo(() => {
     const t = order?.totals;
     if (Array.isArray(t)) return t[t.length - 1] || {};
     return t && typeof t === "object" ? t : {};
   }, [order?.totals]);
 
-  // ⬅️ NEW: decide from Mongo's paymentCurrency (fallback to preferredCurrency if needed)
   const payCurrency = useMemo(
-    () =>
-      normCur(order?.paymentCurrency) ||
-      normCur(order?.preferredCurrency) ||
-      "",
+    () => normCur(order?.paymentCurrency) || normCur(order?.preferredCurrency) || "",
     [order?.paymentCurrency, order?.preferredCurrency]
   );
 
-  // ⬅️ NEW: Display totals based ONLY on Mongo fields
   const displayTotals = useMemo(() => {
     const usdNative = numOr0(latestTotals.totalUSDNative);
     const mxnNative = numOr0(latestTotals.totalMXNNative);
     const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
 
     if (payCurrency === "USD") {
-      // Show USD from totalUSDNative.
-      // MXN shows totalMXNNative if present, else 0.
-      return {
-        showUSD: true,
-        usd: usdNative,
-        showMXN: true,
-        mxn: mxnNative || 0,
-        note: null,
-      };
+      return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || 0, note: null };
     }
 
     if (payCurrency === "MXN") {
-      // USD remains 0; MXN comes from totalAllMXN (or finalAllMXN as fallback).
-      return {
-        showUSD: true,
-        usd: 0,
-        showMXN: true,
-        mxn: allMXN,
-        note: null,
-      };
+      return { showUSD: true, usd: 0, showMXN: true, mxn: allMXN, note: null };
     }
 
-    // Fallback if paymentCurrency missing: show whatever is available
-    return {
-      showUSD: true,
-      usd: usdNative,
-      showMXN: true,
-      mxn: mxnNative || allMXN || 0,
-      note: null,
-    };
+    return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || allMXN || 0, note: null };
   }, [latestTotals, payCurrency]);
 
   // Actions
@@ -490,6 +441,29 @@ export default function NewOrderDetails() {
     } catch (error) {
       console.error("Error updating order:", error);
       alert("Error al validar el pago.");
+    }
+  };
+
+  // ✅ NEW: delete order
+  const handleDeleteOrder = async () => {
+    if (!orderId) return;
+
+    const short = String(orderId).slice(-5);
+    const ok = window.confirm(
+      `¿Seguro que deseas BORRAR el pedido #${short}?\n\nEsta acción NO se puede deshacer.`
+    );
+    if (!ok) return;
+
+    try {
+      setDeleting(true);
+      await axios.delete(`${API}/orders/${orderId}`);
+      alert(`Pedido #${short} borrado correctamente.`);
+      navigate("/newOrders"); // o "/adminHome" si prefieres
+    } catch (e) {
+      console.error("Delete order error:", e?.response?.data || e.message);
+      alert("No se pudo borrar el pedido. Revisa el servidor / endpoint.");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -517,9 +491,7 @@ export default function NewOrderDetails() {
   }
 
   const downloadName =
-    order?.evidenceFile?.filename ||
-    order?.paymentEvidence?.filename ||
-    `evidencia_${String(order._id).slice(-5)}.jpg`;
+    order?.evidenceFile?.filename || order?.paymentEvidence?.filename || `evidencia_${String(order._id).slice(-5)}.jpg`;
 
   const displayName = (clientFullName || csvDisplayName || order.userEmail || "").trim();
   const displayCompany = (companyFromMongo || csvCompanyName || "").trim();
@@ -528,14 +500,7 @@ export default function NewOrderDetails() {
     <body className="body-BG-Gradient">
       {/* LOGO */}
       <div className="loginLogo-ParentDiv">
-        <img
-          className="secondaryPages-GISLogo"
-          src={Logo}
-          alt="Home Icon"
-          width="180"
-          height="55"
-          onClick={goHomeLogo}
-        />
+        <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo} />
       </div>
 
       <div className="edit-titleIcon-Div">
@@ -578,7 +543,6 @@ export default function NewOrderDetails() {
                       <b>{item.product}</b>
                     </label>
 
-                    {/* Presentación */}
                     <label className="orderDets-Label">
                       <b>Presentación:</b> {item.presentation || item.packPresentation || "N/A"}
                     </label>
@@ -587,7 +551,6 @@ export default function NewOrderDetails() {
                       <b>Cantidad:</b> {item.amount}
                     </label>
 
-                    {/* Precio unitario with currency + thousands separators */}
                     <label className="orderDets-Label">
                       <b>Precio Unitario:</b> {unitFmt(unit, cur)}
                     </label>
@@ -599,7 +562,6 @@ export default function NewOrderDetails() {
             <p>No hay productos en este pedido.</p>
           )}
 
-          {/* Totals per Mongo rules */}
           {displayTotals.showUSD && (
             <label className="newOrderDetsTotal-Label">
               <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")}
@@ -610,9 +572,7 @@ export default function NewOrderDetails() {
               <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")}
             </label>
           )}
-          {displayTotals.note && (
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>
-          )}
+          {displayTotals.note && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>}
           {!displayTotals.showUSD && !displayTotals.showMXN && (
             <label className="newOrderDetsTotal-Label" style={{ color: "#b45309" }}>
               (Totales no disponibles en el registro actual)
@@ -626,11 +586,7 @@ export default function NewOrderDetails() {
             <div className="headerEditIcon-Div">
               <label className="newUserData-Label">Método de Pago</label>
             </div>
-            <select
-              className="paymentDets-Select"
-              value={paymentMethod}
-              onChange={(e) => setPaymentMethod(e.target.value)}
-            >
+            <select className="paymentDets-Select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
               <option value="">Selecciona método</option>
               <option value="Efectivo">01: Efectivo</option>
               <option value="Cheque Nominativo">02: Cheque Nominativo</option>
@@ -666,7 +622,6 @@ export default function NewOrderDetails() {
             </div>
           </div>
 
-          {/* Evidence preview + actions */}
           <div className="paymentEvidence-Div" style={{ gap: 12, alignItems: "center" }}>
             <img
               src={evidenceUrl}
@@ -677,10 +632,21 @@ export default function NewOrderDetails() {
           </div>
         </div>
 
-        {/* Validate */}
-        <div className="validatePaymentSubmitBtn-Div">
-          <button className="submitOrder-Btn" type="submit" onClick={handleValidatePayment}>
+        {/* ✅ Validate + Delete (aligned) */}
+        <div style={{ display: "grid", gridTemplateColumns: "50% 50%", gap: 10, marginBottom:"15%", marginLeft: "10%" }}>
+        {/* <div className="validatePaymentSubmitBtn-Div" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}> */}
+          <button className="submitOrder-Btn" type="button" onClick={handleValidatePayment} disabled={deleting}>
             Validar Pago
+          </button>
+
+          <button
+            className="submitOrder-Btn"
+            type="button"
+            onClick={handleDeleteOrder}
+            disabled={deleting}
+            style={{ background: "#b91c1c" }} // rojo (si tu CSS lo sobreescribe, lo quitamos)
+          >
+            {deleting ? "Borrando…" : "Borrar"}
           </button>
         </div>
 
@@ -751,8 +717,7 @@ export default function NewOrderDetails() {
     </body>
   );
 }
-
-// // Rather than using the DOF to display "Total USD" and "Total MXN", letts do rhe following. In MongoDb we have a field "paymentCurrency". If this is set to "USD", for "Total USD" get info from mongDB field "totalUSDNative" and check if there's data for "totalMXNNative". If data exists, then this will be "Total MXN". If no data exists, leave "Total MXN" in zeros. Now, if "paymentCurrency" is MXN, then "Total USD" will remain in zeros and data for "Total MXN" will come from "totalAllMXN". Please handle these changes and direct edit 
+// // in newOrderDetails.jsx I'd like the ability to delete orders. Im thinking of adding a button at the bottom (aligned with existing "Validar Pago" button) "Borrar". Im guessing we'll also need to add an endpoint to make sure this order gets deleted from mongodb cluster "new_orders". Here is my current newOrderDetails.jsx, please direct edit
 // import EvidenceGallery from "/src/components/EvidenceGallery";
 // import axios from "axios";
 // import { API } from "/src/lib/api";
@@ -787,8 +752,8 @@ export default function NewOrderDetails() {
 
 //   // ======== Product DB (Google Sheets) ========  ⬅️ NEW
 //   const PRODUCTS_CSV_URL =
-//   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
-  
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
+
 //   const [productsCsv, setProductsCsv] = useState([]);
 //   const [productsLoaded, setProductsLoaded] = useState(false);
 
@@ -924,9 +889,7 @@ export default function NewOrderDetails() {
 //     if (!order?.userEmail || csvData.length === 0) return null;
 //     const norm = (s) => String(s || "").trim().toLowerCase();
 //     return (
-//       csvData.find(
-//         (r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)
-//       ) || null
+//       csvData.find((r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)) || null
 //     );
 //   }, [csvData, order?.userEmail]);
 
@@ -957,7 +920,9 @@ export default function NewOrderDetails() {
 //       }
 //     })();
 
-//     return () => { cancelled = true; };
+//     return () => {
+//       cancelled = true;
+//     };
 //   }, [order?.userEmail]);
 //   // ============================================================================
 
@@ -1032,7 +997,9 @@ export default function NewOrderDetails() {
 //     return () => window.removeEventListener("keydown", onKey);
 //   }, [isLightboxOpen, closeLightbox]);
 
-//   useEffect(() => { load(); }, [orderId]);
+//   useEffect(() => {
+//     load();
+//   }, [orderId]);
 
 //   async function load() {
 //     try {
@@ -1052,39 +1019,53 @@ export default function NewOrderDetails() {
 //     return vals.some((v) => String(v ?? "").trim() !== "");
 //   }, [order?.billingInfo]);
 
-//   const receivingAccountOptions = useMemo(
-//     () =>
-//       hasInvoiceBilling
-//         ? [
-//             { value: "BBVA *1207", label: "MXN: BBVA *1207" },
-//             { value: "MONEX *8341", label: "USD: MONEX *8341" },
-//             { value: "INVEX *4234", label: "USD: INVEX *4234" },
-//           ]
-//         : [{ value: "BBVA *4078", label: "MXN: BBVA *4078" }],
-//     [hasInvoiceBilling]
-//   );
+//   const receivingAccountOptions = useMemo(() => {
+//     const base = hasInvoiceBilling
+//       ? [
+//           { value: "BBVA *1207", label: "MXN: BBVA *1207" },
+//           { value: "MONEX *8341", label: "USD: MONEX *8341" },
+//           { value: "INVEX *4234", label: "USD: INVEX *4234" },
+//         ]
+//       : [
+//           { value: "BBVA *4078", label: "MXN: BBVA *4078" },
+//         ];
+  
+//     // NEW: always include "Pendiente" at the top
+//     return [{ value: "Pendiente", label: "Pendiente" }, ...base];
+//   }, [hasInvoiceBilling]);
 
 //   // Keep selected account valid when options change; prefer order.receivingAccount if valid
 //   useEffect(() => {
 //     const allowed = receivingAccountOptions.map((o) => o.value);
 //     if (!allowed.includes(account)) {
-//       const preferred = allowed.includes(order?.receivingAccount)
-//         ? order.receivingAccount
-//         : "";
+//       const preferred = allowed.includes(order?.receivingAccount) 
+//       ? order?.receivingAccount 
+//       : "";
 //       setAccount(preferred);
 //     }
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [receivingAccountOptions, order?.receivingAccount]);
 
 //   // Navigation
-//   function goToAdminHome() { navigate("/adminHome"); }
-//   function goToNewOrders() { navigate("/newOrders"); }
-//   function goToDeliverReady() { navigate("/deliverReady"); }
-//   function goHomeLogo() { navigate("/adminHome"); }
+//   function goToAdminHome() {
+//     navigate("/adminHome");
+//   }
+//   function goToNewOrders() {
+//     navigate("/newOrders");
+//   }
+//   function goToDeliverReady() {
+//     navigate("/deliverReady");
+//   }
+//   function goHomeLogo() {
+//     navigate("/adminHome");
+//   }
 
 //   // --------- FORMAT HELPERS ----------
 //   const fmtNum = (v, locale = "es-MX") =>
-//     (Number(v) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+//     (Number(v) || 0).toLocaleString(locale, {
+//       minimumFractionDigits: 2,
+//       maximumFractionDigits: 2,
+//     });
 
 //   const unitFmt = (n, cur) => {
 //     if (cur === "USD") return `$${fmtNum(n, "en-US")} USD`;
@@ -1108,13 +1089,11 @@ export default function NewOrderDetails() {
 //     if (prefersUSD && !prefersMXN) return "USD";
 //     if (prefersMXN && !prefersUSD) return "MXN";
 //     if (prefersUSD && prefersMXN) {
-//       // If both appear (data issue), fall back to receiving account / prior heuristic
 //       const src = `${account || order?.receivingAccount || receivingAccount}`.toUpperCase();
 //       if (src.includes("USD") || src.includes("MONEX") || src.includes("INVEX")) return "USD";
 //       return "MXN";
 //     }
 
-//     // Fallbacks (rare)
 //     if (it.priceUSD != null) return "USD";
 //     if (it.priceMXN != null) return "MXN";
 //     const src = `${account || order?.receivingAccount || receivingAccount}`.toUpperCase();
@@ -1133,17 +1112,15 @@ export default function NewOrderDetails() {
 //     if (!row) return 0;
 
 //     if (cur === "USD") {
-//       const usd =
-//         numOr0(row.PRECIO_UNITARIO_DOLARES) || numOr0(row.PRECIO_PIEZA_DOLARES);
+//       const usd = numOr0(row.PRECIO_UNITARIO_DOLARES) || numOr0(row.PRECIO_PIEZA_DOLARES);
 //       return usd;
 //     } else {
-//       const mxn =
-//         numOr0(row.PRECIO_UNITARIO_MXN) || numOr0(row.PRECIO_PIEZA_MXN);
+//       const mxn = numOr0(row.PRECIO_UNITARIO_MXN) || numOr0(row.PRECIO_PIEZA_MXN);
 //       return mxn;
 //     }
 //   };
 
-//   // --------- TOTALS (native sums + DOF conversion per rules) ----------
+//   // --------- Legacy sums kept only for per-item display (not for totals box anymore) ----------
 //   const sums = useMemo(() => {
 //     const list = Array.isArray(order?.items) ? order.items : [];
 //     let usd = 0;
@@ -1162,80 +1139,60 @@ export default function NewOrderDetails() {
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [order?.items, productsLoaded, productsCsv, account, order?.receivingAccount, receivingAccount]);
 
-//   // Determine the user's selected paying currency
-//   const payPref = useMemo(() => {
-//     const explicit = normCur(order?.preferredCurrency);
-//     if (explicit === "USD" || explicit === "MXN") return explicit;
-//     const src = `${account || order?.receivingAccount || receivingAccount}`.toUpperCase();
-//     if (src.includes("USD") || src.includes("MONEX") || src.includes("INVEX")) return "USD";
-//     return "MXN";
-//   }, [order?.preferredCurrency, account, order?.receivingAccount, receivingAccount]);
-
-//   const dofRate = useMemo(() => {
+//   // ⬅️ NEW: normalize the latest totals snapshot from Mongo (array or object)
+//   const latestTotals = useMemo(() => {
 //     const t = order?.totals;
-//     const tryNum = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-//     if (t && typeof t === "object") {
-//       return tryNum(t.dofRate ?? t.dof2 ?? order?.dofRate ?? 0);
-//     }
-//     return 0;
-//   }, [order]);
+//     if (Array.isArray(t)) return t[t.length - 1] || {};
+//     return t && typeof t === "object" ? t : {};
+//   }, [order?.totals]);
 
-//   // ✅ Siempre mostramos totales nativos disponibles.
-//   // Si hay DOF y existen USD, el Total MXN incluye conversión de USD.
-//   // Si NO hay DOF pero existen USD, Total MXN NO incluye conversión y lo aclaramos en la nota.
+//   // ⬅️ NEW: decide from Mongo's paymentCurrency (fallback to preferredCurrency if needed)
+//   const payCurrency = useMemo(
+//     () =>
+//       normCur(order?.paymentCurrency) ||
+//       normCur(order?.preferredCurrency) ||
+//       "",
+//     [order?.paymentCurrency, order?.preferredCurrency]
+//   );
+
+//   // ⬅️ NEW: Display totals based ONLY on Mongo fields
 //   const displayTotals = useMemo(() => {
-//     const hasUSD = sums.usd > 0;
-//     const hasMXN = sums.mxn > 0;
+//     const usdNative = numOr0(latestTotals.totalUSDNative);
+//     const mxnNative = numOr0(latestTotals.totalMXNNative);
+//     const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
 
-//     const convertedUSDinMXN = hasUSD && dofRate ? (sums.usd * dofRate) : 0;
-
-//     // Siempre mostramos Total USD si hay partidas en USD
-//     const showUSD = hasUSD;
-//     const usd = hasUSD ? sums.usd : 0;
-
-//     // Siempre mostramos Total MXN (al menos el nativo)
-//     // Si hay DOF, sumamos conversión de USD; si no hay DOF, mostramos solo el nativo
-//     const showMXN = hasMXN || hasUSD; // si solo hay USD también mostramos MXN (conversión si existe DOF)
-//     const mxn = hasMXN
-//       ? sums.mxn + convertedUSDinMXN
-//       : convertedUSDinMXN; // si no hay MXN nativo y sí hay USD, Total MXN sólo será la conversión cuando exista DOF
-
-//     let note = null;
-//     if (hasUSD && !dofRate) {
-//       // No bloqueamos totales. Solo avisamos que el Total MXN no incluye conversión de USD.
-//       note = "Sin tipo de cambio DOF; el Total MXN no incluye conversión de USD.";
-//     } else if (hasUSD && dofRate) {
-//       note = `Incluye conversión: USD ${fmtNum(sums.usd, "en-US")} × ${dofRate.toFixed(2)} = MXN ${fmtNum(convertedUSDinMXN)}`;
+//     if (payCurrency === "USD") {
+//       // Show USD from totalUSDNative.
+//       // MXN shows totalMXNNative if present, else 0.
+//       return {
+//         showUSD: true,
+//         usd: usdNative,
+//         showMXN: true,
+//         mxn: mxnNative || 0,
+//         note: null,
+//       };
 //     }
 
-//     return { showUSD, usd, showMXN, mxn, note };
-//   }, [sums, dofRate]);
+//     if (payCurrency === "MXN") {
+//       // USD remains 0; MXN comes from totalAllMXN (or finalAllMXN as fallback).
+//       return {
+//         showUSD: true,
+//         usd: 0,
+//         showMXN: true,
+//         mxn: allMXN,
+//         note: null,
+//       };
+//     }
 
-//   // const displayTotals = useMemo(() => {
-//   //   const onlyUSD = sums.usd > 0 && sums.mxn === 0;
-//   //   const onlyMXN = sums.mxn > 0 && sums.usd === 0;
-//   //   const mixed = sums.usd > 0 && sums.mxn > 0;
-
-//   //   if (payPref === "USD") {
-//   //     if (onlyUSD) {
-//   //       return { showUSD: true, usd: sums.usd, showMXN: false, mxn: 0, note: null };
-//   //     }
-//   //     if (mixed) {
-//   //       return { showUSD: true, usd: sums.usd, showMXN: true, mxn: sums.mxn, note: null };
-//   //     }
-//   //     return { showUSD: false, usd: 0, showMXN: true, mxn: sums.mxn, note: "(Orden solo en MXN; el pago debe realizarse en MXN.)" };
-//   //   } else {
-//   //     if (onlyMXN) {
-//   //       return { showUSD: false, usd: 0, showMXN: true, mxn: sums.mxn, note: null };
-//   //     }
-//   //     const conv = dofRate ? sums.usd * dofRate : 0;
-//   //     const grand = (dofRate ? conv : 0) + sums.mxn;
-//   //     const note = dofRate
-//   //       ? `Incluye conversión: USD ${fmtNum(sums.usd, "en-US")} × ${dofRate.toFixed(2)} = MXN ${fmtNum(conv)}`
-//   //       : "No se cuenta con tipo de cambio DOF; no es posible convertir USD a MXN.";
-//   //     return { showUSD: false, usd: 0, showMXN: true, mxn: grand, note };
-//   //   }
-//   // }, [payPref, sums, dofRate]);
+//     // Fallback if paymentCurrency missing: show whatever is available
+//     return {
+//       showUSD: true,
+//       usd: usdNative,
+//       showMXN: true,
+//       mxn: mxnNative || allMXN || 0,
+//       note: null,
+//     };
+//   }, [latestTotals, payCurrency]);
 
 //   // Actions
 //   const handleValidatePayment = async () => {
@@ -1361,7 +1318,7 @@ export default function NewOrderDetails() {
 //             <p>No hay productos en este pedido.</p>
 //           )}
 
-//           {/* Totals per rules */}
+//           {/* Totals per Mongo rules */}
 //           {displayTotals.showUSD && (
 //             <label className="newOrderDetsTotal-Label">
 //               <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")}
@@ -1373,9 +1330,7 @@ export default function NewOrderDetails() {
 //             </label>
 //           )}
 //           {displayTotals.note && (
-//             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>
-//               {displayTotals.note}
-//             </div>
+//             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>
 //           )}
 //           {!displayTotals.showUSD && !displayTotals.showMXN && (
 //             <label className="newOrderDetsTotal-Label" style={{ color: "#b45309" }}>
@@ -1398,9 +1353,8 @@ export default function NewOrderDetails() {
 //               <option value="">Selecciona método</option>
 //               <option value="Efectivo">01: Efectivo</option>
 //               <option value="Cheque Nominativo">02: Cheque Nominativo</option>
-//               <option value="Transferencia electrónica de fondos">
-//                 03: Transferencia electrónica de fondos
-//               </option>
+//               <option value="Transferencia electrónica de fondos">03: Transferencia electrónica de fondos</option>
+//               <option value="Crédito">04: Crédito</option>
 //             </select>
 //           </div>
 
@@ -1408,11 +1362,7 @@ export default function NewOrderDetails() {
 //             <div className="headerEditIcon-Div">
 //               <label className="newUserData-Label">Cuenta de Recepción</label>
 //             </div>
-//             <select
-//               className="paymentDets-Select"
-//               value={account}
-//               onChange={(e) => setAccount(e.target.value)}
-//             >
+//             <select className="paymentDets-Select" value={account} onChange={(e) => setAccount(e.target.value)}>
 //               <option value="">Selecciona cuenta</option>
 //               {receivingAccountOptions.map((opt) => (
 //                 <option key={opt.value} value={opt.value}>
@@ -1427,14 +1377,9 @@ export default function NewOrderDetails() {
 //               <label className="newUserData-Label">Evidencia de Pago</label>
 //               <div className="existingQuote-Div">
 //                 {order?.evidenceFileExt ? (
-//                   <EvidenceGallery
-//                     orderId={orderId}
-//                     evidenceFileExt={order.evidenceFileExt}
-//                   />
+//                   <EvidenceGallery orderId={orderId} evidenceFileExt={order.evidenceFileExt} />
 //                 ) : (
-//                   <div style={{ fontSize: 12, color: "#666" }}>
-//                     Aún no hay evidencia de pago cargada por el cliente.
-//                   </div>
+//                   <div style={{ fontSize: 12, color: "#666" }}>Aún no hay evidencia de pago cargada por el cliente.</div>
 //                 )}
 //               </div>
 //             </div>
@@ -1525,9 +1470,3 @@ export default function NewOrderDetails() {
 //     </body>
 //   );
 // }
-
-
-
-
-
-
