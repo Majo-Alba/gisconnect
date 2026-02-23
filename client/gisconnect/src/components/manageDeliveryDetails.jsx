@@ -1,3 +1,4 @@
+//manageDeliveryDetails.jsx 
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -115,6 +116,11 @@ export default function ManageDeliveryDetails() {
       cancelled = true;
     };
   }, [order?.userEmail]);
+
+  // ✅ If switch to pickup, clear payment method (since it doesn't apply)
+  useEffect(() => {
+    if (isPickup) setShippingPaymentMethod("");
+  }, [isPickup]);
 
   // Convenience getters from Mongo
   const displayName = useMemo(() => {
@@ -419,11 +425,6 @@ export default function ManageDeliveryDetails() {
       alert("No se pudo marcar como listo para entregar.");
     }
   };
-
-  // ✅ If switch to pickup, clear payment method (since it doesn't apply)
-  useEffect(() => {
-    if (isPickup) setShippingPaymentMethod("");
-  }, [isPickup]);
 
   return (
     <body className="body-BG-Gradient">
