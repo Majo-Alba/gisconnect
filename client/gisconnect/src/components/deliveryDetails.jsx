@@ -317,7 +317,8 @@ export default function DeliveryDetails() {
 
     setBusy(true); setProgress(0); setErrMsg(""); setOkMsg("");
     try {
-      await axios.put(`${API}/orders/${order._id}`, buildDeliveryMeta());
+      // await axios.put(`${API}/orders/${order._id}`, buildDeliveryMeta());
+      await axios.patch(`${API}/orders/${order._id}`, buildDeliveryMeta());
       await fetch(`${API}/order/${order._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -362,7 +363,8 @@ export default function DeliveryDetails() {
       });
       // SWITCH FEB19
 
-      await axios.put(`${API}/orders/${order._id}`, buildDeliveryMeta());
+      // await axios.put(`${API}/orders/${order._id}`, buildDeliveryMeta());
+      await axios.patch(`${API}/orders/${order._id}`, buildDeliveryMeta());
       await fetch(`${API}/order/${order._id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
