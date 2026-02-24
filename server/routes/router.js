@@ -58,9 +58,16 @@ const rolesForStage = (stage) => {
 };
 
 // --- Multer: memory storage (consistent across file routes) ---
+// const upload = multer({
+//   storage: multer.memoryStorage(),
+//   limits: { fileSize: 5 * 1024 * 1024 }, // 25MB
+// });
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 25MB
+  limits: {
+    fileSize: 25 * 1024 * 1024, // ✅ 25MB per file
+    files: 3,                   // ✅ max 3 files in a request
+  },
 });
 
 // --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
@@ -777,7 +784,8 @@ router.put(
       };
 
       if (paymentEvidenceDoc) $set.evidenceFile   = paymentEvidenceDoc;
-      if (deliveryDoc)        $set.deliveryEvidence = deliveryDoc;
+      // if (deliveryDoc)        $set.deliveryEvidence = deliveryDoc;
+      if (deliveryDoc) $set.deliveryEvidence = [deliveryDoc];
 
       const update = { $set };
       if (packingDocs.length > 0) {
@@ -2171,6 +2179,26 @@ router.post("/orders/:id/release-delivery", async (req, res) => {
     console.error("release-delivery error:", e);
     return res.status(500).json({ error: "Server error" });
   }
+});
+
+// ✅ Multer error handler (prevents generic 500 on file too large, etc.)
+router.use((err, req, res, next) => {
+  if (err && err.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({
+        error: "Archivo demasiado grande. Máximo 25MB por imagen.",
+        code: err.code,
+      });
+    }
+    if (err.code === "LIMIT_FILE_COUNT") {
+      return res.status(400).json({
+        error: "Demasiados archivos. Máximo 3 imágenes.",
+        code: err.code,
+      });
+    }
+    return res.status(400).json({ error: err.message, code: err.code });
+  }
+  return next(err);
 });
 
 module.exports = router;
