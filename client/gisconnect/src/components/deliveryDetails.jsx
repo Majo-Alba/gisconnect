@@ -360,7 +360,7 @@ export default function DeliveryDetails() {
       // SWITCH FEB19
       const form = new FormData();
       deliveryImages.slice(0, 3).forEach((file) => {
-        form.append("deliveryImages", file); // 👈 importante: nombre del field para multer.array
+        form.append("deliveryImages", file, file.name); // 👈 importante: nombre del field para multer.array
       });
 
       for (const [k, v] of form.entries()) {
@@ -368,6 +368,7 @@ export default function DeliveryDetails() {
       }
 
       await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (pe) => {
           if (!pe.total) return;
           setProgress(Math.round((pe.loaded / pe.total) * 100));

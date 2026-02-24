@@ -1099,65 +1099,132 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
 
 // SWITCH FEB17
 // POST /orders/:orderId/evidence/delivery  (up to 3 images)
-router.post(
-  "/orders/:orderId/evidence/delivery",
-  upload.fields([
-    { name: "deliveryImages", maxCount: 3 }, // new
-    { name: "deliveryImage",  maxCount: 3 }, // legacy
-  ]),
-  async (req, res) => {
-    try {
-      const { orderId } = req.params;
+// Put this near your upload config
+const deliveryUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 25 * 1024 * 1024,
+    files: 3, // total files
+  },
+});
 
-      const files =
-        (req.files?.deliveryImages && Array.isArray(req.files.deliveryImages) && req.files.deliveryImages) ||
-        (req.files?.deliveryImage  && Array.isArray(req.files.deliveryImage)  && req.files.deliveryImage) ||
-        [];
+router.post("/orders/:orderId/evidence/delivery", deliveryUpload.any(), async (req, res) => {
+  try {
+    const { orderId } = req.params;
 
-      if (!files.length) {
-        return res.status(400).json({ error: "No files uploaded (deliveryImages/deliveryImage)" });
-      }
+    const allFiles = Array.isArray(req.files) ? req.files : [];
+    const allowedFields = new Set(["deliveryImages", "deliveryImage"]);
 
-      const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
-      if (bad) return res.status(400).json({ error: "Only image files are allowed" });
-
-      const order = await newOrderModel.findById(orderId);
-      if (!order) return res.status(404).json({ error: "Order not found" });
-
-      const docs = [];
-      for (const f of files) {
-        const out = await sharp(f.buffer)
-          .rotate()
-          .resize({ width: 1600, withoutEnlargement: true })
-          .jpeg({ quality: 75 })
-          .toBuffer();
-
-        docs.push({
-          filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
-          mimetype: "image/jpeg",
-          data: out,
-          uploadedAt: new Date(),
-        });
-      }
-
-      const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
-      if (totalBytes > 14 * 1024 * 1024) {
-        return res.status(413).json({
-          error: "Evidencia demasiado pesada. Sube fotos más ligeras.",
-          totalBytes,
-        });
-      }
-
-      order.deliveryEvidence = docs;
-      await order.save();
-
-      return res.json({ ok: true, count: docs.length, totalBytes });
-    } catch (e) {
-      console.error("POST /orders/:orderId/evidence/delivery error:", e);
-      return res.status(500).json({ error: "Server error", detail: e?.message });
+    // 👇 If ANY file came under a weird field, tell us clearly
+    const unexpected = allFiles.filter(f => !allowedFields.has(f.fieldname));
+    if (unexpected.length) {
+      return res.status(400).json({
+        error: "Unexpected file field(s).",
+        unexpectedFields: [...new Set(unexpected.map(f => f.fieldname))],
+        allowed: [...allowedFields],
+      });
     }
+
+    const files = allFiles.filter(f => allowedFields.has(f.fieldname));
+    if (!files.length) {
+      return res.status(400).json({ error: "No files uploaded (deliveryImages/deliveryImage)" });
+    }
+
+    const bad = files.find(f => !(f.mimetype || "").startsWith("image/"));
+    if (bad) return res.status(400).json({ error: "Only image files are allowed" });
+
+    const order = await newOrderModel.findById(orderId);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const docs = [];
+    for (const f of files) {
+      const out = await sharp(f.buffer)
+        .rotate()
+        .resize({ width: 1600, withoutEnlargement: true })
+        .jpeg({ quality: 75 })
+        .toBuffer();
+
+      docs.push({
+        filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
+        mimetype: "image/jpeg",
+        data: out,
+        uploadedAt: new Date(),
+      });
+    }
+
+    const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
+    if (totalBytes > 14 * 1024 * 1024) {
+      return res.status(413).json({ error: "Evidencia demasiado pesada. Sube fotos más ligeras.", totalBytes });
+    }
+
+    order.deliveryEvidence = docs;
+    await order.save();
+
+    return res.json({ ok: true, count: docs.length, totalBytes });
+  } catch (e) {
+    console.error("POST /orders/:orderId/evidence/delivery error:", e);
+    return res.status(500).json({ error: "Server error", detail: e?.message });
   }
-);
+});
+// router.post(
+//   "/orders/:orderId/evidence/delivery",
+//   upload.fields([
+//     { name: "deliveryImages", maxCount: 3 }, // new
+//     { name: "deliveryImage",  maxCount: 3 }, // legacy
+//   ]),
+//   async (req, res) => {
+//     try {
+//       const { orderId } = req.params;
+
+//       const files =
+//         (req.files?.deliveryImages && Array.isArray(req.files.deliveryImages) && req.files.deliveryImages) ||
+//         (req.files?.deliveryImage  && Array.isArray(req.files.deliveryImage)  && req.files.deliveryImage) ||
+//         [];
+
+//       if (!files.length) {
+//         return res.status(400).json({ error: "No files uploaded (deliveryImages/deliveryImage)" });
+//       }
+
+//       const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
+//       if (bad) return res.status(400).json({ error: "Only image files are allowed" });
+
+//       const order = await newOrderModel.findById(orderId);
+//       if (!order) return res.status(404).json({ error: "Order not found" });
+
+//       const docs = [];
+//       for (const f of files) {
+//         const out = await sharp(f.buffer)
+//           .rotate()
+//           .resize({ width: 1600, withoutEnlargement: true })
+//           .jpeg({ quality: 75 })
+//           .toBuffer();
+
+//         docs.push({
+//           filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
+//           mimetype: "image/jpeg",
+//           data: out,
+//           uploadedAt: new Date(),
+//         });
+//       }
+
+//       const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
+//       if (totalBytes > 14 * 1024 * 1024) {
+//         return res.status(413).json({
+//           error: "Evidencia demasiado pesada. Sube fotos más ligeras.",
+//           totalBytes,
+//         });
+//       }
+
+//       order.deliveryEvidence = docs;
+//       await order.save();
+
+//       return res.json({ ok: true, count: docs.length, totalBytes });
+//     } catch (e) {
+//       console.error("POST /orders/:orderId/evidence/delivery error:", e);
+//       return res.status(500).json({ error: "Server error", detail: e?.message });
+//     }
+//   }
+// );
 // router.post(
 //   "/orders/:orderId/evidence/delivery",
 //   upload.array("deliveryImages", 3),
