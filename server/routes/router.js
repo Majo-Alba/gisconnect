@@ -1101,31 +1101,33 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
 // POST /orders/:orderId/evidence/delivery  (up to 3 images)
 router.post(
   "/orders/:orderId/evidence/delivery",
-  upload.array("deliveryImages", 3),
+  upload.fields([
+    { name: "deliveryImages", maxCount: 3 }, // new
+    { name: "deliveryImage",  maxCount: 3 }, // legacy
+  ]),
   async (req, res) => {
     try {
       const { orderId } = req.params;
-      const files = Array.isArray(req.files) ? req.files : [];
+
+      const files =
+        (req.files?.deliveryImages && Array.isArray(req.files.deliveryImages) && req.files.deliveryImages) ||
+        (req.files?.deliveryImage  && Array.isArray(req.files.deliveryImage)  && req.files.deliveryImage) ||
+        [];
 
       if (!files.length) {
-        return res.status(400).json({ error: "No files uploaded (deliveryImages)" });
+        return res.status(400).json({ error: "No files uploaded (deliveryImages/deliveryImage)" });
       }
 
-      // Validate image mimetype
       const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
       if (bad) return res.status(400).json({ error: "Only image files are allowed" });
 
       const order = await newOrderModel.findById(orderId);
       if (!order) return res.status(404).json({ error: "Order not found" });
 
-      // ✅ Compress/resize to keep Mongo doc under 16MB
       const docs = [];
       for (const f of files) {
-        const input = f.buffer;
-
-        // Convert everything to JPEG and resize (good balance)
-        const out = await sharp(input)
-          .rotate() // respects EXIF orientation
+        const out = await sharp(f.buffer)
+          .rotate()
           .resize({ width: 1600, withoutEnlargement: true })
           .jpeg({ quality: 75 })
           .toBuffer();
@@ -1138,29 +1140,87 @@ router.post(
         });
       }
 
-      // Additional safety: ensure doc won't exceed Mongo limits (rough check)
       const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
       if (totalBytes > 14 * 1024 * 1024) {
         return res.status(413).json({
-          error: "Evidencia demasiado pesada. Sube fotos más ligeras (o toma captura / baja resolución).",
+          error: "Evidencia demasiado pesada. Sube fotos más ligeras.",
           totalBytes,
         });
       }
 
-      order.deliveryEvidence = docs; // replace all
+      order.deliveryEvidence = docs;
       await order.save();
 
       return res.json({ ok: true, count: docs.length, totalBytes });
     } catch (e) {
-      // ✅ log the real mongo error so you can confirm
       console.error("POST /orders/:orderId/evidence/delivery error:", e);
-      return res.status(500).json({
-        error: "Server error",
-        detail: e?.message, // helpful while debugging
-      });
+      return res.status(500).json({ error: "Server error", detail: e?.message });
     }
   }
 );
+// router.post(
+//   "/orders/:orderId/evidence/delivery",
+//   upload.array("deliveryImages", 3),
+//   async (req, res) => {
+//     try {
+//       const { orderId } = req.params;
+//       const files = Array.isArray(req.files) ? req.files : [];
+
+//       if (!files.length) {
+//         return res.status(400).json({ error: "No files uploaded (deliveryImages)" });
+//       }
+
+//       // Validate image mimetype
+//       const bad = files.find((f) => !(f.mimetype || "").startsWith("image/"));
+//       if (bad) return res.status(400).json({ error: "Only image files are allowed" });
+
+//       const order = await newOrderModel.findById(orderId);
+//       if (!order) return res.status(404).json({ error: "Order not found" });
+
+//       // ✅ Compress/resize to keep Mongo doc under 16MB
+//       const docs = [];
+//       for (const f of files) {
+//         const input = f.buffer;
+
+//         // Convert everything to JPEG and resize (good balance)
+//         const out = await sharp(input)
+//           .rotate() // respects EXIF orientation
+//           .resize({ width: 1600, withoutEnlargement: true })
+//           .jpeg({ quality: 75 })
+//           .toBuffer();
+
+//         docs.push({
+//           filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
+//           mimetype: "image/jpeg",
+//           data: out,
+//           uploadedAt: new Date(),
+//         });
+//       }
+
+//       // Additional safety: ensure doc won't exceed Mongo limits (rough check)
+//       const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
+//       if (totalBytes > 14 * 1024 * 1024) {
+//         return res.status(413).json({
+//           error: "Evidencia demasiado pesada. Sube fotos más ligeras (o toma captura / baja resolución).",
+//           totalBytes,
+//         });
+//       }
+
+//       order.deliveryEvidence = docs; // replace all
+//       await order.save();
+
+//       return res.json({ ok: true, count: docs.length, totalBytes });
+//     } catch (e) {
+//       // ✅ log the real mongo error so you can confirm
+//       console.error("POST /orders/:orderId/evidence/delivery error:", e);
+//       return res.status(500).json({
+//         error: "Server error",
+//         detail: e?.message, // helpful while debugging
+//       });
+//     }
+//   }
+// );
+
 // router.post(
 //   "/orders/:orderId/evidence/delivery",
 //   upload.array("deliveryImages", 3),
@@ -2197,6 +2257,13 @@ router.use((err, req, res, next) => {
       return res.status(400).json({
         error: "Demasiados archivos. Máximo 3 imágenes.",
         code: err.code,
+      });
+    }
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res.status(400).json({
+        error: `Campo de archivo inesperado: "${err.field}". Esperado: deliveryImages (o deliveryImage).`,
+        code: err.code,
+        field: err.field,
       });
     }
     return res.status(400).json({ error: err.message, code: err.code });

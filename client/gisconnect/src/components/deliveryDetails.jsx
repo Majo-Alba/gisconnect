@@ -363,6 +363,10 @@ export default function DeliveryDetails() {
         form.append("deliveryImages", file); // 👈 importante: nombre del field para multer.array
       });
 
+      for (const [k, v] of form.entries()) {
+        console.log("FormData:", k, v?.name || v);
+      }
+
       await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
         onUploadProgress: (pe) => {
           if (!pe.total) return;
