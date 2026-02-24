@@ -368,7 +368,6 @@ export default function DeliveryDetails() {
       }
 
       await axios.post(`${API}/orders/${order._id}/evidence/delivery`, form, {
-        headers: { "Content-Type": "multipart/form-data" },
         onUploadProgress: (pe) => {
           if (!pe.total) return;
           setProgress(Math.round((pe.loaded / pe.total) * 100));

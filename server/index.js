@@ -179,6 +179,29 @@ app.listen(port, () => {
 
 //  ------- 
 
+app.use((err, req, res, next) => {
+  if (err && err.name === "MulterError") {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(413).json({ error: "Archivo demasiado grande. Máximo 25MB por imagen.", code: err.code });
+    }
+    if (err.code === "LIMIT_FILE_COUNT") {
+      return res.status(400).json({ error: "Demasiados archivos. Máximo 3 imágenes.", code: err.code });
+    }
+    if (err.code === "LIMIT_UNEXPECTED_FILE") {
+      return res.status(400).json({
+        error: `Campo de archivo inesperado: "${err.field}". Esperado: deliveryImages.`,
+        code: err.code,
+        field: err.field,
+      });
+    }
+    return res.status(400).json({ error: err.message, code: err.code });
+  }
+  next(err);
+});
+
+
+
+
 // // This solution is not working. Still facing the same initial problem (orders and images dont load) and now, furthermore, no orders are stored at all. You previously mentioned that this problem could be happening due to CORS and we made a lot of modifications to CORS in index.js. Hence, here is my index. js to take a look if there might me something messing us up
 
 // const express = require("express");

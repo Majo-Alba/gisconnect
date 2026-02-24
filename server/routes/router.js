@@ -1102,71 +1102,76 @@ router.get("/orders/:orderId/evidence/payment", async (req, res) => {
 // Put this near your upload config
 const deliveryUpload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 25 * 1024 * 1024,
-    files: 3, // total files
-  },
+  limits: { fileSize: 25 * 1024 * 1024 },
 });
 
-router.post("/orders/:orderId/evidence/delivery", deliveryUpload.any(), async (req, res) => {
-  try {
-    const { orderId } = req.params;
+router.post(
+  "/orders/:orderId/evidence/delivery",
+  deliveryUpload.fields([
+    { name: "deliveryImages", maxCount: 3 },
+    { name: "deliveryImages[]", maxCount: 3 }, // ✅ handles array-style fieldnames
+    { name: "deliveryImage", maxCount: 3 },    // ✅ optional legacy
+  ]),
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
 
-    const allFiles = Array.isArray(req.files) ? req.files : [];
-    // const allowedFields = new Set(["deliveryImages", "deliveryImage"]);
-    const allowedFields = new Set(["deliveryImages"]);
+      // ✅ normalize files into a single array
+      const files =
+        []
+          .concat(req.files?.["deliveryImages"] || [])
+          .concat(req.files?.["deliveryImages[]"] || [])
+          .concat(req.files?.["deliveryImage"] || []);
 
-    // 👇 If ANY file came under a weird field, tell us clearly
-    const unexpected = allFiles.filter(f => !allowedFields.has(f.fieldname));
-    if (unexpected.length) {
-      return res.status(400).json({
-        error: "Unexpected file field(s).",
-        unexpectedFields: [...new Set(unexpected.map(f => f.fieldname))],
-        allowed: [...allowedFields],
+      console.log("[delivery upload]", {
+        contentType: req.headers["content-type"],
+        fields: Object.keys(req.body || {}),
+        fileFields: Object.keys(req.files || {}),
+        fileCount: files.length,
+        fileNames: files.map(f => `${f.fieldname}:${f.originalname}`),
       });
+
+      if (!files.length) return res.status(400).json({ error: "No images received." });
+
+      const bad = files.find(f => !(f.mimetype || "").startsWith("image/"));
+      if (bad) return res.status(400).json({ error: "Only image files are allowed." });
+
+      const order = await newOrderModel.findById(orderId);
+      if (!order) return res.status(404).json({ error: "Order not found" });
+
+      console.log("FILES RAW:", req.files);
+
+      const docs = [];
+      for (const f of files) {
+        const out = await sharp(f.buffer)
+          .rotate()
+          .resize({ width: 1600, withoutEnlargement: true })
+          .jpeg({ quality: 75 })
+          .toBuffer();
+
+        docs.push({
+          filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
+          mimetype: "image/jpeg",
+          data: out,
+          uploadedAt: new Date(),
+        });
+      }
+
+      const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
+      if (totalBytes > 14 * 1024 * 1024) {
+        return res.status(413).json({ error: "Evidencia demasiado pesada. Sube fotos más ligeras.", totalBytes });
+      }
+
+      order.deliveryEvidence = docs;
+      await order.save();
+
+      return res.json({ ok: true, count: docs.length, totalBytes });
+    } catch (e) {
+      console.error("POST /orders/:orderId/evidence/delivery error:", e);
+      return res.status(500).json({ error: "Server error", detail: e?.message });
     }
-
-    const files = allFiles.filter(f => allowedFields.has(f.fieldname));
-    if (!files.length) {
-      return res.status(400).json({ error: "No files uploaded (deliveryImages/deliveryImage)" });
-    }
-
-    const bad = files.find(f => !(f.mimetype || "").startsWith("image/"));
-    if (bad) return res.status(400).json({ error: "Only image files are allowed" });
-
-    const order = await newOrderModel.findById(orderId);
-    if (!order) return res.status(404).json({ error: "Order not found" });
-
-    const docs = [];
-    for (const f of files) {
-      const out = await sharp(f.buffer)
-        .rotate()
-        .resize({ width: 1600, withoutEnlargement: true })
-        .jpeg({ quality: 75 })
-        .toBuffer();
-
-      docs.push({
-        filename: (f.originalname || "delivery-evidence").replace(/\.(heic|heif)$/i, ".jpg"),
-        mimetype: "image/jpeg",
-        data: out,
-        uploadedAt: new Date(),
-      });
-    }
-
-    const totalBytes = docs.reduce((s, d) => s + (d.data?.length || 0), 0);
-    if (totalBytes > 14 * 1024 * 1024) {
-      return res.status(413).json({ error: "Evidencia demasiado pesada. Sube fotos más ligeras.", totalBytes });
-    }
-
-    order.deliveryEvidence = docs;
-    await order.save();
-
-    return res.json({ ok: true, count: docs.length, totalBytes });
-  } catch (e) {
-    console.error("POST /orders/:orderId/evidence/delivery error:", e);
-    return res.status(500).json({ error: "Server error", detail: e?.message });
   }
-});
+);
 // router.post(
 //   "/orders/:orderId/evidence/delivery",
 //   upload.fields([
@@ -2313,31 +2318,31 @@ router.post("/orders/:id/release-delivery", async (req, res) => {
 });
 
 // ✅ Multer error handler (prevents generic 500 on file too large, etc.)
-router.use((err, req, res, next) => {
-  if (err && err.name === "MulterError") {
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(413).json({
-        error: "Archivo demasiado grande. Máximo 25MB por imagen.",
-        code: err.code,
-      });
-    }
-    if (err.code === "LIMIT_FILE_COUNT") {
-      return res.status(400).json({
-        error: "Demasiados archivos. Máximo 3 imágenes.",
-        code: err.code,
-      });
-    }
-    if (err.code === "LIMIT_UNEXPECTED_FILE") {
-      return res.status(400).json({
-        error: `Campo de archivo inesperado: "${err.field}". Esperado: deliveryImages (o deliveryImage).`,
-        code: err.code,
-        field: err.field,
-      });
-    }
-    return res.status(400).json({ error: err.message, code: err.code });
-  }
-  return next(err);
-});
+// router.use((err, req, res, next) => {
+//   if (err && err.name === "MulterError") {
+//     if (err.code === "LIMIT_FILE_SIZE") {
+//       return res.status(413).json({
+//         error: "Archivo demasiado grande. Máximo 25MB por imagen.",
+//         code: err.code,
+//       });
+//     }
+//     if (err.code === "LIMIT_FILE_COUNT") {
+//       return res.status(400).json({
+//         error: "Demasiados archivos. Máximo 3 imágenes.",
+//         code: err.code,
+//       });
+//     }
+//     if (err.code === "LIMIT_UNEXPECTED_FILE") {
+//       return res.status(400).json({
+//         error: `Campo de archivo inesperado: "${err.field}". Esperado: deliveryImages (o deliveryImage).`,
+//         code: err.code,
+//         field: err.field,
+//       });
+//     }
+//     return res.status(400).json({ error: err.message, code: err.code });
+//   }
+//   return next(err);
+// });
 
 module.exports = router;
 
