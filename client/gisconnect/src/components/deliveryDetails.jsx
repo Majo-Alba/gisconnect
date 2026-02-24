@@ -637,7 +637,7 @@ export default function DeliveryDetails() {
             </div>
             <div className="shipmentEvidence-Div" style={{ alignItems: "center" }}>
               <div className="file-upload-wrapper" style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <label htmlFor="deliveryImage" className="custom-file-upload" style={{ cursor: "pointer" }}>
+                <label htmlFor="deliveryImages" className="custom-file-upload" style={{ cursor: "pointer" }}>
                   Elegir archivo
                 </label>
                 {/* <input
@@ -648,7 +648,7 @@ export default function DeliveryDetails() {
                   style={{ display: "none" }}
                 /> */}
                 <input
-                  id="deliveryImage"
+                  id="deliveryImages"
                   type="file"
                   accept="image/*"
                   multiple

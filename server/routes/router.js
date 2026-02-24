@@ -722,7 +722,7 @@ router.put(
     { name: "paymentEvidence", maxCount: 1 }, // alias
     { name: "evidenceFile",    maxCount: 1 }, // alias
     { name: "packingImages",   maxCount: 3 },
-    { name: "deliveryImage",   maxCount: 3 },
+    // { name: "deliveryImage",   maxCount: 3 },
     { name: "deliveryImages",  maxCount: 3 }, 
 
   ]),
@@ -758,8 +758,8 @@ router.put(
     const pickEvidenceFile = () =>
       firstOf("evidenceImage") || firstOf("paymentEvidence") || firstOf("evidenceFile");
 
-    // const pickDeliveryFile = () => firstOf("deliveryImage");
-    const pickDeliveryFile = () => firstOf("deliveryImage") || firstOf("deliveryImages");
+    const pickDeliveryFile = () => firstOf("deliveryImages");
+    // const pickDeliveryFile = () => firstOf("deliveryImage") || firstOf("deliveryImages");
     const pickPackingDocs = () => (files?.packingImages || []).map(fileToDoc).filter(Boolean);
 
     try {
@@ -1113,7 +1113,8 @@ router.post("/orders/:orderId/evidence/delivery", deliveryUpload.any(), async (r
     const { orderId } = req.params;
 
     const allFiles = Array.isArray(req.files) ? req.files : [];
-    const allowedFields = new Set(["deliveryImages", "deliveryImage"]);
+    // const allowedFields = new Set(["deliveryImages", "deliveryImage"]);
+    const allowedFields = new Set(["deliveryImages"]);
 
     // 👇 If ANY file came under a weird field, tell us clearly
     const unexpected = allFiles.filter(f => !allowedFields.has(f.fieldname));
