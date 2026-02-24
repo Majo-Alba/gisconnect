@@ -723,6 +723,8 @@ router.put(
     { name: "evidenceFile",    maxCount: 1 }, // alias
     { name: "packingImages",   maxCount: 3 },
     { name: "deliveryImage",   maxCount: 3 },
+    { name: "deliveryImages",  maxCount: 3 }, 
+
   ]),
   async (req, res) => {
     const { orderId } = req.params;
@@ -756,7 +758,8 @@ router.put(
     const pickEvidenceFile = () =>
       firstOf("evidenceImage") || firstOf("paymentEvidence") || firstOf("evidenceFile");
 
-    const pickDeliveryFile = () => firstOf("deliveryImage");
+    // const pickDeliveryFile = () => firstOf("deliveryImage");
+    const pickDeliveryFile = () => firstOf("deliveryImage") || firstOf("deliveryImages");
     const pickPackingDocs = () => (files?.packingImages || []).map(fileToDoc).filter(Boolean);
 
     try {

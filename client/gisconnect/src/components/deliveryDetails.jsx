@@ -310,6 +310,14 @@ export default function DeliveryDetails() {
   //   };
   // };
 
+  const buildDeliveryMeta = () => ({
+    deliveryDate,
+    trackingNumber,
+    insuredAmount,
+    deliverer: deliverer || undefined,
+    // any other scalar fields you store on the order
+  });
+
   const markAsPending = async () => {
     if (!order?._id) return;
     if (!deliveryDate) { alert("Seleccione la fecha de entrega programada."); return; }
