@@ -1,4 +1,4 @@
-// in deliveredSummary.jsx, under "Detalles Entrega" let's have to modifs: 1) if shippingInfo on mongodb is "Recoger en Matriz", then lets not have a "Monto asegurado" (since package isn't being shipped, this field wouldnt make sense), and 2) under same section, lets add person in charge of handling delivery. Add field "Entregado por:" and this info lives on mongodb under "deliveryWork" and more specifically "claimedBy" 
+// in deliveredSummary.jsx I'd like to add some extras. In "Detalles de Envío" lets add the following mongodb new_orders fields right under shipping address: "Transportista" (preferredCarrier), "Método de Pago Envío" (shipPayMethod). And under "Preparación de Pedido", under "Pedido preparado por", lets add "Observaciones" (observations) 
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -598,7 +598,7 @@ export default function DeliveredSummary() {
             <div className="deliveryDets-AddressDiv">
               <div className="headerEditIcon-Div">
                 <label className="newUserData-Label">
-                  {isPickupOrder ? "Detalles de Pedido" : "Dirección de Envío"}
+                  {isPickupOrder ? "Detalles de Pedido" : "Detalles de Envío"}
                 </label>
               </div>
               <div className="existingQuote-Div">
@@ -633,7 +633,21 @@ export default function DeliveredSummary() {
                       )}
                       {shipping.postalCode && <label className="productDetail-Label">C.P.: {shipping.postalCode}</label>}
                       {shipping.country && <label className="productDetail-Label">{shipping.country}</label>}
+
+                      {/* ✅ NEW: Order-level shipping fields */}
+                      {order?.preferredCarrier && (
+                        <label className="productDetail-Label">
+                          <b>Transportista:</b> {String(order.preferredCarrier).trim()}
+                        </label>
+                      )}
+
+                      {order?.shipPayMethod && (
+                        <label className="productDetail-Label">
+                          <b>Método de Pago Envío:</b> {String(order.shipPayMethod).trim()}
+                        </label>
+                      )}
                     </>
+                    
                   )}
                 </div>
               </div>
@@ -722,6 +736,13 @@ export default function DeliveredSummary() {
                   <label className="productDetail-Label">
                     <b>Pedido preparado por:</b> {packerName || "—"}
                   </label>
+
+                  {/* ✅ NEW: Observaciones */}
+                  {order?.observations && String(order.observations).trim() !== "" && (
+                    <label className="productDetail-Label">
+                      <b>Observaciones:</b> {String(order.observations).trim()}
+                    </label>
+                  )}
 
                   {/* Fotos de empaque */}
                   {Array.isArray(order?.packingEvidenceExt) && order.packingEvidenceExt.length > 0 ? (

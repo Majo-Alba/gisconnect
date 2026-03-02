@@ -1,4 +1,4 @@
-// in deliveryDetails.jsx, initially we allowed for only 1 photo to be uploaded as evidence. I'd like to extend to be able to upload up to 3 images. Here is my current deliveryDetails.jsx and I'm also attaching the corresponding endpoints 
+// in deliveryDetails.jsx if on mongodb's new_orders field "insureShipment" is false, then don't show "Monto Asegurado". As well, we currently have an automatically displayed "Número de Guía", which is causing confusion, so can we not have anything autopopulating that field
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"; 
 import { useParams, useNavigate } from "react-router-dom"; 
 import axios from "axios"; 
@@ -109,8 +109,7 @@ export default function DeliveryDetails() {
             try { 
                 const { data } = await axios.get(`${API}/orders/${orderId}`); 
                 setOrder(data); 
-                
-                if (data?.trackingNumber) setTrackingNumber(String(data.trackingNumber)); 
+                // if (data?.trackingNumber) setTrackingNumber(String(data.trackingNumber)); 
                 
                 if (data?.deliveryDate) { 
                     const d = new Date(data.deliveryDate); 
@@ -146,15 +145,23 @@ export default function DeliveryDetails() {
     }, [order?.userEmail]); 
         
     // Auto-insured amount 
-    useEffect(() => { 
-        const insureShipment = 
-            mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment ?? null; 
-        if (insureShipment === true && order) { 
-            setInsuredAmount(calcInsuredAmountMXN(order)); 
-        } else { 
-            setInsuredAmount(null); 
-        } 
-    }, [mongoUser, order]); 
+    // useEffect(() => { 
+    //     const insureShipment = 
+    //         mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment ?? null; 
+    //     if (insureShipment === true && order) { 
+    //         setInsuredAmount(calcInsuredAmountMXN(order)); 
+    //     } else { 
+    //         setInsuredAmount(null); 
+    //     } 
+    // }, [mongoUser, order]); 
+    useEffect(() => {
+      const insureShipment = order?.insureShipment; // ✅ from new_order
+      if (insureShipment === true && order) {
+        setInsuredAmount(calcInsuredAmountMXN(order));
+      } else {
+        setInsuredAmount(null);
+      }
+    }, [order]);
     
     // Nav 
     const goToAdminHome = () => navigate("/adminHome"); 
@@ -306,10 +313,12 @@ export default function DeliveryDetails() {
     const displayName = [nombre, apellido].filter(Boolean).join(" ") || order.userEmail || "Cliente"; 
     const companyName = (mongoUser?.empresa || "").trim(); 
     
-    const carrier = 
-        (mongoUser?.shippingPreferences?.preferredCarrier || mongoUser?.preferredCarrier || "")?.toString().trim() || ""; 
+    // const carrier = 
+    //     (mongoUser?.shippingPreferences?.preferredCarrier || mongoUser?.preferredCarrier || "")?.toString().trim() || ""; 
+    const carrier = (order?.preferredCarrier || "").toString().trim();
         
-    const insureShipment = mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment ?? null; 
+    // const insureShipment = mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment ?? null;
+    const insureShipment = order?.insureShipment ?? null; // ✅ from new_order
     
     // ===== Shipping info & pickup detection (supports string or object) ===== 
     const sRaw = order.shippingInfo; 
@@ -610,6 +619,8 @@ export default function DeliveryDetails() {
         </body> 
     ); 
 }
+
+
 // ----- FEB25: THIS VERSION IS FOR UPLOADING 3 PIECES OF EVIDENCE BUT STILL HAS THE 500 ERROR GOING ON :( 
 
 

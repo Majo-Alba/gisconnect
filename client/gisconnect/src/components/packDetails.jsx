@@ -1,4 +1,4 @@
-// hey chatgpt, in my packDetails.jsx, I'd like to add a "Cancelar" button that - when pressed - "liberates" the order that is being processed by a specific packer and returns the order to the pendingPack.jsx screen. (Example: say packer Santiago has claimed order #1234 but suddenly has to attend something urgent. He hits "Cancelar" button to allow order #1234 to become visible and available again for the other packers). Here is my current packDetails.jsx, please direct edit 
+// in packDetails.jx, under the div containing all products and before "elegir archivos", I'd like to add a new div "Observaciones" that is populated by mongodb's field "observations". Here is my current packDetails.jsx
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -254,6 +254,14 @@ export default function PackDetails() {
 
   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
 
+  // mar01
+  const observationsText =
+  (order?.observations ??
+    order?.observacion ??
+    order?.observaciones ??
+    "").toString().trim();
+  // mar01
+
   // Simple banner logic
   const showBlocked =
     claimState.status === "blocked" ||
@@ -334,6 +342,33 @@ export default function PackDetails() {
             </div>
           </div>
         ))}
+
+        {/* OBSERVACIONES */}
+        <label className="newUserData-Label" style={{ display: "block", marginBottom: 6, marginTop:"7%", marginLeft:"8%" }}>
+            Observaciones
+          </label>
+        <div
+          className="packDetails-ObservationsDiv"
+          style={{
+            width:"85%",
+            marginTop: 14,
+            marginLeft:"7%",
+            marginBottom:"5%",
+            padding: "12px 12px",
+            borderRadius: 10,
+            background: "rgba(255,255,255,0.65)",
+            border: "1px solid rgba(0,0,0,0.08)",
+            boxShadow: "0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19)",
+          }}
+        >
+          {observationsText ? (
+            <div style={{ fontSize: 13, lineHeight: 1.35, whiteSpace: "pre-wrap" }}>
+              {observationsText}
+            </div>
+          ) : (
+            <div style={{ fontSize: 12, opacity: 0.75 }}>— Sin observaciones —</div>
+          )}
+        </div>
 
         {/* MULTIPLE file input */}
         <div className="packDetails-ImageDiv" style={{ marginTop: 16 }}>

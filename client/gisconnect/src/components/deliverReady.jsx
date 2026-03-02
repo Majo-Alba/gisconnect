@@ -1,4 +1,4 @@
-// in deliverReady.jsx under "Recoger en Matriz" im getting the date that the order was placed on, rather than using the pickup date. On mongodb we have field "pickupDetails" umder which we have "date" & "time", can you help me fix this 
+// in deliverReady.jsx, for "Paquetería", lets use mongodb's new_orders "preferredCarrier" instead of previous userprefs. Remember that we may also have "recoger en matriz" as an option, so don't leave that aside. 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -125,15 +125,15 @@ export default function DeliverReady() {
     return full || email || "Cliente";
   };
 
-  const preferredCarrierFor = (email) => {
-    const user = mongoByEmail[normalize(email)];
-    return (
-      (user?.shippingPreferences?.preferredCarrier ||
-        user?.preferredCarrier ||
-        "")?.toString()
-        .trim() || ""
-    );
-  };
+  // const preferredCarrierFor = (email) => {
+  //   const user = mongoByEmail[normalize(email)];
+  //   return (
+  //     (user?.shippingPreferences?.preferredCarrier ||
+  //       user?.preferredCarrier ||
+  //       "")?.toString()
+  //       .trim() || ""
+  //   );
+  // };
 
   const insureShipmentLabelFor = (email) => {
     const user = mongoByEmail[normalize(email)];
@@ -266,7 +266,8 @@ export default function DeliverReady() {
       <div className="newQuotesScroll-Div">
         {sortedOrders.map((order) => {
           const name = displayNameFor(order.userEmail);
-          const carrier = preferredCarrierFor(order.userEmail);
+          // const carrier = preferredCarrierFor(order.userEmail);
+          const carrier = (order?.preferredCarrier || "").toString().trim();
           const insured = insureShipmentLabelFor(order.userEmail);
 
           // Pending label logic

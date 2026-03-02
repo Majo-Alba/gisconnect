@@ -57,6 +57,24 @@ export default function InvoiceDetails() {
   const [saving, setSaving] = useState(false);
   const [errMsg, setErrMsg] = useState("");
 
+  const fmtNum = (v, locale = "es-MX") =>
+    (Number(v) || 0).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  
+  const getItemCurrency = (it) => {
+    const c = String(it?.currency || "").trim().toUpperCase();
+    if (c === "USD" || c === "MXN") return c;
+    // fallback: if you stored priceUSD/priceMXN, infer; else default MXN
+    if (it?.priceUSD != null) return "USD";
+    if (it?.priceMXN != null) return "MXN";
+    return "MXN";
+  };
+  
+  const getUnitPrice = (it) => {
+    const cur = getItemCurrency(it);
+    if (cur === "USD") return Number(it?.priceUSD ?? it?.price ?? 0) || 0;
+    return Number(it?.priceMXN ?? it?.price ?? 0) || 0;
+  };
+
   function parseCSV(csvText) {
     const rows = String(csvText || "").split(/\r?\n/).filter(Boolean);
     if (rows.length === 0) return [];
@@ -201,23 +219,48 @@ export default function InvoiceDetails() {
 
   const shortId = useMemo(() => String(order?._id || "").slice(-5), [order?._id]);
 
-  const saveNoteType = async (type) => {
-    if (!order?._id) return;
-    try {
-      setSaving(true);
-      await axios.put(`${API}/orders/${order._id}`, { invoiceNoteType: type });
-      setOrder((prev) => ({ ...(prev || {}), invoiceNoteType: type }));
-      alert(`Tipo de nota guardado: ${type}`);
+//   const saveNoteType = async (type) => {
+//     if (!order?._id) return;
+//     try {
+//       setSaving(true);
+//       await axios.put(`${API}/orders/${order._id}`, { invoiceNoteType: type });
+//       setOrder((prev) => ({ ...(prev || {}), invoiceNoteType: type }));
+//       alert(`Tipo de nota guardado: ${type}`);
   
-      // ✅ go back to adminHome
-      navigate("/adminHome", { replace: true });
-    } catch (e) {
-      console.error(e);
-      alert("No se pudo guardar el tipo de nota.");
-    } finally {
-      setSaving(false);
-    }
-  };
+//       // ✅ go back to adminHome
+//       navigate("/adminHome", { replace: true });
+//     } catch (e) {
+//       console.error(e);
+//       alert("No se pudo guardar el tipo de nota.");
+//     } finally {
+//       setSaving(false);
+//     }
+//   };
+    const saveNoteType = async (type) => {
+        if (!order?._id) return;
+    
+        const clean =
+        type === "Factura" || type === "Nota de Remisión" ? type : "";
+    
+        try {
+        setSaving(true);
+    
+        // ✅ use JSON PATCH endpoint (not the multipart PUT)
+        await axios.patch(`${API}/orders/${order._id}`, {
+            invoiceNoteType: clean,
+        });
+    
+        setOrder((prev) => ({ ...(prev || {}), invoiceNoteType: clean }));
+        alert(`Tipo de nota guardado: ${clean}`);
+    
+        navigate("/adminHome", { replace: true });
+        } catch (e) {
+        console.error(e);
+        alert("No se pudo guardar el tipo de nota.");
+        } finally {
+        setSaving(false);
+        }
+    };
 
   if (loading) {
     return (
@@ -300,10 +343,59 @@ export default function InvoiceDetails() {
               )}
             </div>
           </div>
+
+          {/* mar02 */}
+          {/* ✅ Productos del pedido */}
+            <div className="deliveryDets-AddressDiv" style={{ marginTop: 14 }}>
+            <div className="headerEditIcon-Div">
+                <label className="newUserData-Label">Productos</label>
+            </div>
+
+            <div className="paymentValidationProducts-Div">
+                {Array.isArray(order?.items) && order.items.length > 0 ? (
+                order.items.map((item, index) => {
+                    const cur = getItemCurrency(item);
+                    const unit = getUnitPrice(item);
+                    const qty = Number(item.amount) || 0;
+                    const line = qty * unit;
+
+                    return (
+                    <div key={index} className="newOrderDets-Div">
+                        <div className="orderDetails-Div">
+                        <label className="orderDets-Label">
+                            <b>{item.product || "Producto"}</b>
+                        </label>
+
+                        <label className="orderDets-Label">
+                            <b>Presentación:</b> {item.presentation || item.packPresentation || "—"}
+                        </label>
+
+                        <label className="orderDets-Label">
+                            <b>Cantidad:</b> {qty}
+                        </label>
+
+                        <label className="orderDets-Label">
+                            <b>Precio Unitario:</b>{" "}
+                            {cur === "USD" ? `$${fmtNum(unit, "en-US")} USD` : `$${fmtNum(unit, "es-MX")} MXN`}
+                        </label>
+
+                        <label className="orderDets-Label" style={{marginLeft:"50%", marginTop:"3%"}}>
+                            <b>Sub-Total:</b>{" "}
+                            {cur === "USD" ? `$${fmtNum(line, "en-US")} USD` : `$${fmtNum(line, "es-MX")} MXN`}
+                        </label>
+                        </div>
+                    </div>
+                    );
+                })
+                ) : (
+                <p style={{ textAlign: "center", color: "#6b7280" }}>No hay productos en este pedido.</p>
+                )}
+            </div>
+            </div>
         </div>
 
         {/* Buttons */}
-        <div style={{ display: "grid", marginTop: "10%", marginLeft: "10%", gridTemplateColumns: "50% 50%" }}>
+        <div style={{ display: "grid", marginTop: "10%", marginLeft: "10%", marginBottom:"15%", gridTemplateColumns: "50% 50%" }}>
         {/* <div className="validatePaymentSubmitBtn-Div" style={{ display: "grid", gap: 10, marginTop: 14 }}> */}
           <button
             className="submitOrder-Btn"

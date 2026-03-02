@@ -1,4 +1,4 @@
-// ok, continuing in orderNow.jsx, just as on expressQupte.jsx we will be using the currency dictated by the admin on our "Tipo_de_Cambio" database rather than the previous DOF rate. Help me update my current orderNow.jsx, as well as the pdf that is being generated, and remember that this value also gets stored to mongodb as dofRate 
+// in orderNow.jsx, when changing "Transportista" and/or "Mercancia Asegurada", we are patching shipping-preferences, but instead I'd like to avoid modifying the shipping preferences of newuser in mongodb and instead add a field in the existing mongodb order "preferredCarrier" and "insureShipment" with this items. Here is my current orderNow.jsx, orderModel.js and router.js
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -54,10 +54,90 @@ export default function OrderNow() {
   const [wantsInvoice, setWantsInvoice] = useState(false);
   const [imageLookup, setImageLookup] = useState({});
 
+  const [observations, setObservations] = useState("");
+
   const [shippingPrefs, setShippingPrefs] = useState({
     preferredCarrier: "",
     insureShipment: false,
   });
+
+  // feb27
+  // ✅ NEW: editable shipping preferences (per user, can override before order)
+  const CARRIERS = [
+    "Autocamiones del Pacífico",
+    "Castores",
+    "DHL",
+    "Estafeta",
+    "Express Manzanillo-Guadalajara",
+    "Kora Express",
+    "Paquete Express",
+    "Paquetería Vallarta Plus",
+    "Paquetería y Mensajería de Michoacán",
+    "PCP - Paquetería y Carga del Pacífico",
+    "Tamazula Express",
+    "Transportes Unidos de Tepa",
+    "Tres GUerras",
+    "Otro",
+  ];
+
+  const [editShippingPrefs, setEditShippingPrefs] = useState(false);
+  const [prefCarrierDraft, setPrefCarrierDraft] = useState("");
+  const [prefCarrierOther, setPrefCarrierOther] = useState("");
+  const [prefInsureDraft, setPrefInsureDraft] = useState("No"); // "Sí" | "No"
+  const [prefsSaving, setPrefsSaving] = useState(false);
+
+  const openPrefsEdit = () => {
+    const currentCarrier = (shippingPrefs.preferredCarrier || "").trim();
+    const isKnown = CARRIERS.some((c) => c !== "Otro" && c === currentCarrier);
+  
+    setPrefCarrierDraft(isKnown ? currentCarrier : (currentCarrier ? "Otro" : ""));
+    setPrefCarrierOther(isKnown ? "" : currentCarrier);
+    setPrefInsureDraft(shippingPrefs.insureShipment ? "Sí" : "No");
+    setEditShippingPrefs(true);
+  };
+  
+  const cancelPrefsEdit = () => {
+    setEditShippingPrefs(false);
+    setPrefCarrierDraft("");
+    setPrefCarrierOther("");
+    setPrefInsureDraft("No");
+  };
+
+  // const savePrefsLocally = () => {
+  //   const carrier =
+  //     (prefCarrierDraft === "Otro" ? prefCarrierOther : prefCarrierDraft) || "";
+  
+  //   const next = {
+  //     preferredCarrier: String(carrier || "").trim(),
+  //     insureShipment: prefInsureDraft === "Sí",
+  //   };
+  
+  //   setShippingPrefs(next);
+  //   setEditShippingPrefs(false);
+  // };
+  
+  // mar02
+  const savePrefsLocally = () => {
+    const carrier =
+      (prefCarrierDraft === "Otro" ? prefCarrierOther : prefCarrierDraft) || "";
+  
+    const trimmed = String(carrier).trim();
+  
+    // ✅ Guard
+    if (prefCarrierDraft === "Otro" && !trimmed) {
+      alert("Escribe el transportista en 'Otro'.");
+      return;
+    }
+  
+    const next = {
+      preferredCarrier: trimmed,
+      insureShipment: prefInsureDraft === "Sí",
+    };
+  
+    setShippingPrefs(next);
+    setEditShippingPrefs(false);
+  };
+  // mar02
 
   // ✅ NEW: pickup toggle & fields
   const [pickupSelected, setPickupSelected] = useState(false);
@@ -1538,6 +1618,19 @@ export default function OrderNow() {
     ? "Evidencia Subida"
     : "Pedido Realizado";
 
+    // mar02
+    // ✅ Effective shipping prefs at the exact moment of saving:
+    const effectiveCarrier =
+    editShippingPrefs
+      ? String((prefCarrierDraft === "Otro" ? prefCarrierOther : prefCarrierDraft) || "").trim()
+      : String(shippingPrefs?.preferredCarrier || "").trim();
+
+    const effectiveInsure =
+    editShippingPrefs
+      ? (prefInsureDraft === "Sí")
+      : !!shippingPrefs?.insureShipment;
+    // mar02
+
     const orderInfo = {
       userEmail,
       items,
@@ -1566,8 +1659,22 @@ export default function OrderNow() {
         ? { date: pickupDate || null, time: pickupTime || null }
         : null,
 
+       // ✅ add these:
+      // preferredCarrier: (shippingPrefs?.preferredCarrier || "").trim(),
+      // insureShipment: !!shippingPrefs?.insureShipment,
+      // shippingPreferences: { ...shippingPrefs },
+      // mar02
+      preferredCarrier: effectiveCarrier,
+      insureShipment: effectiveInsure,
+
+      // optional: if you still want the nested snapshot, keep it consistent:
+      shippingPreferences: {
+        preferredCarrier: effectiveCarrier,
+        insureShipment: effectiveInsure,
+      },
+      // mar02
+
       billingInfo: wantsInvoice ? { ...currentBilling } : {},
-      shippingPreferences: { ...shippingPrefs },
       orderDate: new Date().toISOString(),
       // orderStatus: "Pedido Realizado",
       orderStatus: statusAtCreate,
@@ -1575,6 +1682,7 @@ export default function OrderNow() {
       creditTermDays: paymentOption === "Crédito" ? creditDays : 0,
       creditDueDate: creditDue,
       invoiceBreakdownEnabled: wantsDesgloseIVA,
+      observations: (observations || "").toString().trim(),
     };
 
     try {
@@ -1661,7 +1769,101 @@ export default function OrderNow() {
         <div className="orderNowBody-Div">
           {/* ===== Preferencias de Envío (solo datos) ===== */}
           <div className="headerAndDets-Div">
-            <div className="headerEditIcon-Div">
+            {/* FEB28 */}
+            <div className="headerEditIcon-Div" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <label className="newAddress-Label" style={{marginLeft: "7%"}}>Preferencias de Envío</label>
+
+              {!editShippingPrefs ? (
+                <button
+                  type="button"
+                  className="submitOrder-Btn"
+                  style={{ minWidth: 130, fontSize: 12, padding: "8px 10px", marginTop:"5%" }}
+                  onClick={openPrefsEdit}
+                >
+                  Cambiar<br></br> preferencias
+                </button>
+              ) : (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="submitOrder-Btn"
+                    style={{ minWidth: 110, fontSize: 12, padding: "8px 10px", marginTop: "5%" }}
+                    onClick={savePrefsLocally}
+                  >
+                    Guardar
+                  </button>
+                  {/* <button
+                    type="button"
+                    className="submitOrder-Btn"
+                    style={{ minWidth: 110, fontSize: 12, padding: "8px 10px", background: "transparent", border: "1px solid rgba(255,255,255,0.35)" }}
+                    disabled={prefsSaving}
+                    onClick={cancelPrefsEdit}
+                  >
+                    Cancelar
+                  </button> */}
+                </div>
+              )}
+            </div>
+
+            <div className="orderNow-AddressDiv">
+              {/* Transportista */}
+              <label className="orderNow-Label">
+                <b>Transportista:</b> <br />
+
+                {!editShippingPrefs ? (
+                  <span>{shippingPrefs.preferredCarrier || "No especificado"}</span>
+                ) : (
+                  <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+                    <select
+                      className="alternateAddress-Select"
+                      value={prefCarrierDraft}
+                      onChange={(e) => setPrefCarrierDraft(e.target.value)}
+                    >
+                      <option value="">Seleccione</option>
+                      {CARRIERS.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+
+                    {prefCarrierDraft === "Otro" && (
+                      <input
+                        type="text"
+                        value={prefCarrierOther}
+                        onChange={(e) => setPrefCarrierOther(e.target.value)}
+                        placeholder="Escribe el transportista..."
+                        className="alternateAddress-Select"
+                        style={{ padding: 10 }}
+                      />
+                    )}
+                  </div>
+                )}
+              </label>
+
+              <br />
+
+              {/* Mercancía asegurada */}
+              <label className="orderNow-Label">
+                <b>Mercancía Asegurada:</b> <br />
+
+                {!editShippingPrefs ? (
+                  <span>{shippingPrefs.insureShipment ? "Sí" : "No"}</span>
+                ) : (
+                  <select
+                    className="alternateAddress-Select"
+                    value={prefInsureDraft}
+                    onChange={(e) => setPrefInsureDraft(e.target.value)}
+                    style={{ marginTop: 6 }}
+                  >
+                    <option value="Sí">Sí</option>
+                    <option value="No">No</option>
+                  </select>
+                )}
+              </label>
+            </div>
+            {/* FEB28 */}
+            {/* <div className="headerEditIcon-Div">
               <label className="newAddress-Label">Preferencias de Envío</label>
             </div>
 
@@ -1675,7 +1877,7 @@ export default function OrderNow() {
                 <b>Mercancía Asegurada:</b> <br />
                 {shippingPrefs.insureShipment ? "Sí" : "No"}
               </label>
-            </div>
+            </div> */}
           </div>
 
           {/* Shipping address */}
@@ -2021,7 +2223,7 @@ export default function OrderNow() {
               </div>
             )}
 
-            <div className="orderNow-AddressDiv" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <div className="orderNow-AddressDiv" style={{ display: "flex", gap: 12, alignItems: "center", marginLeft: "-3%" }}>
               <select
                 className="alternateAddress-Select"
                 value={paymentOption}
@@ -2039,6 +2241,36 @@ export default function OrderNow() {
               )}
             </div>
           </div>
+
+          {/* FEB28 */}
+          {/* Observaciones */}
+          <div className="headerAndDets-Div" style={{ marginTop: 10 }}>
+            <div className="headerEditIcon-Div">
+              <label className="newAddress-Label">Observaciones</label>
+            </div>
+
+            <div className="orderNow-AddressDiv">
+              <textarea
+                value={observations}
+                onChange={(e) => setObservations(e.target.value)}
+                placeholder="Escribe aquí cualquier solicitud adicional para este pedido..."
+                rows={4}
+                style={{
+                  width: "110%",
+                  borderRadius: 10,
+                  padding: 12,
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  // background: "rgba(255,255,255,0.08)",
+                  background: "white",
+                  color: "black",
+                  resize: "vertical",
+                  outline: "none",
+                  boxShadow: "0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19)"
+                }}
+              />
+            </div>
+          </div>
+          {/* FEB28 */}
 
           <div className="orderReqBts-Div">
             <button

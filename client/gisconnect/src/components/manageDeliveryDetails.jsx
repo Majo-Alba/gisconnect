@@ -1,4 +1,4 @@
-//manageDeliveryDetails.jsx 
+//In manageDeliveryDetails.jsx lets have same change. Currently paquetería and mercancia asegurada come from userprefs and we want them to come from mongos new_order "preferredCarrier" & "insuredShipment". As well, when we are selecting "Metodo de pago de envio", its not getting stored anywhere, and I wish for it to be stored in mongodb new_order along all other info from this order. Here is current managedDeliveryDetails.jsx, as well as orderModel.js
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -83,10 +83,12 @@ export default function ManageDeliveryDetails() {
 
       // ✅ NEW: preload shipping payment method if you later persist it (optional)
       // Try to read it from order.shippingInfo.shipPayMethod or order.shipPayMethod if exists.
-      const existingPay =
-        (typeof o?.shippingInfo === "object" && o?.shippingInfo?.shipPayMethod) ||
-        o?.shipPayMethod ||
-        "";
+      // const existingPay =
+      //   (typeof o?.shippingInfo === "object" && o?.shippingInfo?.shipPayMethod) ||
+      //   o?.shipPayMethod ||
+      //   "";
+      // setShippingPaymentMethod(String(existingPay || ""));
+      const existingPay = o?.shipPayMethod || "";
       setShippingPaymentMethod(String(existingPay || ""));
     } catch (err) {
       console.error("Error fetching order:", err);
@@ -130,17 +132,47 @@ export default function ManageDeliveryDetails() {
     return full || order?.userEmail || "";
   }, [mongoUser, order?.userEmail]);
 
-  const preferredCarrier = useMemo(() => {
-    return (
-      (mongoUser?.shippingPreferences?.preferredCarrier || mongoUser?.preferredCarrier || "")?.toString().trim()
-    );
-  }, [mongoUser]);
+  useEffect(() => {
+    if (!order?._id) return;
+    if (isPickup) return; // shipping payment does not apply
+    if (!shippingPaymentMethod) return;
+  
+    const t = setTimeout(async () => {
+      try {
+        await axios.patch(
+          `${API}/orders/${order._id}`,
+          { shipPayMethod: shippingPaymentMethod },
+          { headers: { "Content-Type": "application/json" } }
+        );
+      } catch (e) {
+        console.error("Failed to save shipPayMethod:", e?.response?.data || e.message);
+      }
+    }, 400); // small debounce to avoid spamming
+  
+    return () => clearTimeout(t);
+  }, [shippingPaymentMethod, isPickup, order?._id]);
 
+  // const preferredCarrier = useMemo(() => {
+  //   return (
+  //     (mongoUser?.shippingPreferences?.preferredCarrier || mongoUser?.preferredCarrier || "")?.toString().trim()
+  //   );
+  // }, [mongoUser]);
+
+  // const insureShipmentLabel = useMemo(() => {
+  //   const val = mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment;
+  //   if (typeof val === "boolean") return val ? "Sí" : "No";
+  //   return "";
+  // }, [mongoUser]);
+  const preferredCarrier = useMemo(() => {
+    return (order?.preferredCarrier || "").toString().trim();
+  }, [order?.preferredCarrier]);
+  
   const insureShipmentLabel = useMemo(() => {
-    const val = mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment;
-    if (typeof val === "boolean") return val ? "Sí" : "No";
+    const val = order?.insureShipment; // ✅ schema field is insureShipment
+    if (val === true) return "Sí";
+    if (val === false) return "No";
     return "";
-  }, [mongoUser]);
+  }, [order?.insureShipment]);
 
   // ===== pick latest totals snapshot (object or last array element)
   const totalsSnap = useMemo(() => {
@@ -543,8 +575,15 @@ export default function ManageDeliveryDetails() {
           <label className="shippingMethod-Label">Mercancía Asegurada</label>
           <label className="productDetail-Label">{insureShipmentLabel || "No especificado"}</label>
           <br />
-          <label className="shippingMethod-Label">Monto Asegurado</label>
-          <label className="productDetail-Label">{fmtMXNScreen(insuredAmountMXN)}</label>
+          {/* <label className="shippingMethod-Label">Monto Asegurado</label>
+          <label className="productDetail-Label">{fmtMXNScreen(insuredAmountMXN)}</label> */}
+          {insureShipmentLabel === "Sí" && (
+            <>
+              <label className="shippingMethod-Label">Monto Asegurado</label>
+              <label className="productDetail-Label">{fmtMXNScreen(insuredAmountMXN)}</label>
+              <br />
+            </>
+          )}
           <br />
         </div>
 

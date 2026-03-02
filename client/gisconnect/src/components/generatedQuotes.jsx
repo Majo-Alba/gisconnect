@@ -1,4 +1,4 @@
-// generatedQuotes.jsx
+// In generatedQuotes.jsx, we are populating with all orders who's status has changed to "Pago Verificado". However, if status changes as flow continues, order disappear from here before the admin time has time to procces invoice. I'd like for all order that fall here to only move out once admin has decided if order is having an invoice issued or a remission note, regardless of the stage it is in. As well, I'd like to add - from mongodb - the items that are being bought in this order (in mongo we have array "items" that contains that info.) I'm attaching current generatedQuotes.jsx, as well as newOrders.jsx so you can see how products ordered are presented, and copy same logic and format to invoiceDetails.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -61,7 +61,13 @@ export default function GeneratedQuotes() {
   const fetchOrders = async () => {
     try {
       const res = await axios.get(`${API}/orders`);
-      const arr = (res.data || []).filter((o) => o.orderStatus === "Pago Verificado");
+    //   const arr = (res.data || []).filter((o) => o.orderStatus === "Pago Verificado");
+        const arr = (res.data || []).filter((o) => {
+            const note = String(o.invoiceNoteType || "").trim(); // "" | "Factura" | "Nota de Remisión"
+            const inBillingQueue = !!o.paymentVerifiedAt || o.orderStatus === "Pago Verificado"; // fallback for old orders
+            const notDecidedYet = note === "";
+            return inBillingQueue && notDecidedYet;
+        });
       setOrders(arr);
     } catch (e) {
       console.error("Error fetching orders:", e);
@@ -208,7 +214,7 @@ export default function GeneratedQuotes() {
 
       {sortedOrders.length === 0 && (
         <p style={{ textAlign: "center", marginTop: "2rem" }}>
-          No hay pedidos con “Pago Verificado”.
+          No hay pedidos nuevos.
         </p>
       )}
 

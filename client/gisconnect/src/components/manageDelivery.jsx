@@ -1,4 +1,4 @@
-// In manageDelivery.jsx, if shippingInfo on mongodb is set to "Recoger en Matriz", then under "Instrucción" replace "Paquetería" & "Mercancía Asegurada" for "Recoger en matriz", followed by pickupDetails (we have that field in Mongodb) "Día" (date on mongodb) and "Hora" (time on mongodb)
+// In manageDelivery.jsx, under Instrucción we have two fields: Paquetería & Mercancía Asegurada. Previously we had that autopopulated from user preferences stored in mongo (newusers cluster, under field "shippingPreferences"). But since we are giving user flexibility to change carrier and insurance, we added new field on new_order mongo cluster: preferredCarrier & insureShipment. Use this fields to fill "Paquetería" & "Mercancía Asegurada". For the latter, if insureShipment is "true" in mongodb, then put "Sí" on field. Likewaise, if its "false", then put "No" on screen. 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -133,11 +133,15 @@ export default function ManageDelivery() {
               (u.shippingPreferences && u.shippingPreferences.insureShipment) ??
               u.insureShipment;
 
+            // next[email] = {
+            //   name: [nombre, apellido].filter(Boolean).join(" ") || email,
+            //   company: empresa || "",
+            //   preferredCarrier: (prefCarrier || "").toString().trim(),
+            //   insureShipment: Boolean(insure),
+            // };
             next[email] = {
               name: [nombre, apellido].filter(Boolean).join(" ") || email,
               company: empresa || "",
-              preferredCarrier: (prefCarrier || "").toString().trim(),
-              insureShipment: Boolean(insure),
             };
           }
         });
@@ -192,24 +196,48 @@ export default function ManageDelivery() {
     );
   };
 
-  const carrierForEmail = (emailRaw) => {
-    const email = normalize(emailRaw);
-    return (
-      mongoUsers[email]?.preferredCarrier ||
-      clientLookupCSV[email]?.carrier ||
-      ""
-    );
-  };
+  // const carrierForEmail = (emailRaw) => {
+  //   const email = normalize(emailRaw);
+  //   return (
+  //     mongoUsers[email]?.preferredCarrier ||
+  //     clientLookupCSV[email]?.carrier ||
+  //     ""
+  //   );
+  // };
 
-  const insuranceForEmail = (emailRaw) => {
-    const email = normalize(emailRaw);
-    // Prefer Mongo boolean → "Sí"/"No"
-    if (mongoUsers[email]) {
-      return mongoUsers[email].insureShipment ? "Sí" : "No";
-    }
-    // Fallback CSV (string like "Sí"/"No" or empty)
+  // const insuranceForEmail = (emailRaw) => {
+  //   const email = normalize(emailRaw);
+  //   // Prefer Mongo boolean → "Sí"/"No"
+  //   if (mongoUsers[email]) {
+  //     return mongoUsers[email].insureShipment ? "Sí" : "No";
+  //   }
+  //   // Fallback CSV (string like "Sí"/"No" or empty)
+  //   return clientLookupCSV[email]?.insurance || "";
+  // };
+
+  // mar02
+  const carrierForOrder = (order) => {
+    // ✅ NEW: from new_order
+    const fromOrder = (order?.preferredCarrier || "").toString().trim();
+    if (fromOrder) return fromOrder;
+  
+    // fallback only if order is missing it
+    const email = normalize(order?.userEmail);
+    return clientLookupCSV[email]?.carrier || "";
+  };
+  
+  const insuranceForOrder = (order) => {
+    // ✅ NEW: from new_order boolean
+    const v = order?.insureShipment;
+  
+    if (v === true) return "Sí";
+    if (v === false) return "No";
+  
+    // fallback only if undefined/null
+    const email = normalize(order?.userEmail);
     return clientLookupCSV[email]?.insurance || "";
   };
+  // mar02
 
   // ✅ Newest first (no filters that hide orders)
   const sortedOrders = useMemo(() => {
@@ -247,8 +275,10 @@ export default function ManageDelivery() {
           {sortedOrders.map((order) => {
             const displayName = nameForEmail(order.userEmail);
             const companyName = companyForEmail(order.userEmail);
-            const carrierName = carrierForEmail(order.userEmail);
-            const insurancePref = insuranceForEmail(order.userEmail);
+            // const carrierName = carrierForEmail(order.userEmail);
+            // const insurancePref = insuranceForEmail(order.userEmail);
+            const carrierName = carrierForOrder(order);
+            const insurancePref = insuranceForOrder(order);
 
             const isPickup =
               typeof order?.shippingInfo === "string" &&

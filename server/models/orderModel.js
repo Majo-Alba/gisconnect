@@ -118,6 +118,13 @@ const orderSchema = new Schema(
       date: { type: String, default: null }, // "YYYY-MM-DD"
       time: { type: String, default: null }, // "HH:mm"
     },
+
+    // ✅ NEW: per-order shipping choice snapshot (do NOT modify user prefs)
+    preferredCarrier: { type: String, default: "" },
+    insureShipment: { type: Boolean, default: false },
+
+    shipPayMethod: { type: String, default: "" },
+
     billingInfo: { type: Schema.Types.Mixed },
 
     orderDate: Date,
@@ -126,9 +133,16 @@ const orderSchema = new Schema(
       default: "Pedido Realizado",
     },
 
+    // mar02
+    paymentVerifiedAt: { type: Date, default: null },
+    // mar02
+
     paymentOption: String,
     creditTermDays: String,
     creditDueDate: String,
+
+    // ✅ NEW: user free notes per order
+    observations: { type: String, default: "" },
 
     paymentMethod: String,
     paymentAccount: String,

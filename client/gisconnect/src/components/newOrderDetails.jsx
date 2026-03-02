@@ -429,10 +429,16 @@ export default function NewOrderDetails() {
   // Actions
   const handleValidatePayment = async () => {
     try {
+      // const updatedData = {
+      //   paymentMethod,
+      //   paymentAccount: account,
+      //   orderStatus: "Pago Verificado",
+      // };
       const updatedData = {
         paymentMethod,
         paymentAccount: account,
         orderStatus: "Pago Verificado",
+        paymentVerifiedAt: new Date().toISOString(), // optional
       };
       await axios.put(`${API}/orders/${orderId}`, updatedData);
       setIsValidated(true);
