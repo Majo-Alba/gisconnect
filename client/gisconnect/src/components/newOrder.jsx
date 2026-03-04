@@ -1,4 +1,4 @@
-// hey chatgpt, in newOrder, in "Total a pagar (MXN)" and "Total a pagar en MXN" we are using 4 decimals for the FIX currency convertion but I'd like to only use 2 decimal places. Here is current newOrder.jsx, please direct edit
+// in expressQuote.jsx, we are using SPECIAL_PRICES_URL. We are having kind of a situation when assigning prices because we have rhe following going on: Some products are in USD, while others are expressed in MXN. Though our database has columnos "PRECIO_PIEZA_DOLARES" & "PRECIO_PIEZA_MXN" to differentiatie amongst which products fall into which category, when assigning special prices we just have all prices ligned up under the user. I've added a new column "UNIDAD_MONETARIA" which expresses the currency for each product. Can we please take into consideration that column too to correctly - and double check - the assignment of a products currency  
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -19,7 +19,7 @@ import Logo from "/src/assets/images/GIS_Logo.png";
 
 import { API } from "/src/lib/api";
 
-export default function ExpressQuote() {
+export default function NewOrder() {
   const navigate = useNavigate();
 
   const [selectedProduct, setSelectedProduct] = useState("");
@@ -46,11 +46,21 @@ export default function ExpressQuote() {
   const [mongoProfile, setMongoProfile] = useState(null);   // << new
   const [isActive, setIsActive] = useState(false);
 
-  const [dofRate, setDofRate] = useState(null);
-  const [dofDate, setDofDate] = useState(null);
-  const [fxError, setFxError] = useState(null);
+  // const [dofRate, setDofRate] = useState(null);
+  // const [dofDate, setDofDate] = useState(null);
+  // const [fxError, setFxError] = useState(null);
+
+    // ===== Manual FX from Google Sheets ("Tipo_de_Cambio") =====
+    const [dofRate, setDofRate] = useState(null);     // keep name to avoid refactor all usages
+    const [dofDate, setDofDate] = useState(null);     // will store "YYYY-MM-DD" effective date (local MX)
+    const [fxError, setFxError] = useState(null);
+    const [fxSource, setFxSource] = useState("manual"); // "manual"
+    const [fxDebug, setFxDebug] = useState(null);       // helpful text for testing
+  
 
   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+
+  const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
 
   // ===== NEW: pull latest shipping/billing from Mongo =====
   const [shippingAddr, setShippingAddr] = useState(null);
@@ -92,26 +102,198 @@ export default function ExpressQuote() {
       ? [...arr].sort((a, b) => _idToMs(b?._id) - _idToMs(a?._id))[0]
       : null;
 
+  // mar04
+  const normMoneyUnit = (v) => {
+    const c = String(v ?? "").trim().toUpperCase();
+    if (["MXN", "MN", "PESOS", "PESO", "MEX", "MEXN"].includes(c)) return "MXN";
+    if (["USD", "DLLS", "DOLARES", "DÓLARES", "DOLAR", "DÓLAR", "US", "USD$"].includes(c)) return "USD";
+    return ""; // unknown
+  };
+  
+  // Double-check currency using price columns
+  const inferCurrencyFromPriceCols = (row) => {
+    const usd = n(row?.PRECIO_UNITARIO_DOLARES) ?? n(row?.PRECIO_PIEZA_DOLARES);
+    const mxn = n(row?.PRECIO_UNITARIO_MXN) ?? n(row?.PRECIO_PIEZA_MXN);
+    if (usd && usd > 0 && !(mxn && mxn > 0)) return "USD";
+    if (mxn && mxn > 0 && !(usd && usd > 0)) return "MXN";
+    // if both exist or neither, return ""
+    return "";
+  };
+  
+  // Decide final currency using UNIDAD_MONETARIA + verification
+  const resolveRowCurrency = (row, baseRow) => {
+    const declared = normMoneyUnit(row?.UNIDAD_MONETARIA || row?.MONEDA || row?.CURRENCY);
+    const inferred = inferCurrencyFromPriceCols(row);
+    const baseInferred = inferCurrencyFromPriceCols(baseRow);
+  
+    // 1) If declared exists and matches inferred → trust it
+    if (declared && (!inferred || declared === inferred)) return declared;
+  
+    // 2) If declared conflicts with inferred:
+    // prefer inferred if it’s clearly derivable from columns, else keep declared.
+    if (declared && inferred && declared !== inferred) {
+      console.warn(
+        "[SPECIAL_PRICES] UNIDAD_MONETARIA mismatch vs price cols:",
+        { declared, inferred, producto: row?.NOMBRE_PRODUCTO, peso: row?.PESO_PRODUCTO, um: row?.UNIDAD_MEDICION }
+      );
+      return inferred; // “double check” wins
+    }
+  
+    // 3) If no declared, but inferred exists → use inferred
+    if (!declared && inferred) return inferred;
+  
+    // 4) Fallback to baseRow inference
+    if (baseInferred) return baseInferred;
+  
+    // 5) Default USD (as your previous behavior)
+    return "USD";
+  };
+  // mar04
+
   // Fetch DOF
+  // useEffect(() => {
+  //   const getDofRate = async () => {
+  //     try {
+  //       const res = await fetch(`${API}/fx/usd-dof`);
+  //       const data = await res.json();
+  //       if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
+  //       setDofRate(Number(data.rate));
+  //       setDofDate(data.date);
+  //       setFxError(null);
+  //     } catch (err) {
+  //       console.error("DOF fetch error:", err);
+  //       setFxError("No se pudo obtener el tipo de cambio DOF.");
+  //     }
+  //   };
+  //   getDofRate();
+  // }, []);
+    
+  // CURRENCY FETCHER - FEB/15
   useEffect(() => {
-    const getDofRate = async () => {
+    const TIPO_CAMBIO_CSV_URL =
+      "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=2061823272&single=true&output=csv";
+
+    const pad2 = (x) => String(x).padStart(2, "0");
+
+    const addOneDay = (yyyy_mm_dd) => {
+      const [y, m, d] = (yyyy_mm_dd || "").split("-").map((v) => parseInt(v, 10));
+      if (!y || !m || !d) return null;
+      const dt = new Date(Date.UTC(y, m - 1, d));
+      dt.setUTCDate(dt.getUTCDate() + 1);
+      return `${dt.getUTCFullYear()}-${pad2(dt.getUTCMonth() + 1)}-${pad2(dt.getUTCDate())}`;
+    };
+
+    const toEpochMexico = (dateStr, timeStr) => {
+      // Mexico City / Guadalajara is effectively UTC-06 year-round
+      const t = (timeStr || "").length === 5 ? `${timeStr}:00` : (timeStr || "00:00:00");
+      const iso = `${dateStr}T${t}-06:00`;
+      const ms = Date.parse(iso);
+      return Number.isFinite(ms) ? ms : null;
+    };
+
+    const getManualFx = async () => {
       try {
-        const res = await fetch(`${API}/fx/usd-dof`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
-        setDofRate(Number(data.rate));
-        setDofDate(data.date);
-        setFxError(null);
+        const res = await axios.get(TIPO_CAMBIO_CSV_URL, { responseType: "text" });
+        const rows = parseCSV(res.data);
+
+        // Build rows + capture epoch, then sort by capture datetime
+        const dataRows = (Array.isArray(rows) ? rows : [])
+          .map((r) => {
+            const rateRaw = (r.TIPO_DE_CAMBIO ?? "").toString().trim();
+            const fecha = (r.FECHA_CAPTURA ?? "").toString().trim();  // YYYY-MM-DD
+            const hora = (r.HORA_CAPTURA ?? "").toString().trim() || "17:00";
+            const captureEpoch = (fecha ? toEpochMexico(fecha, hora) : null);
+            return { rateRaw, fecha, hora, captureEpoch };
+          })
+          .filter((r) => r.rateRaw !== "");
+
+        if (dataRows.length < 1) {
+          setDofRate(null);
+          setDofDate(null);
+          setFxError("La hoja Tipo_de_Cambio no tiene datos.");
+          setFxDebug(null);
+          return;
+        }
+
+        // Sort by capture time (fallback to 0 if missing)
+        const sorted = [...dataRows].sort(
+          (a, b) => (a.captureEpoch ?? 0) - (b.captureEpoch ?? 0)
+        );
+
+        const next = sorted[sorted.length - 1];                 // newest capture (row3 in your process)
+        const prev = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+
+        const nextRate = n(next.rateRaw);
+        const prevRate = prev ? n(prev.rateRaw) : null;
+
+        if (!Number.isFinite(nextRate) || nextRate <= 0) {
+          setDofRate(null);
+          setDofDate(null);
+          setFxError(`TIPO_DE_CAMBIO inválido: "${next.rateRaw}"`);
+          setFxDebug({ sorted });
+          return;
+        }
+
+        // Effective moment for the "next" rate: (FECHA_CAPTURA + 1 day) @ 00:00:01 MX
+        const effectiveDate = addOneDay(next.fecha);
+        const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+
+        const now = Date.now(); // ✅ absolute epoch, no timezone parsing bugs
+
+        // Debug info to verify decisions in UI/PDF metadata
+        setFxDebug({
+          nowISO: new Date(now).toISOString(),
+          next: { ...next, nextRate },
+          prev: prev ? { ...prev, prevRate } : null,
+          effectiveDate,
+          effectiveEpochISO: effectiveEpoch ? new Date(effectiveEpoch).toISOString() : null,
+          decision: effectiveEpoch ? (now >= effectiveEpoch ? "USE_NEXT" : "USE_PREV") : "NO_EFFECTIVE_EPOCH",
+        });
+
+        // If missing metadata, just use latest (for testing)
+        if (!effectiveEpoch) {
+          setDofRate(nextRate);
+          setDofDate(null);
+          setFxError("Faltan FECHA_CAPTURA/HORA_CAPTURA; usando el último tipo de cambio.");
+          return;
+        }
+
+        if (now >= effectiveEpoch) {
+          // ✅ Effective already → use newest captured rate
+          setDofRate(nextRate);
+          setDofDate(effectiveDate); // date when it became effective
+          setFxError(null);
+          return;
+        }
+
+        // Not effective yet → use previous
+        if (Number.isFinite(prevRate) && prevRate > 0) {
+          setDofRate(prevRate);
+          setDofDate(effectiveDate); // date when next will become effective
+          setFxError(null);
+          return;
+        }
+
+        // No prev → fallback to next but warn
+        setDofRate(nextRate);
+        setDofDate(effectiveDate);
+        setFxError("Aún no entra en vigor el tipo de cambio nuevo y no hay valor anterior válido. Usando el último.");
       } catch (err) {
-        console.error("DOF fetch error:", err);
-        setFxError("No se pudo obtener el tipo de cambio DOF.");
+        console.error("Manual FX fetch error:", err);
+        setDofRate(null);
+        setDofDate(null);
+        setFxError("No se pudo obtener el tipo de cambio desde Tipo_de_Cambio.");
+        setFxDebug(null);
       }
     };
-    getDofRate();
+
+    getManualFx();
   }, []);
 
-  const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
-
+  useEffect(() => {
+    if (fxDebug) console.log("FX DEBUG:", fxDebug);
+  }, [fxDebug]);
+  
   // Logged-in user
   useEffect(() => {
     const creds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
@@ -141,6 +323,8 @@ export default function ExpressQuote() {
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=231220133&single=true&output=csv";
   const INVENTORY_LATEST_CSV_URL =
     "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3w6YJjBrIDz56fkcJmjeBNlsfI55v9ilSXOzmnJBLi4h97ePj433ibiqXIRQ1KHOae-mYb21zydwS/pub?gid=0&single=true&output=csv";
+  // const TIPO_CAMBIO_CSV_URL =
+  //   "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=2061823272&single=true&output=csv";
 
   // Fetch product CSVs (unchanged)
   useEffect(() => {
@@ -315,13 +499,27 @@ export default function ExpressQuote() {
     let applied = false;
 
     // Try multiple candidate columns: CLIENT_DB mapping first, then Mongo-based variants
+    // if (spRow) {
+    //   const candidates = getCandidateClientCols();
+    //   for (const col of candidates) {
+    //     const v = n(spRow[col]);
+    //     if (v && v > 0) {
+    //       resolvedPrice = v;
+    //       resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+    //       applied = true;
+    //       break;
+    //     }
+    //   }
+    // }
     if (spRow) {
       const candidates = getCandidateClientCols();
+      const rowCurrency = resolveRowCurrency(spRow, baseRow);
+    
       for (const col of candidates) {
         const v = n(spRow[col]);
         if (v && v > 0) {
           resolvedPrice = v;
-          resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+          resolvedCurrency = rowCurrency;   // ✅ NOW: currency is per-row
           applied = true;
           break;
         }
@@ -337,21 +535,67 @@ export default function ExpressQuote() {
     //   }
     // }
 
+    // if (resolvedPrice === null) {
+    //   const usdFallback =
+    //     n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+    //     n(spRow?.PRECIO_PIEZA_DOLARES) ??
+    //     n(baseRow.PRECIO_PIEZA_DOLARES);
+    //   if (usdFallback && usdFallback > 0) {
+    //     resolvedPrice = usdFallback;
+    //     resolvedCurrency = "USD";
+    //   }
+    // }
+
+    // if (resolvedPrice === null) {
+    //   const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
+    //   if (mxnVal && mxnVal > 0) {
+    //     resolvedPrice = mxnVal;
+    //     resolvedCurrency = "MXN";
+    //   }
+    // }
+    if (resolvedPrice === null) {
+      const rowCurrency = resolveRowCurrency(spRow, baseRow);
+    
+      if (rowCurrency === "MXN") {
+        const mxnVal =
+          n(spRow?.PRECIO_UNITARIO_MXN) ??
+          n(spRow?.PRECIO_PIEZA_MXN) ??
+          n(baseRow?.PRECIO_PIEZA_MXN);
+    
+        if (mxnVal && mxnVal > 0) {
+          resolvedPrice = mxnVal;
+          resolvedCurrency = "MXN";
+        }
+      } else {
+        const usdVal =
+          n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+          n(spRow?.PRECIO_PIEZA_DOLARES) ??
+          n(baseRow?.PRECIO_PIEZA_DOLARES);
+    
+        if (usdVal && usdVal > 0) {
+          resolvedPrice = usdVal;
+          resolvedCurrency = "USD";
+        }
+      }
+    }
+    
+    // If still null, try the opposite currency as a last fallback (legacy safety net)
     if (resolvedPrice === null) {
       const usdFallback =
         n(spRow?.PRECIO_UNITARIO_DOLARES) ??
         n(spRow?.PRECIO_PIEZA_DOLARES) ??
-        n(baseRow.PRECIO_PIEZA_DOLARES);
+        n(baseRow?.PRECIO_PIEZA_DOLARES);
+    
+      const mxnFallback =
+        n(spRow?.PRECIO_UNITARIO_MXN) ??
+        n(spRow?.PRECIO_PIEZA_MXN) ??
+        n(baseRow?.PRECIO_PIEZA_MXN);
+    
       if (usdFallback && usdFallback > 0) {
         resolvedPrice = usdFallback;
         resolvedCurrency = "USD";
-      }
-    }
-
-    if (resolvedPrice === null) {
-      const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
-      if (mxnVal && mxnVal > 0) {
-        resolvedPrice = mxnVal;
+      } else if (mxnFallback && mxnFallback > 0) {
+        resolvedPrice = mxnFallback;
         resolvedCurrency = "MXN";
       }
     }
@@ -457,7 +701,511 @@ export default function ExpressQuote() {
   const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
   const fmtMXN = (v) =>
     `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+
+  // // ======== PDF (address now from Mongo) ========
+  const downloadPDF = async () => {
+    const doc = new jsPDF();
   
+    // Helper: strict 2-dec rounding
+    const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+  
+    const fmtUSD = (v) =>
+      `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+    const fmtMXN = (v) =>
+      `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+  
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+  
+    const drawBg = () => doc.addImage(docDesign, "PNG", 0, 0, pageWidth, pageHeight);
+    drawBg();
+  
+    doc.setFontSize(10);
+    doc.setFont("custom", "bold");
+    doc.text(`Fecha de Elaboración: ${new Date().toLocaleDateString("es-MX")}`, 195, 15, { align: "right" });
+    doc.text(`Cotización Válida Hasta: ${new Date(Date.now() + 30 * 86400000).toLocaleDateString("es-MX")}`, 195, 20, { align: "right" });
+  
+    doc.setLineWidth(0.1);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(10, 45, 200, 45);
+  
+    // === Address sections from Mongo ===
+    const userCreds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+  
+    // Shipping
+    doc.setFontSize(11);
+    doc.setFont("custom", "bold");
+    doc.text("Información de Envío", 13, 51);
+  
+    doc.setFontSize(10);
+    doc.addImage(iconBuilding, 13, 53, 5, 5);
+    doc.text(`${billingAddr?.razonSocial || ""}`, 19, 57);
+  
+    doc.addImage(iconContact, 13.5, 59.5, 4, 4);
+    doc.text(`${shippingAddr?.apodo || ""}`, 19, 63);
+  
+    doc.addImage(iconLocation, 13.7, 65, 3, 4);
+    doc.text(
+      `${shippingAddr?.calleEnvio || ""}  # ${shippingAddr?.exteriorEnvio || ""}  Int. ${shippingAddr?.interiorEnvio || ""}`,
+      19,
+      68
+    );
+    doc.text(`Col. ${shippingAddr?.coloniaEnvio || ""}`, 19, 72);
+    doc.text(
+      `${shippingAddr?.ciudadEnvio || ""}, ${shippingAddr?.estadoEnvio || ""}. C.P. ${shippingAddr?.cpEnvio || ""}`,
+      19,
+      76
+    );
+  
+    doc.addImage(iconPhone, 13.7, 78, 3, 4);
+    doc.text(``, 19, 81.5);
+  
+    doc.addImage(iconEmail, 13.7, 84, 4, 3);
+    doc.text(`${userCreds?.correo || shippingAddr?.userEmail || ""}`, 19, 87);
+  
+    // Billing
+    doc.setFontSize(11);
+    doc.setFont("custom", "bold");
+    doc.text("Información Fiscal", 100, 51);
+  
+    doc.setFontSize(10);
+    doc.text(`Razón Social: ${billingAddr?.razonSocial || ""}`, 106, 57);
+    doc.text(`RFC: ${billingAddr?.rfcEmpresa || ""}`, 106, 63);
+  
+    doc.addImage(iconEmail, 100, 65, 4, 3);
+    doc.text(`${billingAddr?.correoFiscal || ""}`, 106, 68);
+  
+    doc.addImage(iconLocation, 100.5, 70, 3, 4);
+    doc.text(
+      `${billingAddr?.calleFiscal || ""}  # ${billingAddr?.exteriorFiscal || ""}  Int. ${billingAddr?.interiorFiscal || ""}`,
+      106,
+      73
+    );
+    doc.text(`Col. ${billingAddr?.coloniaFiscal || ""}`, 106, 77);
+    doc.text(
+      `${billingAddr?.ciudadFiscal || ""}, ${billingAddr?.estadoFiscal || ""}. C.P. ${billingAddr?.cpFiscal || ""}`,
+      106,
+      81
+    );
+  
+    doc.setLineWidth(0.1);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(10, 92, 200, 92);
+  
+    const tableData = items.map((it) => [
+      it.product,
+      it.presentation,
+      it.packPresentation || "-",
+      it.amount,
+      `$${Number(it.price).toFixed(2)} ${it.currency || "USD"}`,
+      `$${(Number(it.amount) * Number(it.price)).toFixed(2)} ${it.currency || "USD"}`,
+    ]);
+  
+    // --- Currency sections ---
+    const toCur = (v) => String(v ?? "").trim().toUpperCase();
+    const itemCur = (it) => toCur(it.currency ?? it.priceCurrency);
+    const isMXN = (it) => itemCur(it) === "MXN";
+    const isUSD = (it) => itemCur(it) === "USD";
+  
+    const usdItemsPDF = items.filter(isUSD);
+    const mxnItemsPDF = items.filter(isMXN);
+  
+    const sectionTitle = (text, y) => {
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(text, 13, y);
+    };
+  
+    const makeBody = (arr) =>
+      arr.map((it) => {
+        const cur = itemCur(it) || "—";
+        const unit = Number(it.price) || 0;
+        const qty = Number(it.amount) || 0;
+        return [
+          it.product,
+          it.presentation,
+          it.packPresentation || "-",
+          String(qty),
+          `$${unit.toFixed(2)} ${cur}`,
+          `$${(qty * unit).toFixed(2)} ${cur}`,
+        ];
+      });
+  
+    let cursorY = 105;
+  
+    if (usdItemsPDF.length) {
+      doc.setTextColor(24, 144, 69);
+      sectionTitle("Artículos en USD", cursorY - 6);
+  
+      autoTable(doc, {
+        head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+        body: makeBody(usdItemsPDF),
+        startY: cursorY,
+        headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+        styles: { fontSize: 9 },
+        margin: { top: 100, right: 10, bottom: 20, left: 10 },
+        didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+      });
+  
+      cursorY = doc.lastAutoTable.finalY + 6;
+      const subtotalUSD = usdItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text(
+        `Subtotal USD: $${subtotalUSD.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`,
+        140,
+        cursorY
+      );
+      cursorY += 12;
+    }
+  
+    if (mxnItemsPDF.length) {
+      doc.setTextColor(24, 144, 69);
+      sectionTitle("Artículos en MXN", cursorY - 6);
+  
+      autoTable(doc, {
+        head: [["Producto", "Presentación", "Empaque", "Cantidad", "Precio Unitario", "Total"]],
+        body: makeBody(mxnItemsPDF),
+        startY: cursorY,
+        headStyles: { fillColor: [149, 194, 61], textColor: [0, 0, 0], fontStyle: "bold" },
+        styles: { fontSize: 9 },
+        margin: { top: 100, right: 10, bottom: 20, left: 10 },
+        didDrawPage: (data) => { if (data.pageNumber > 1) drawBg(); }
+      });
+  
+      cursorY = doc.lastAutoTable.finalY + 6;
+      const subtotalMXN = mxnItemsPDF.reduce((sum, it) => sum + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+      doc.setFontSize(11);
+      doc.setTextColor(0, 0, 0);
+      doc.setFont("helvetica", "bold");
+      doc.text(
+        `Subtotal MXN: $${subtotalMXN.toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`,
+        140,
+        cursorY
+      );
+      cursorY += 12;
+    }
+  
+    {
+      const usdItems = usdItemsPDF;
+      const mxnItems = mxnItemsPDF;
+  
+      const subtotalUSD = usdItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+      const subtotalMXN = mxnItems.reduce((s, it) => s + (Number(it.amount)||0) * (Number(it.price)||0), 0);
+  
+      // Round DOF rate and all conversions to 2 decimals
+      const rateRaw = Number(dofRate) || 0;
+      const rate = rateRaw ? round2(rateRaw) : 0;
+  
+      const iva16 = (v) => (isActive ? round2(v * 0.16) : 0);
+      const hasUSD = usdItems.length > 0;
+      const hasMXN = mxnItems.length > 0;
+      const isMixed = hasUSD && hasMXN;
+      const wantsMXN = (preferredCurrency || "USD").toUpperCase() === "MXN";
+  
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text("Resumen Financiero", 13, cursorY);
+      cursorY += 6;
+  
+      const boxX = 12;
+      const boxW = 186;
+      const boxPad = 4;
+      const textMaxW = boxW - boxPad * 2;
+      const lineH = 6;
+  
+      // Rounded FX math
+      const usdEnMXN = rate ? round2(round2(subtotalUSD) * rate) : 0;
+      const baseMXN_Mixed = rate ? round2(usdEnMXN + subtotalMXN) : subtotalMXN;
+      const totalMXN_Mixed = round2(baseMXN_Mixed + iva16(baseMXN_Mixed));
+      const totalUSD_only = round2(subtotalUSD + iva16(subtotalUSD));
+      const totalMXN_only = round2(subtotalMXN + iva16(subtotalMXN));
+  
+      const measureSummary = () => {
+        let y = cursorY + boxPad;
+        y += lineH; // moneda
+        if (wantsMXN) {
+          y += lineH; // total MXN
+          if (isMixed || hasUSD) {
+            const det = rate
+              ? (isMixed
+                  ? `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`
+                  : `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}.`)
+              : "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+            const detLines = doc.splitTextToSize(det, textMaxW);
+            y += detLines.length * 5 + 3;
+          }
+          if ((isMixed || hasUSD) && rate) y += 5;
+          if (isMixed) {
+            const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+            const legendLines = doc.splitTextToSize(legend, textMaxW);
+            y += legendLines.length * 5 + 5;
+          }
+        } else {
+          if (hasUSD) y += lineH;
+          if (hasMXN) y += lineH;
+          if (isMixed && rate) y += 5;
+          if (isMixed) {
+            const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+            const legendLines = doc.splitTextToSize(legend, textMaxW);
+            y += legendLines.length * 5 + 5;
+          }
+          if (!hasUSD && hasMXN) {
+            y += lineH;
+            const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+            const noteLines = doc.splitTextToSize(note, textMaxW);
+            y += noteLines.length * 5 + 3;
+          }
+        }
+        return y + boxPad;
+      };
+  
+      const boxBottom = measureSummary();
+      const boxHeight = Math.max(12, boxBottom - cursorY);
+  
+      doc.setFillColor(241, 241, 241);
+      doc.setDrawColor(200, 200, 200);
+      if (typeof doc.roundedRect === "function") {
+        doc.roundedRect(boxX, cursorY, boxW, boxHeight, 2.5, 2.5, "FD");
+      } else {
+        doc.rect(boxX, cursorY, boxW, boxHeight, "FD");
+      }
+  
+      let y = cursorY + boxPad;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.text(`Moneda de pago seleccionada: ${preferredCurrency || "USD"}`, boxX + boxPad, y + 3);
+      y += lineH;
+      doc.setFont("helvetica", "normal");
+  
+      if (wantsMXN) {
+        if (isMixed) {
+          if (!rate) {
+            doc.setTextColor(180, 0, 0);
+            const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total global en MXN.";
+            const errLines = doc.splitTextToSize(err, textMaxW);
+            doc.text(errLines, boxX + boxPad, y);
+            doc.setTextColor(0, 0, 0);
+            y += errLines.length * 5 + 3;
+          } else {
+            doc.text(
+              `Total a pagar en MXN: ${fmtMXN(totalMXN_Mixed)}` + (isActive ? " (incluye IVA 16%)" : ""),
+              boxX + boxPad,
+              y + 3
+            );
+            y += lineH;
+  
+            doc.setFontSize(9);
+            doc.setTextColor(120,120,120);
+            const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(usdEnMXN)}; + MXN nativo ${fmtMXN(subtotalMXN)}.`;
+            const detLines = doc.splitTextToSize(det, textMaxW);
+            doc.text(detLines, boxX + boxPad, y + 3);
+            y += detLines.length * 5 + 3;
+
+            // doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
+            doc.text(`Tipo de cambio: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 2);
+            doc.setTextColor(0,0,0);
+            doc.setFontSize(10);
+            y += 5;
+          }
+        } else if (hasUSD) {
+          if (!rate) {
+            doc.setTextColor(180, 0, 0);
+            const err = "No se pudo obtener el tipo de cambio DOF; no es posible calcular el total en MXN.";
+            const errLines = doc.splitTextToSize(err, textMaxW);
+            doc.text(errLines, boxX + boxPad, y);
+            doc.setTextColor(0, 0, 0);
+            y += errLines.length * 5 + 3;
+          } else {
+            const base = usdEnMXN; // pre-rounded USD→MXN
+            const total = round2(base + iva16(base));
+            doc.text(`Total a pagar en MXN: ${fmtMXN(total)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+            y += lineH;
+  
+            doc.setFontSize(9);
+            doc.setTextColor(120,120,120);
+            const det = `Detalle: USD (${fmtUSD(subtotalUSD)}) × ${rate.toFixed(2)} = ${fmtMXN(base)}.`;
+            const detLines = doc.splitTextToSize(det, textMaxW);
+            doc.text(detLines, boxX + boxPad, y);
+            y += detLines.length * 5 + 3;
+            
+            // doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
+            doc.text(`Tipo de cambio: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y);
+            doc.setTextColor(0,0,0);
+            doc.setFontSize(10);
+            y += 5;
+          }
+        } else {
+          doc.text(`Total a pagar en MXN: ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""), boxX + boxPad, y);
+          y += lineH;
+        }
+  
+        if (isMixed) {
+          doc.setTextColor(180, 0, 0);
+          doc.setFont("helvetica", "bold");
+          const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+          const legendLines = doc.splitTextToSize(legend, textMaxW);
+          doc.text(legendLines, boxX + boxPad, y + 3);
+          y += legendLines.length * 5 + 5;
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+        }
+      } else {
+        if (hasUSD) {
+          doc.text(
+            `A pagar en USD (artículos en USD): ${fmtUSD(totalUSD_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+            boxX + boxPad,
+            y + 3
+          );
+          y += lineH;
+        }
+        if (hasMXN) {
+          doc.text(
+            `A pagar en MXN (artículos en MXN): ${fmtMXN(totalMXN_only)}` + (isActive ? " (incluye IVA 16%)" : ""),
+            boxX + boxPad,
+            y + 3
+          );
+          y += lineH;
+        }
+        if (isMixed && rate) {
+          doc.setFontSize(9);
+          doc.setTextColor(120,120,120);
+          // doc.text(`Tipo de cambio DOF: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
+          doc.text(`Tipo de cambio: ${rate.toFixed(2)} MXN/USD` + (dofDate ? `  (Fecha: ${dofDate})` : ""), boxX + boxPad, y + 3);
+          doc.setTextColor(0,0,0);
+          doc.setFontSize(10);
+          y += 5;
+        }
+        if (isMixed) {
+          doc.setTextColor(180, 0, 0);
+          doc.setFont("helvetica", "bold");
+          const legend = "IMPORTANTE: En órdenes mixtas, donde se tengan artículos cotizados tanto en USD como en MXN, los artículos cotizados en MXN deben pagarse en MXN.";
+          const legendLines = doc.splitTextToSize(legend, textMaxW);
+          doc.text(legendLines, boxX + boxPad, y + 5);
+          y += legendLines.length * 5 + 5;
+          doc.setTextColor(0, 0, 0);
+          doc.setFont("helvetica", "normal");
+        }
+        if (!hasUSD && hasMXN) {
+          doc.setFontSize(9);
+          doc.setTextColor(120,120,120);
+          const note = "Nota: Esta orden solo contiene artículos en MXN; el pago debe realizarse en MXN.";
+          const noteLines = doc.splitTextToSize(note, textMaxW);
+          doc.text(noteLines, boxX + boxPad, y);
+          doc.setTextColor(0,0,0);
+          doc.setFontSize(10);
+          y += noteLines.length * 5 + 3;
+        }
+      }
+  
+      cursorY = cursorY + boxHeight + 4;
+    }
+  
+    {
+      const last = doc.internal.getNumberOfPages();
+      doc.setPage(last);
+  
+      const boxPad = 4;
+      const boxX = 12;
+      const boxW = 186;
+      const lineH = 5.2;
+  
+      const bullets = [
+        "1) Disponibilidad inmediata.",
+        "2) Precios LAB Guadalajara, Jalisco.",
+        "3) Precios en dólares americanos, pagaderos al TC del DOF del día del pago.",
+        "4) Precios sujetos a cambio sin previo aviso.",
+      ];
+  
+      const textLines = bullets.flatMap((b) => doc.splitTextToSize(b, boxW - boxPad * 2));
+      const boxH = boxPad * 2 + textLines.length * lineH;
+  
+      const bottomMargin = 10;
+      const boxY = pageHeight - boxH - bottomMargin;
+  
+      doc.setFillColor(241, 241, 241);
+      doc.setDrawColor(200, 200, 200);
+      if (typeof doc.roundedRect === "function") {
+        doc.roundedRect(boxX, boxY, boxW, boxH, 2.5, 2.5, "FD");
+      } else {
+        doc.rect(boxX, boxY, boxW, boxH, "FD");
+      }
+  
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      let y = boxY + boxPad + 3;
+      textLines.forEach((ln) => {
+        doc.text(ln, boxX + boxPad, y);
+        y += lineH;
+      });
+    }
+  
+    const pdfBlob = doc.output("blob");
+  
+    try {
+      if (!navigator.onLine) throw new Error("Sin conexión a Internet.");
+  
+      const formData = new FormData();
+      formData.append("pdf", pdfBlob, "Cotización_Express.pdf");
+      formData.append(
+        "metadata",
+        JSON.stringify({
+          userEmail: userCreds?.correo,
+          createdAt: new Date().toISOString(),
+          // Persist raw totals as-is if you prefer, or also round if desired:
+          totals: {
+            totalUSD,
+            totalMXN,
+            allUSD,
+            allMXN,
+            allUSDWithIVA,
+            allMXNWithIVA,
+            dofRate,
+            dofDate,
+            fxSource,
+            fxDebug,
+            ivaApplied: !!isActive,
+          },
+          items,
+          shippingAddr,
+          billingAddr,
+        })
+      );
+  
+      const useKeepalive = pdfBlob.size <= 60 * 1024;
+  
+      let res;
+      try {
+        res = await fetch(`${API}/save-pdf`, {
+          method: "POST",
+          body: formData,
+          ...(useKeepalive ? { keepalive: true } : {}),
+          headers: { Accept: "application/json" },
+          cache: "no-store",
+        });
+      } catch (e) {
+        const axiosRes = await axios.post(`${API}/save-pdf`, formData, {
+          headers: { Accept: "application/json" },
+          withCredentials: false,
+        });
+        res = new Response(JSON.stringify(axiosRes.data), { status: 200 });
+      }
+  
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson?.error || `Error ${res.status}`);
+      }
+  
+      await new Promise((r) => setTimeout(r, 50));
+      doc.save("Cotización_Express.pdf");
+      alert("PDF generado y guardado exitosamente.");
+    } catch (err) {
+      console.error("Error saving PDF:", err);
+      alert(`No se pudo guardar el PDF.\n${err?.message || "Revisa tu conexión y vuelve a intentar."}`);
+    }
+  };
+
   const submitOrder = () => {
     localStorage.setItem("discountTotal", "0");
     localStorage.setItem("billRequest", JSON.stringify(isActive));
@@ -660,6 +1408,7 @@ export default function ExpressQuote() {
             const mixed = hasUSD && hasMXN;
 
             const fx = Number.isFinite(dofRate) ? Number(dofRate) : null;
+            const fxRounded = fx != null ? round2(fx) : null;
 
             const withIVA = (v) => (isActive ? v * 1.16 : v);
 
@@ -669,17 +1418,14 @@ export default function ExpressQuote() {
             const usdSubtotalIVA = withIVA(usdSubtotal);
             const mxnSubtotalIVA = withIVA(mxnSubtotal);
 
-            // For MXN totals that come from USD via FX, force 2-dec rounding at each step
-            const fxRounded = fx != null ? round2(fx) : null;
+            // const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
+            // const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
 
-            // combined MXN (when user prefers MXN on mixed carts)
+            // Force 2-dec rounding on every FX step
             const combinedMXN =
               fxRounded != null ? round2(round2(usdSubtotal) * fxRounded + mxnSubtotal) : null;
             const combinedMXNIVA =
               combinedMXN != null ? round2(withIVA(combinedMXN)) : null;
-
-            // const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
-            // const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
 
             if (onlyUSD) {
               return (
@@ -746,8 +1492,7 @@ export default function ExpressQuote() {
                       <b>Tipo de cambio:</b>{" "}
                       {fxRounded != null ? `$${fxRounded.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
                       {/* {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")} */}
-                    </label>
-
+                    </label>e
                     <label className="summaryTotal-Label">
                       <b>Total a pagar (MXN):</b>{" "}
                       {fxRounded != null ? fmtMXN(combinedMXNIVA) : "—"}
@@ -776,6 +1521,15 @@ export default function ExpressQuote() {
               Hacer Pedido
             </button>
           </div>
+
+          {/* <div className="actionButtons-Div">
+            <button className="generatePDF-Btn" type="button" onClick={downloadPDF}>
+              Descargar PDF
+            </button>
+            <button className="submitOrder-Btn" type="button" onClick={submitOrder}>
+              Hacer Pedido
+            </button>
+          </div> */}
         </div>
       </div>
 
@@ -798,6 +1552,814 @@ export default function ExpressQuote() {
     </body>
   );
 }
+
+// OFF MAR04
+
+// // hey chatgpt, in newOrder, in "Total a pagar (MXN)" and "Total a pagar en MXN" we are using 4 decimals for the FIX currency convertion but I'd like to only use 2 decimal places. Here is current newOrder.jsx, please direct edit
+// import { useState, useEffect } from "react";
+// import { Link, useNavigate } from "react-router-dom";
+// import axios from "axios";
+// import jsPDF from "jspdf";
+// import autoTable from "jspdf-autotable";
+// import { faHouse, faUser, faCartShopping, faTrash } from "@fortawesome/free-solid-svg-icons";
+// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+
+// import { docDesign } from "/src/components/documentDesign";
+
+// import iconBuilding from "../assets/images/iconBuilding.png";
+// import iconContact from "../assets/images/iconContact.png";
+// import iconLocation from "../assets/images/iconLocation.png";
+// import iconPhone from "../assets/images/iconPhone.png";
+// import iconEmail from "../assets/images/iconEmail.png";
+
+// import Logo from "/src/assets/images/GIS_Logo.png";
+
+// import { API } from "/src/lib/api";
+
+// export default function ExpressQuote() {
+//   const navigate = useNavigate();
+
+//   const [selectedProduct, setSelectedProduct] = useState("");
+//   const [presentation, setPresentation] = useState("");
+//   const [amount, setAmount] = useState("");
+//   const [items, setItems] = useState([]);
+
+//   const [price, setPrice] = useState("");
+//   const [priceCurrency, setPriceCurrency] = useState("");
+//   const [weight, setWeight] = useState("");
+//   const [stock, setStock] = useState("");
+//   const [stockReady, setStockReady] = useState(false);
+//   const [specialApplied, setSpecialApplied] = useState(false);
+//   const [packPresentation, setPackPresentation] = useState("");
+
+//   const [csvData, setCsvData] = useState([]);             // Products
+//   const [csvClientData, setCsvClientData] = useState([]); // (kept but no longer used for addr)
+//   const [specialPrices, setSpecialPrices] = useState([]);
+//   const [specialHeaders, setSpecialHeaders] = useState([]); // headers present in SPECIAL_PRICES sheet
+
+//   const [stockByKey, setStockByKey] = useState({});
+
+//   const [user, setUser] = useState(null);
+//   const [mongoProfile, setMongoProfile] = useState(null);   // << new
+//   const [isActive, setIsActive] = useState(false);
+
+//   const [dofRate, setDofRate] = useState(null);
+//   const [dofDate, setDofDate] = useState(null);
+//   const [fxError, setFxError] = useState(null);
+
+//   const [preferredCurrency, setPreferredCurrency] = useState("USD");
+
+//   // ===== NEW: pull latest shipping/billing from Mongo =====
+//   const [shippingAddr, setShippingAddr] = useState(null);
+//   const [billingAddr, setBillingAddr] = useState(null);
+
+//   const normalize = (s) =>
+//     (s ?? "")
+//       .toString()
+//       .normalize("NFD")
+//       .replace(/[\u0300-\u036f]/g, "")
+//       .trim()
+//       .toLowerCase()
+//       .replace(/\s+/g, " ");
+
+//   const n = (v) => {
+//     if (v === null || v === undefined) return null;
+//     const s = String(v).trim().replace(/\s+/g, "");
+//     if (!s) return null;
+//     const cleaned = s.replace(/(?<=\d)[,\s](?=\d{3}\b)/g, "").replace(/,/g, ".");
+//     const x = Number(cleaned);
+//     return Number.isFinite(x) ? x : null;
+//   };
+//   const asQty = (v) => {
+//     const num = n(v);
+//     if (!Number.isFinite(num)) return 0;
+//     return Math.max(0, Math.floor(num));
+//   };
+
+//   // Helper to get timestamp from Mongo _id
+//   const _idToMs = (id) => {
+//     try {
+//       return parseInt(String(id).slice(0, 8), 16) * 1000;
+//     } catch {
+//       return 0;
+//     }
+//   };
+//   const pickNewest = (arr) =>
+//     Array.isArray(arr) && arr.length
+//       ? [...arr].sort((a, b) => _idToMs(b?._id) - _idToMs(a?._id))[0]
+//       : null;
+
+//   // Fetch DOF
+//   useEffect(() => {
+//     const getDofRate = async () => {
+//       try {
+//         const res = await fetch(`${API}/fx/usd-dof`);
+//         const data = await res.json();
+//         if (!res.ok) throw new Error(data?.error || "Error al obtener tipo de cambio DOF");
+//         setDofRate(Number(data.rate));
+//         setDofDate(data.date);
+//         setFxError(null);
+//       } catch (err) {
+//         console.error("DOF fetch error:", err);
+//         setFxError("No se pudo obtener el tipo de cambio DOF.");
+//       }
+//     };
+//     getDofRate();
+//   }, []);
+
+//   const round2 = (v) => Math.round((Number(v) + Number.EPSILON) * 100) / 100;
+
+//   // Logged-in user
+//   useEffect(() => {
+//     const creds = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+//     setUser(creds);
+//   }, []);
+
+//   // Fetch Mongo profile to get nombre, apellido, empresa
+//   useEffect(() => {
+//     const email = user?.correo;
+//     if (!email) return;
+//     (async () => {
+//       try {
+//         const { data } = await axios.get(`${API}/users/by-email`, { params: { email } });
+//         setMongoProfile(data || null);
+//       } catch {
+//         setMongoProfile(null);
+//       }
+//     })();
+//   }, [user?.correo]);
+
+//   // CSV URLs (left as-is for product/pricing logic)
+//   const PRODUCTS_CSV_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
+//   const CLIENT_DB_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vTyCM71h4JvqTsLcQ5dwYj0rapCn_j4qKbz6uh43zTMJsah9CULKqmz1nxC05Yn6a98oZ1jjqpQxNAZ/pub?gid=2117653598&single=true&output=csv";
+//   const SPECIAL_PRICES_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=231220133&single=true&output=csv";
+//   const INVENTORY_LATEST_CSV_URL =
+//     "https://docs.google.com/spreadsheets/d/e/2PACX-1vR3w6YJjBrIDz56fkcJmjeBNlsfI55v9ilSXOzmnJBLi4h97ePj433ibiqXIRQ1KHOae-mYb21zydwS/pub?gid=0&single=true&output=csv";
+
+//   // Fetch product CSVs (unchanged)
+//   useEffect(() => {
+//     fetchCSV(PRODUCTS_CSV_URL, setCsvData);
+//     fetchCSV(CLIENT_DB_URL, setCsvClientData);
+//     fetchCSV(SPECIAL_PRICES_URL, setSpecialPrices);
+
+//     axios
+//       .get(INVENTORY_LATEST_CSV_URL)
+//       .then((res) => {
+//         const rows = parseCSV(res.data);
+//         const byName = {};
+//         rows.forEach((r) => {
+//           const prod = normalize(r.NOMBRE_PRODUCTO || "");
+//           const ex = n(r.EXISTENCIA ?? r.EXISTENCIAS ?? r.STOCK ?? "0");
+//           if (!prod || !Number.isFinite(ex)) return;
+//           byName[prod] = (byName[prod] || 0) + ex;
+//         });
+//         setStockByKey(byName);
+//       })
+//       .catch((err) => console.error("Error fetching LATEST inventory CSV:", err));
+//   }, []);
+
+//   // ===== NEW: fetch user addresses from Mongo =====
+//   useEffect(() => {
+//     const email = user?.correo;
+//     if (!email) return;
+
+//     const fetchAddrs = async () => {
+//       try {
+//         const [sRes, bRes] = await Promise.all([
+//           axios.get(`${API}/shipping-address/${encodeURIComponent(email)}`),
+//           axios.get(`${API}/billing-address/${encodeURIComponent(email)}`),
+//         ]);
+//         setShippingAddr(pickNewest(sRes.data));
+//         setBillingAddr(pickNewest(bRes.data));
+//       } catch (err) {
+//         console.error("Error fetching addresses:", err);
+//         setShippingAddr(null);
+//         setBillingAddr(null);
+//       }
+//     };
+//     fetchAddrs();
+//   }, [user?.correo]);
+
+//   function fetchCSV(url, setter) {
+//     axios.get(url)
+//       .then((res) => {
+//         const parsed = parseCSV(res.data);
+//         setter(parsed);
+//         // If this is SPECIAL_PRICES_URL, store headers once
+//         if (url === SPECIAL_PRICES_URL && Array.isArray(parsed) && parsed.length) {
+//           setSpecialHeaders(Object.keys(parsed[0] || {}));
+//         }
+//       })
+//       .catch((err) => console.error("Error fetching CSV:", err));
+//   }
+
+//   function parseCSV(csvText) {
+//     const rows = csvText.split(/\r\n/).filter(Boolean);
+//     const headers = rows[0].split(",").map((h) => h.trim());
+//     return rows.slice(1).map((line) => {
+//       const cols = line.split(",");
+//       const obj = {};
+//       headers.forEach((h, i) => (obj[h] = (cols[i] || "").trim()));
+//       return obj;
+//     });
+//   }
+
+//   // (pricing logic uses CSVs — unchanged except unrelated client address removal)
+//   const toClientHeader = (name) => {
+//     if (!name) return "";
+//     const noAccents = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+//     return noAccents.toUpperCase().replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+//   };
+
+//   // Clean common MX company suffixes for better matches
+//   const stripCompanySuffixes = (s) => {
+//     if (!s) return s;
+//     let t = s.toString();
+//     t = t.replace(/\bS\.?A\.?\s*D?E?\s*C\.?V\.?\b/gi, ""); // SA de CV variants
+//     t = t.replace(/\bS\.? DE R\.?L\.? DE C\.?V\.?\b/gi, ""); // S de RL de CV
+//     t = t.replace(/\bS\.?C\.?A\.??\b/gi, "");
+//     t = t.replace(/\bS\.?C\.?\b/gi, "");
+//     t = t.replace(/\bA\.?C\.?\b/gi, "");
+//     t = t.replace(/\bDE\s+M[EÉ]XICO\b/gi, "");
+//     t = t.replace(/\s+/g, " ").trim();
+//     return t;
+//   };
+
+//   // Build a prioritized list of possible client columns to try in SPECIAL_PRICES
+//   const getCandidateClientCols = () => {
+//     const candidates = [];
+//     // 1) Existing mapping via CLIENT_DB_URL (if present)
+//     const viaClientDb = getClientColumnName(user, csvClientData);
+//     if (viaClientDb) candidates.push(viaClientDb);
+
+//     // 2) From Mongo profile
+//     const nombre = mongoProfile?.nombre || "";
+//     const apellido = mongoProfile?.apellido || "";
+//     const empresa = mongoProfile?.empresa || "";
+//     const razonSocial = billingAddr?.razonSocial || ""; // sometimes more “official”
+
+//     const fullName = [nombre, apellido].filter(Boolean).join(" ");
+//     const empresaClean = stripCompanySuffixes(empresa);
+//     const razonClean = stripCompanySuffixes(razonSocial);
+
+//     [fullName, empresa, empresaClean, razonSocial, razonClean].forEach((s) => {
+//       const h = toClientHeader(s);
+//       if (h) candidates.push(h);
+//     });
+
+//     // 3) Dedup while preserving order
+//     const uniq = [];
+//     const seen = new Set();
+//     for (const c of candidates) {
+//       if (!seen.has(c)) { seen.add(c); uniq.push(c); }
+//     }
+//     // Filter to only headers that actually exist in SPECIAL_PRICES sheet
+//     const allowed = new Set((specialHeaders || []).map(String));
+//     return uniq.filter((c) => allowed.has(c));
+//   };
+
+//   const getClientColumnName = (user, clientRows) => {
+//     if (!user?.correo || clientRows.length === 0) return "";
+//     const hit = clientRows.find(
+//       (r) => normalize(r.CORREO_EMPRESA) === normalize(user.correo)
+//     );
+//     return toClientHeader(hit?.NOMBRE_APELLIDO);
+//   };
+
+//   useEffect(() => {
+//     setStockReady(false);
+
+//     const baseRow = csvData.find(
+//       (r) =>
+//         r.NOMBRE_PRODUCTO === selectedProduct &&
+//         (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+//     );
+
+//     if (!baseRow) {
+//       setWeight("");
+//       setStock("");
+//       setPrice("");
+//       setPackPresentation("");
+//       setSpecialApplied(false);
+//       setPriceCurrency("");
+//       setStockReady(false);
+//       return;
+//     }
+
+//     setWeight(baseRow.PESO_PRODUCTO || "");
+//     setPackPresentation(baseRow.PRESENTACION_EMPAQUE || "");
+
+//     const prodKey = normalize(selectedProduct);
+//     const latestStock = stockByKey[prodKey];
+//     const fallbackStock = n(baseRow.CANTIDAD_EXISTENCIA) ?? 0;
+//     setStock(Number.isFinite(latestStock) ? String(latestStock) : String(fallbackStock));
+//     setTimeout(() => setStockReady(true), 0);
+
+//     const clientCol = getClientColumnName(user, csvClientData);
+
+//     const spRow = specialPrices.find(
+//       (row) =>
+//         normalize(row.NOMBRE_PRODUCTO) === normalize(selectedProduct) &&
+//         normalize(row.PESO_PRODUCTO) === normalize(baseRow.PESO_PRODUCTO) &&
+//         normalize(row.UNIDAD_MEDICION) === normalize(baseRow.UNIDAD_MEDICION)
+//     );
+
+//     let resolvedPrice = null;
+//     let resolvedCurrency = "USD";
+//     let applied = false;
+
+//     // Try multiple candidate columns: CLIENT_DB mapping first, then Mongo-based variants
+//     if (spRow) {
+//       const candidates = getCandidateClientCols();
+//       for (const col of candidates) {
+//         const v = n(spRow[col]);
+//         if (v && v > 0) {
+//           resolvedPrice = v;
+//           resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+//           applied = true;
+//           break;
+//         }
+//       }
+//     }
+
+//     // if (spRow && clientCol) {
+//     //   const clientVal = n(spRow[clientCol]);
+//     //   if (clientVal && clientVal > 0) {
+//     //     resolvedPrice = clientVal;
+//     //     resolvedCurrency = "USD";
+//     //     applied = true;
+//     //   }
+//     // }
+
+//     if (resolvedPrice === null) {
+//       const usdFallback =
+//         n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+//         n(spRow?.PRECIO_PIEZA_DOLARES) ??
+//         n(baseRow.PRECIO_PIEZA_DOLARES);
+//       if (usdFallback && usdFallback > 0) {
+//         resolvedPrice = usdFallback;
+//         resolvedCurrency = "USD";
+//       }
+//     }
+
+//     if (resolvedPrice === null) {
+//       const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
+//       if (mxnVal && mxnVal > 0) {
+//         resolvedPrice = mxnVal;
+//         resolvedCurrency = "MXN";
+//       }
+//     }
+
+//     if (resolvedPrice === null) {
+//       setPrice("");
+//       setPriceCurrency("");
+//       setSpecialApplied(false);
+//       return;
+//     }
+
+//     setPrice(String(resolvedPrice));
+//     setPriceCurrency(resolvedCurrency);
+//     setSpecialApplied(applied);
+//   }, [selectedProduct, presentation, csvData, specialPrices, csvClientData, user, stockByKey]);
+
+//   console.log(csvClientData)
+
+//   const presentationOptions = csvData
+//     .filter((r) => r.NOMBRE_PRODUCTO === selectedProduct)
+//     .map((r) => (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || ""));
+
+//   const qty = asQty(amount);
+//   const stockNum = n(stock);
+//   const hasFiniteStock = Number.isFinite(stockNum);
+//   const outOfStock = hasFiniteStock && qty > 0 && qty > stockNum;
+
+//   const handleAddItem = () => {
+//     const baseRow = csvData.find(
+//       (r) =>
+//         r.NOMBRE_PRODUCTO === selectedProduct &&
+//         (r.PESO_PRODUCTO + r.UNIDAD_MEDICION) === presentation
+//     );
+//     if (!baseRow) return;
+
+//     if (!stockReady || !hasFiniteStock) {
+//       alert("Esperando disponibilidad de inventario. Intenta en un momento…");
+//       return;
+//     }
+//     if (qty <= 0) {
+//       alert("Ingrese una cantidad válida.");
+//       return;
+//     }
+//     if (outOfStock) {
+//       alert(`Solo hay ${stockNum} unidades disponibles.`);
+//       return;
+//     }
+//     const unitPrice = n(price) || 0;
+//     if (!unitPrice) {
+//       alert("Precio no disponible para esta presentación.");
+//       return;
+//     }
+
+//     const cur = (priceCurrency || "").toUpperCase() === "MXN" ? "MXN" : "USD";
+
+//     setItems((prev) => [
+//       ...prev,
+//       {
+//         product: selectedProduct,
+//         presentation,
+//         packPresentation,
+//         amount: qty,
+//         price: unitPrice,
+//         currency: cur,
+//         weight: Number(baseRow.PESO_PRODUCTO || 0),
+//       },
+//     ]);
+
+//     setSelectedProduct("");
+//     setPresentation("");
+//     setPackPresentation("");
+//     setAmount("");
+//     setPrice("");
+//     setPriceCurrency("");
+//     setWeight("");
+//     setStock("");
+//     setStockReady(false);
+//     setSpecialApplied(false);
+//   };
+
+//   const removeItem = (idx) => setItems((prev) => prev.filter((_, i) => i !== idx));
+
+//   const normalizeCur = (val) => {
+//     const c = String(val || "").trim().toUpperCase();
+//     return c === "MXN" ? "MXN" : "USD";
+//   };
+//   const usdItems = items.filter((it) => normalizeCur(it.currency) === "USD");
+//   const mxnItems = items.filter((it) => normalizeCur(it.currency) === "MXN");
+
+//   const totalUSD = usdItems.reduce((sum, it) => sum + it.amount * it.price, 0);
+//   const totalMXN = mxnItems.reduce((sum, it) => sum + it.amount * it.price, 0);
+
+//   const allUSD = dofRate ? totalUSD + totalMXN / Number(dofRate) : null;
+//   const allMXN = dofRate ? totalMXN + totalUSD * Number(dofRate) : null;
+
+//   const ivaAllUSD = isActive && allUSD != null ? +(allUSD * 0.16).toFixed(2) : null;
+//   const ivaAllMXN = isActive && allMXN != null ? +(allMXN * 0.16).toFixed(2) : null;
+
+//   const allUSDWithIVA = ivaAllUSD != null ? +(allUSD + ivaAllUSD).toFixed(2) : null;
+//   const allMXNWithIVA = ivaAllMXN != null ? +(allMXN + ivaAllMXN).toFixed(2) : null;
+
+//   // const fmtUSD = (v) => `$${(v ?? 0).toFixed(2)} USD`;
+//   const fmtUSD = (v) => `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+//   const fmtMXN = (v) =>
+//     `$${(v ?? 0).toLocaleString("es-MX", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+  
+//   const submitOrder = () => {
+//     localStorage.setItem("discountTotal", "0");
+//     localStorage.setItem("billRequest", JSON.stringify(isActive));
+//     navigate("/orderNow", { state: { items, preferredCurrency } });
+//   };
+
+//   return (
+//     <body className="app-shell body-BG-Gradient">
+//       <div className="app-header loginLogo-ParentDiv">
+//         <img
+//           className="secondaryPages-GISLogo"
+//           src={Logo}
+//           alt="Home Icon"
+//           width="180"
+//           height="55"
+//           onClick={() => navigate("/userHome")}
+//         />
+//       </div>
+
+//       <div className="app-main">
+//         <label className="sectionHeader-Label">¡Haz tu pedido!</label>
+
+//         <div className="quoterBody-Div">
+//           <div>
+//             <label className="newUserData-Label">Encuentra tu producto</label>
+//             <select
+//               className="productInfo-Input"
+//               value={selectedProduct}
+//               onChange={(e) => {
+//                 setSelectedProduct(e.target.value);
+//                 setPresentation("");
+//                 setAmount("");
+//                 setStock("");
+//                 setStockReady(false);
+//               }}
+//             >
+//               <option value="">Selecciona producto</option>
+//               {[...new Set(csvData.map((i) => i.NOMBRE_PRODUCTO))].map((prod, idx) => (
+//                 <option key={idx} value={prod}>
+//                   {prod}
+//                 </option>
+//               ))}
+//             </select>
+//           </div>
+
+//           <div>
+//             <label className="newUserData-Label">Presentación</label>
+//             <select
+//               className="productInfo-Input"
+//               value={presentation}
+//               onChange={(e) => {
+//                 setPresentation(e.target.value);
+//                 setAmount("");
+//                 setStock("");
+//                 setStockReady(false);
+//               }}
+//             >
+//               <option value="">Selecciona presentación</option>
+//               {[...new Set(presentationOptions)].map((pres, idx) => (
+//                 <option key={idx} value={pres}>
+//                   {pres}
+//                 </option>
+//               ))}
+//             </select>
+//           </div>
+
+//           {/* Package Presentation (auto) */}
+//           <div>
+//             <label className="newUserData-Label">Presentación Empaque</label>
+//             <input
+//               className="productInfo-Input"
+//               type="text"
+//               placeholder="Presentación empaque"
+//               value={packPresentation}
+//               readOnly
+//             />
+//           </div>
+
+//           <div>
+//             <label className="newUserData-Label">
+//               Precio {priceCurrency ? `(${priceCurrency})` : ""}
+//             </label>
+//             <input
+//               className="productInfo-Input"
+//               type="text"
+//               placeholder="Precio"
+//               value={price ? `${price} ${priceCurrency}` : ""}
+//               readOnly
+//             />
+//           </div>
+
+//           <div>
+//             <label className="newUserData-Label">Cantidad deseada</label>
+//             <input
+//               className="productInfo-Input"
+//               type="number"
+//               inputMode="numeric"
+//               min="0"
+//               step="1"
+//               onChange={(e) => {
+//                 const q = asQty(e.target.value);
+//                 setAmount(q === 0 && e.target.value === "" ? "" : String(q));
+//               }}
+//               placeholder="Ingrese cantidad deseada"
+//               value={amount}
+//             />
+//           </div>
+
+//           {/* Unified & guarded stock warning */}
+//           {stockReady && hasFiniteStock && qty > 0 && outOfStock && (
+//             <label className="stockAvailability-Label">
+//               Lo sentimos, por el momento no contamos con suficiente disponibilidad de este producto.
+//             </label>
+//           )}
+
+//           <button
+//             className="quoter-AddMoreButton"
+//             onClick={handleAddItem}
+//             disabled={
+//               !price ||
+//               !stockReady ||
+//               !hasFiniteStock ||
+//               qty <= 0 ||
+//               outOfStock ||
+//               !selectedProduct ||
+//               !presentation
+//             }
+//             title={
+//               !price
+//                 ? "Precio no disponible."
+//                 : !stockReady
+//                 ? "Cargando disponibilidad…"
+//                 : !hasFiniteStock
+//                 ? "Inventario no disponible."
+//                 : qty <= 0
+//                 ? "Ingrese una cantidad válida."
+//                 : outOfStock
+//                 ? "Cantidad excede el inventario."
+//                 : (!selectedProduct || !presentation)
+//                 ? "Seleccione producto y presentación."
+//                 : ""
+//             }
+//           >
+//             +
+//           </button>
+
+//           <label className="newUserData-Label">Resumen del pedido</label>
+//           <div className="quoter-wishlistDiv">
+//             <ul className="wishlist-ulElement">
+//               {items.map((item, i) => (
+//                 <div key={i} className="wishlist-liElement">
+//                   {item.amount} x {item.product} ({item.presentation})
+//                   {item.packPresentation ? ` — ${item.packPresentation}` : ""} — ${item.price} {item.currency} c/u
+//                   <FontAwesomeIcon
+//                     className="expressQuote-TrashIt"
+//                     onClick={() => removeItem(i)}
+//                     icon={faTrash}
+//                     style={{ marginLeft: 8, cursor: "pointer" }}
+//                   />
+//                 </div>
+//               ))}
+//             </ul>
+//           </div>
+
+//           {/* ===== Financial Summary (unchanged content) ===== */}
+//           <label className="newUserData-Label">Resumen financiero</label>
+
+//           {/* Toggle */}
+//           <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8, marginLeft: 55, marginTop: 5 }}>
+//             <span style={{ fontSize: 13, color: "#333" }}>Moneda preferida:</span>
+
+//             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+//               <input
+//                 type="radio"
+//                 name="prefCurrency"
+//                 value="USD"
+//                 checked={preferredCurrency === "USD"}
+//                 onChange={() => setPreferredCurrency("USD")}
+//               />
+//               USD
+//             </label>
+
+//             <label style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+//               <input
+//                 type="radio"
+//                 name="prefCurrency"
+//                 value="MXN"
+//                 checked={preferredCurrency === "MXN"}
+//                 onChange={() => setPreferredCurrency("MXN")}
+//                 disabled={!dofRate} // need FX to combine/convert
+//               />
+//               MXN
+//             </label>
+//           </div>
+
+//           {(() => {
+//             const hasUSD = totalUSD > 0;
+//             const hasMXN = totalMXN > 0;
+//             const onlyUSD = hasUSD && !hasMXN;
+//             const mixed = hasUSD && hasMXN;
+
+//             const fx = Number.isFinite(dofRate) ? Number(dofRate) : null;
+
+//             const withIVA = (v) => (isActive ? v * 1.16 : v);
+
+//             const usdSubtotal = totalUSD;
+//             const mxnSubtotal = totalMXN;
+
+//             const usdSubtotalIVA = withIVA(usdSubtotal);
+//             const mxnSubtotalIVA = withIVA(mxnSubtotal);
+
+//             // For MXN totals that come from USD via FX, force 2-dec rounding at each step
+//             const fxRounded = fx != null ? round2(fx) : null;
+
+//             // combined MXN (when user prefers MXN on mixed carts)
+//             const combinedMXN =
+//               fxRounded != null ? round2(round2(usdSubtotal) * fxRounded + mxnSubtotal) : null;
+//             const combinedMXNIVA =
+//               combinedMXN != null ? round2(withIVA(combinedMXN)) : null;
+
+//             // const combinedMXN = fx ? usdSubtotal * fx + mxnSubtotal : null;
+//             // const combinedMXNIVA = fx ? withIVA(combinedMXN) : null;
+
+//             if (onlyUSD) {
+//               return (
+//                 <div className="quoter-summaryDiv">
+//                   <label className="summary-Label">
+//                     <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+//                   </label>
+
+//                   {preferredCurrency === "USD" ? (
+//                     <label className="summaryTotal-Label">
+//                       <b>Total a pagar en USD:</b> {fmtUSD(usdSubtotalIVA)}
+//                     </label>
+//                   ) : (
+//                     <>
+//                       <label className="summary-Label">
+//                         <b>Tipo de cambio:</b>{" "}
+//                         {fxRounded != null ? `$${fxRounded.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+//                         {/* {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")} */}
+//                       </label>
+//                       <label className="summaryTotal-Label">
+//                         <b>Total a pagar en MXN:</b>{' '}
+//                         {fxRounded != null ? fmtMXN(round2(round2(usdSubtotalIVA) * fxRounded)) : "—"}
+//                         {/* {fx ? fmtMXN(usdSubtotalIVA * fx) : "—"} */}
+//                       </label>
+//                     </>
+//                   )}
+//                 </div>
+//               );
+//             }
+
+//             if (mixed) {
+//               if (preferredCurrency === "USD") {
+//                 return (
+//                   <div className="quoter-summaryDiv">
+//                     <label className="summary-Label">
+//                       <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+//                     </label>
+//                     <label className="summary-Label">
+//                       <b>Subtotal artículos en MXN:</b> {fmtMXN(mxnSubtotal)}
+//                     </label>
+
+//                     <label className="summaryTotal-Label">
+//                       <b>Total a pagar en USD:</b> {fmtUSD(usdSubtotalIVA)}
+//                     </label>
+//                     <label className="summaryTotal-Label">
+//                       <b>Total a pagar en MXN:</b> {fmtMXN(mxnSubtotalIVA)}
+//                     </label>
+
+//                     <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
+//                       En órdenes mixtas, los artículos cotizados en MXN deben pagarse en MXN.
+//                     </div>
+//                   </div>
+//                 );
+//               } else {
+//                 return (
+//                   <div className="quoter-summaryDiv">
+//                     <label className="summary-Label">
+//                       <b>Subtotal artículos en USD:</b> {fmtUSD(usdSubtotal)}
+//                     </label>
+//                     <label className="summary-Label">
+//                       <b>Subtotal artículos en MXN:</b> {fmtMXN(mxnSubtotal)}
+//                     </label>
+//                     <label className="summary-Label">
+//                       <b>Tipo de cambio:</b>{" "}
+//                       {fxRounded != null ? `$${fxRounded.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")}
+//                       {/* {fx ? `$${fx.toFixed(2)} MXN/USD` : (fxError || "Cargando tipo de cambio...")} */}
+//                     </label>
+
+//                     <label className="summaryTotal-Label">
+//                       <b>Total a pagar (MXN):</b>{" "}
+//                       {fxRounded != null ? fmtMXN(combinedMXNIVA) : "—"}
+//                       {/* {fx ? fmtMXN(combinedMXNIVA) : "—"} */}
+//                     </label>
+//                   </div>
+//                 );
+//               }
+//             }
+
+//             // Only MXN
+//             return (
+//               <div className="quoter-summaryDiv">
+//                 <label className="summary-Label">
+//                   <b>Subtotal MXN (artículos en MXN):</b> {fmtMXN(mxnSubtotal)}
+//                 </label>
+//                 <label className="summaryTotal-Label">
+//                   <b>Total a pagar (MXN):</b> {fmtMXN(mxnSubtotalIVA)}
+//                 </label>
+//               </div>
+//             );
+//           })()}
+
+//           <div className="newOrderActionButtons-Div">
+//             <button className="submitOrder-Btn" type="button" onClick={submitOrder}>
+//               Hacer Pedido
+//             </button>
+//           </div>
+//         </div>
+//       </div>
+
+//       <div className="app-footer footerMenuDiv">
+//         <div className="footerHolder">
+//           <div className="footerIcon-NameDiv" onClick={() => navigate("/userHome")}>
+//             <FontAwesomeIcon icon={faHouse} className="footerIcons" />
+//             <label className="footerIcon-Name">PRINCIPAL</label>
+//           </div>
+//           <div className="footerIcon-NameDiv" onClick={() => navigate("/userProfile")}>
+//             <FontAwesomeIcon icon={faUser} className="footerIcons" />
+//             <label className="footerIcon-Name">MI PERFIL</label>
+//           </div>
+//           <div className="footerIcon-NameDiv" onClick={() => navigate("/newOrder")}>
+//             <FontAwesomeIcon icon={faCartShopping} className="footerIcons" />
+//             <label className="footerIcon-Name">ORDENA</label>
+//           </div>
+//         </div>
+//       </div>
+//     </body>
+//   );
+// }
+
+
+
+
+// ----- OG ------
 
 // import { useState, useEffect } from "react";
 // import { Link, useNavigate } from "react-router-dom";
