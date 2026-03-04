@@ -1,4 +1,4 @@
-// Ok so my google sheets has been updated to have the 3 row/columns you mention and my expressQuote.jsx file also updated. However, as it is, my expressQupte screen shows today's currency as the one we're using, instead of the one inputed yesterday (remember: admin inputs data yesterday - february 14 - at 5pm and that currency comes into effect until today - february 15 - at 00:00:01). 
+// in expressQuote.jsx, we are using SPECIAL_PRICES_URL. We are having kind of a situation when assigning prices because we have rhe following going on: Some products are in USD, while others are expressed in MXN. Though our database has columnos "PRECIO_PIEZA_DOLARES" & "PRECIO_PIEZA_MXN" to differentiatie amongst which products fall into which category, when assigning special prices we just have all prices ligned up under the user. I've added a new column "UNIDAD_MONETARIA" which expresses the currency for each product. Can we please take into consideration that column too to correctly - and double check - the assignment of a products currency  
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -101,6 +101,54 @@ export default function ExpressQuote() {
     Array.isArray(arr) && arr.length
       ? [...arr].sort((a, b) => _idToMs(b?._id) - _idToMs(a?._id))[0]
       : null;
+
+  // mar04
+  const normMoneyUnit = (v) => {
+    const c = String(v ?? "").trim().toUpperCase();
+    if (["MXN", "MN", "PESOS", "PESO", "MEX", "MEXN"].includes(c)) return "MXN";
+    if (["USD", "DLLS", "DOLARES", "DÓLARES", "DOLAR", "DÓLAR", "US", "USD$"].includes(c)) return "USD";
+    return ""; // unknown
+  };
+  
+  // Double-check currency using price columns
+  const inferCurrencyFromPriceCols = (row) => {
+    const usd = n(row?.PRECIO_UNITARIO_DOLARES) ?? n(row?.PRECIO_PIEZA_DOLARES);
+    const mxn = n(row?.PRECIO_UNITARIO_MXN) ?? n(row?.PRECIO_PIEZA_MXN);
+    if (usd && usd > 0 && !(mxn && mxn > 0)) return "USD";
+    if (mxn && mxn > 0 && !(usd && usd > 0)) return "MXN";
+    // if both exist or neither, return ""
+    return "";
+  };
+  
+  // Decide final currency using UNIDAD_MONETARIA + verification
+  const resolveRowCurrency = (row, baseRow) => {
+    const declared = normMoneyUnit(row?.UNIDAD_MONETARIA || row?.MONEDA || row?.CURRENCY);
+    const inferred = inferCurrencyFromPriceCols(row);
+    const baseInferred = inferCurrencyFromPriceCols(baseRow);
+  
+    // 1) If declared exists and matches inferred → trust it
+    if (declared && (!inferred || declared === inferred)) return declared;
+  
+    // 2) If declared conflicts with inferred:
+    // prefer inferred if it’s clearly derivable from columns, else keep declared.
+    if (declared && inferred && declared !== inferred) {
+      console.warn(
+        "[SPECIAL_PRICES] UNIDAD_MONETARIA mismatch vs price cols:",
+        { declared, inferred, producto: row?.NOMBRE_PRODUCTO, peso: row?.PESO_PRODUCTO, um: row?.UNIDAD_MEDICION }
+      );
+      return inferred; // “double check” wins
+    }
+  
+    // 3) If no declared, but inferred exists → use inferred
+    if (!declared && inferred) return inferred;
+  
+    // 4) Fallback to baseRow inference
+    if (baseInferred) return baseInferred;
+  
+    // 5) Default USD (as your previous behavior)
+    return "USD";
+  };
+  // mar04
 
   // Fetch DOF
   // useEffect(() => {
@@ -451,13 +499,27 @@ export default function ExpressQuote() {
     let applied = false;
 
     // Try multiple candidate columns: CLIENT_DB mapping first, then Mongo-based variants
+    // if (spRow) {
+    //   const candidates = getCandidateClientCols();
+    //   for (const col of candidates) {
+    //     const v = n(spRow[col]);
+    //     if (v && v > 0) {
+    //       resolvedPrice = v;
+    //       resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+    //       applied = true;
+    //       break;
+    //     }
+    //   }
+    // }
     if (spRow) {
       const candidates = getCandidateClientCols();
+      const rowCurrency = resolveRowCurrency(spRow, baseRow);
+    
       for (const col of candidates) {
         const v = n(spRow[col]);
         if (v && v > 0) {
           resolvedPrice = v;
-          resolvedCurrency = "USD"; // all client columns are USD-priced in your sheet
+          resolvedCurrency = rowCurrency;   // ✅ NOW: currency is per-row
           applied = true;
           break;
         }
@@ -473,21 +535,67 @@ export default function ExpressQuote() {
     //   }
     // }
 
+    // if (resolvedPrice === null) {
+    //   const usdFallback =
+    //     n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+    //     n(spRow?.PRECIO_PIEZA_DOLARES) ??
+    //     n(baseRow.PRECIO_PIEZA_DOLARES);
+    //   if (usdFallback && usdFallback > 0) {
+    //     resolvedPrice = usdFallback;
+    //     resolvedCurrency = "USD";
+    //   }
+    // }
+
+    // if (resolvedPrice === null) {
+    //   const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
+    //   if (mxnVal && mxnVal > 0) {
+    //     resolvedPrice = mxnVal;
+    //     resolvedCurrency = "MXN";
+    //   }
+    // }
+    if (resolvedPrice === null) {
+      const rowCurrency = resolveRowCurrency(spRow, baseRow);
+    
+      if (rowCurrency === "MXN") {
+        const mxnVal =
+          n(spRow?.PRECIO_UNITARIO_MXN) ??
+          n(spRow?.PRECIO_PIEZA_MXN) ??
+          n(baseRow?.PRECIO_PIEZA_MXN);
+    
+        if (mxnVal && mxnVal > 0) {
+          resolvedPrice = mxnVal;
+          resolvedCurrency = "MXN";
+        }
+      } else {
+        const usdVal =
+          n(spRow?.PRECIO_UNITARIO_DOLARES) ??
+          n(spRow?.PRECIO_PIEZA_DOLARES) ??
+          n(baseRow?.PRECIO_PIEZA_DOLARES);
+    
+        if (usdVal && usdVal > 0) {
+          resolvedPrice = usdVal;
+          resolvedCurrency = "USD";
+        }
+      }
+    }
+    
+    // If still null, try the opposite currency as a last fallback (legacy safety net)
     if (resolvedPrice === null) {
       const usdFallback =
         n(spRow?.PRECIO_UNITARIO_DOLARES) ??
         n(spRow?.PRECIO_PIEZA_DOLARES) ??
-        n(baseRow.PRECIO_PIEZA_DOLARES);
+        n(baseRow?.PRECIO_PIEZA_DOLARES);
+    
+      const mxnFallback =
+        n(spRow?.PRECIO_UNITARIO_MXN) ??
+        n(spRow?.PRECIO_PIEZA_MXN) ??
+        n(baseRow?.PRECIO_PIEZA_MXN);
+    
       if (usdFallback && usdFallback > 0) {
         resolvedPrice = usdFallback;
         resolvedCurrency = "USD";
-      }
-    }
-
-    if (resolvedPrice === null) {
-      const mxnVal = n(spRow?.PRECIO_PIEZA_MXN) ?? n(baseRow.PRECIO_PIEZA_MXN);
-      if (mxnVal && mxnVal > 0) {
-        resolvedPrice = mxnVal;
+      } else if (mxnFallback && mxnFallback > 0) {
+        resolvedPrice = mxnFallback;
         resolvedCurrency = "MXN";
       }
     }
