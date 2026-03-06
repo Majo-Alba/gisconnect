@@ -19,6 +19,8 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "majo_test@gmail.com",
   "info@greenimportsol.com",
   "ventas@greenimportsol.com",
+  "administracion@greenimportsol.com",
+  "administracion2@greenimportsol.com",
 ]);
 
 export default function DeliveredSummary() {
