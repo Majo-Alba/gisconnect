@@ -194,7 +194,8 @@ const orderSchema = new Schema(
 );
 
 /* ---------- Indexes to speed up admin filters ---------- */
-orderSchema.index({ orderDate: -1 });
+orderSchema.index({ orderDate: -1, _id: -1 });
+// orderSchema.index({ orderDate: -1 });
 orderSchema.index({ userEmail: 1, orderDate: -1 });
 orderSchema.index({ orderStatus: 1, orderDate: -1 });
 

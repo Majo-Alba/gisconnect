@@ -662,7 +662,8 @@ router.get('/userOrders', async (req, res) => {
     const orders = await newOrderModel
       .find({ userEmail: email })
       .select(ORDER_LIST_PROJECTION)
-      .sort({ orderDate: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ orderDate: -1, _id: -1 })
       .limit(limit)
       .lean();
 
@@ -721,7 +722,8 @@ router.get('/orders', async (req, res) => {
     const orders = await newOrderModel
       .find(findQuery)
       .select(ORDER_LIST_PROJECTION)     // ✅ don’t fetch Buffers
-      .sort({ orderDate: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ orderDate: -1, _id: -1 })
       .limit(limit)
       .lean();
 
@@ -741,7 +743,8 @@ router.get("/orders/packable", async (req, res) => {
     const orders = await newOrderModel
       .find(buildPackableFilter())
       .select(ORDER_LIST_PROJECTION)
-      .sort({ orderDate: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ orderDate: -1, _id: -1 })
       .limit(limit)
       .lean();
 
