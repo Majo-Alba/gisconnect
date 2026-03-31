@@ -1795,7 +1795,8 @@ router.get('/shipping-address/:email', async (req, res) => {
 
     const addresses = await ShippingAddress
       .find({ userEmail: email })
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .lean();
 
@@ -1864,7 +1865,8 @@ router.get('/billing-address/:email', async (req, res) => {
 
     const addresses = await BillingAddress
       .find({ userEmail: email })
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .lean();
 
@@ -1998,7 +2000,8 @@ router.get('/pdfquotes', async (req, res) => {
 
     const docs = await PdfQuote.find(find)
       .select('_id filename contentType createdAt metadata')
-      .sort({ createdAt: -1, _id: -1 })
+      .sort({ _id: -1 })
+      // .sort({ createdAt: -1, _id: -1 })
       .limit(limit)
       .lean();
 
