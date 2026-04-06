@@ -660,47 +660,83 @@ export default function OrderTrackDetails() {
     for (const item of chosenItems) {
       const docs = getDocsForItem(item);
       if (!docs) continue;
-  
+
+      // apr06
       for (const docKey of selectedDocTypeKeys) {
-        // const url = normalizeUrl(docs?.[docKey]);
-        // if (!url) continue;
-  
-        // const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-        // const safeBaseName = `${item.product}_${cleanDocName}`
-        //   .replace(/[^\w\-]+/g, "_")
-        //   .replace(/^_+|_+$/g, "");
-  
-        // files.push({
-        //   url,
-        //   name: `${safeBaseName}.pdf`,
-        // });
-
-        // apr06
-        const { download, fileId } = normalizeUrl(docs?.[docKey]);
-
+        const docObj = docs?.[docKey];
+      
+        if (!docObj || !docObj.fileId) {
+          console.warn("⚠️ Invalid file skipped:", docObj);
+          continue;
+        }
+      
         const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
         const safeBaseName = `${item.product}_${cleanDocName}`
           .replace(/[^\w\-]+/g, "_")
           .replace(/^_+|_+$/g, "");
-
-        if (!fileId) {
-          console.warn("⚠️ Invalid file skipped:", docs?.[docKey]);
-          continue;
-        }
-
+      
         console.log("📄 FILE:", {
           product: item.product,
           docKey,
-          originalUrl: docs?.[docKey],
-          fileId,
+          fileId: docObj.fileId,
         });
-
+      
         files.push({
-          fileId,
+          fileId: docObj.fileId,
           name: `${safeBaseName}.pdf`,
         });
-        // apr06
       }
+      // apr06
+  
+      // for (const docKey of selectedDocTypeKeys) {
+      //   // const url = normalizeUrl(docs?.[docKey]);
+      //   // if (!url) continue;
+  
+      //   // const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+      //   // const safeBaseName = `${item.product}_${cleanDocName}`
+      //   //   .replace(/[^\w\-]+/g, "_")
+      //   //   .replace(/^_+|_+$/g, "");
+  
+      //   // files.push({
+      //   //   url,
+      //   //   name: `${safeBaseName}.pdf`,
+      //   // });
+
+      //   // apr06
+
+      //   // const { download, fileId } = normalizeUrl(docs?.[docKey]);
+      //   const docObj = docs?.[docKey];
+
+      //   if (!docObj || !docObj.fileId) {
+      //     console.warn("⚠️ Invalid file skipped:", docObj);
+      //     continue;
+      //   }
+
+      //   const fileId = docObj.fileId;
+
+      //   const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+      //   const safeBaseName = `${item.product}_${cleanDocName}`
+      //     .replace(/[^\w\-]+/g, "_")
+      //     .replace(/^_+|_+$/g, "");
+
+      //   if (!fileId) {
+      //     console.warn("⚠️ Invalid file skipped:", docs?.[docKey]);
+      //     continue;
+      //   }
+
+      //   console.log("📄 FILE:", {
+      //     product: item.product,
+      //     docKey,
+      //     originalUrl: docs?.[docKey],
+      //     fileId,
+      //   });
+
+      //   files.push({
+      //     fileId,
+      //     name: `${safeBaseName}.pdf`,
+      //   });
+      //   // apr06
+      // }
     }
   
     if (!files.length) {
