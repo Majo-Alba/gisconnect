@@ -90,29 +90,31 @@ export default function OrderTrackDetails() {
   // const normalizeUrl = (url = "") => {
   //   const clean = String(url || "").trim();
   
-  //   // Detect Google Drive "file/d/" format
   //   const match = clean.match(/\/file\/d\/([^/]+)/);
   
   //   if (match && match[1]) {
   //     const fileId = match[1];
-  //     return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  
+  //     // ✅ Use preview instead of forced download
+  //     return `https://drive.google.com/file/d/${fileId}/preview`;
   //   }
   
   //   return clean;
   // };
   const normalizeUrl = (url = "") => {
     const clean = String(url || "").trim();
-  
     const match = clean.match(/\/file\/d\/([^/]+)/);
   
     if (match && match[1]) {
       const fileId = match[1];
   
-      // ✅ Use preview instead of forced download
-      return `https://drive.google.com/file/d/${fileId}/preview`;
+      return {
+        download: `https://drive.google.com/uc?export=download&id=${fileId}`,
+        fileId,
+      };
     }
   
-    return clean;
+    return { download: clean, fileId: null };
   };
 
   const isPreparingOrLater = useMemo(() => {
@@ -658,18 +660,28 @@ export default function OrderTrackDetails() {
       if (!docs) continue;
   
       for (const docKey of selectedDocTypeKeys) {
-        const url = normalizeUrl(docs?.[docKey]);
-        if (!url) continue;
+        // const url = normalizeUrl(docs?.[docKey]);
+        // if (!url) continue;
   
-        const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-        const safeBaseName = `${item.product}_${cleanDocName}`
-          .replace(/[^\w\-]+/g, "_")
-          .replace(/^_+|_+$/g, "");
+        // const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+        // const safeBaseName = `${item.product}_${cleanDocName}`
+        //   .replace(/[^\w\-]+/g, "_")
+        //   .replace(/^_+|_+$/g, "");
   
+        // files.push({
+        //   url,
+        //   name: `${safeBaseName}.pdf`,
+        // });
+
+        // apr06
+        const { download, fileId } = normalizeUrl(docs?.[docKey]);
+
         files.push({
-          url,
+          url: download,
+          fileId,
           name: `${safeBaseName}.pdf`,
         });
+        // apr06
       }
     }
   
@@ -687,10 +699,17 @@ export default function OrderTrackDetails() {
   
     try {
       // iPhone installed app fallback:
+      // if (isIOSPWA) {
+      //   // open one by one instead of ZIP blob
+      //   for (const file of files) {
+      //     window.open(file.url, "_blank", "noopener,noreferrer");
+      //   }
+      //   return;
+      // }
       if (isIOSPWA) {
-        // open one by one instead of ZIP blob
         for (const file of files) {
-          window.open(file.url, "_blank", "noopener,noreferrer");
+          const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
+          window.open(link, "_blank");
         }
         return;
       }

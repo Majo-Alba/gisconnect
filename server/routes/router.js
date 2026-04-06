@@ -2652,6 +2652,32 @@ router.post("/download-product-docs", async (req, res) => {
     res.status(500).json({ error: "Error generating ZIP" });
   }
 });
+
+router.get("/proxy-download", async (req, res) => {
+  try {
+    const { fileId, name } = req.query;
+
+    if (!fileId) {
+      return res.status(400).send("Missing fileId");
+    }
+
+    const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+    const response = await fetch(driveUrl);
+
+    if (!response.ok) {
+      throw new Error("Failed to fetch file");
+    }
+
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="${name || "file.pdf"}"`);
+
+    response.body.pipe(res);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Download error");
+  }
+});
 // apr06
 
 // ✅ Multer error handler (prevents generic 500 on file too large, etc.)
