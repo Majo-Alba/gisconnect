@@ -592,9 +592,13 @@ export default function OrderTrackDetails() {
   
   //       const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
   
+  //       const safeBaseName = `${item.product}_${cleanDocName}`
+  //         .replace(/[^\w\-]+/g, "_")
+  //         .replace(/^_+|_+$/g, "");
+  
   //       files.push({
   //         url,
-  //         name: `${item.product}_${cleanDocName}.pdf`.replace(/[^\w]/g, "_"),
+  //         name: `${safeBaseName}.pdf`,
   //       });
   //     }
   //   }
@@ -620,7 +624,7 @@ export default function OrderTrackDetails() {
   //     alert("Error descargando documentos.");
   //   }
   // }
-  
+
   async function downloadSelectedDocs() {
     if (!selectedDocTypeKeys.length) {
       alert("Selecciona al menos un tipo de documento.");
@@ -647,7 +651,6 @@ export default function OrderTrackDetails() {
         if (!url) continue;
   
         const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-  
         const safeBaseName = `${item.product}_${cleanDocName}`
           .replace(/[^\w\-]+/g, "_")
           .replace(/^_+|_+$/g, "");
@@ -664,7 +667,24 @@ export default function OrderTrackDetails() {
       return;
     }
   
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      window.navigator.standalone === true;
+  
+    const isIOSPWA = isIOS && isStandalone;
+  
     try {
+      // iPhone installed app fallback:
+      if (isIOSPWA) {
+        // open one by one instead of ZIP blob
+        for (const file of files) {
+          window.open(file.url, "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
+  
+      // desktop / normal browsers
       const res = await fetch(`${API}/download-product-docs`, {
         method: "POST",
         headers: {
@@ -672,6 +692,10 @@ export default function OrderTrackDetails() {
         },
         body: JSON.stringify({ files }),
       });
+  
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
   
       const blob = await res.blob();
       saveAs(blob, `documentos_pedido_${orderId}.zip`);
