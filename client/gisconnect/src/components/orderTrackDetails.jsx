@@ -1,5 +1,4 @@
-// hey chatgpt, in orderTrackDetails.jsx, once the status of an order has changed to "Preparando Pedido", I'd like to give user access to download the products' certificates and technical specs pdf. We have four possible documents the user can download: 1) Ficha Técnica, 2) Hoja de Seguridad, 3) Certificado OMRI, 4) Cetificado de Análisis. Not all products have all, so keep that in mind. Now, all of these files are stored in a google drive file, and the links for each file are stored in our database "Inventario_Base" (https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv)under the columns "CERTIFICADO_OMRI_URL", "FICHA_TECNICA_URL", "HOJA_DE_SEGURIDAD_URL", "CERTIFICADO_DE_ANALISIS_URL". I'd like, once the stage has changed to "Preparando Pedido", for two dropdown menus to become available right under "Fecha de Pedido". The first dropdown has a checkbox menu from which the user can select which documents he wants to download (add all four documents I mentioned as options, as well as an option "Descargar todos" to download all for documents rather than having to check off each one). The second dropdown menu will include all products the person has bought. Once again, make this dropdown a checkbox situation so user can select which products he want the documents for. Once again, add option "Todos los productos". Under these dropdowns, add button "Descargar" and, when user presses it, download all corresponding files. Now the problem I faced before while doing this implementation was that, due to the fact that the app had to constantly fetch information from the database and bring it back, the app crashed and it was super hard to get it back on track. So I guess first off, what is the best way to make this function work (allowing customers to download their product files) without it resulting super taxing (I'm guessing having to get the link from the google database and move on from there is not the best way around to implement such functionality. Now, I dont know if "Hard coding" all pdf's as files withing the code - example: creating a folder client/gisconnect/src/certificates - would be a better solution or what else would you propose). Here is my current orderTrackDetails.jsx, please suggest and direct edit in any case
-
+// with this modificaction to downloadSelectedDocs, when downloading in iphone now I'm redirected to a secondary screen "drive.usercontent.google.com" that has a progress bar on top, but nothing else shows. Progress bar stops loading at about 10% full and rest of the page remains white with no documents showing or being downloaded
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { ProgressBar, Step } from "react-step-progress-bar";
@@ -88,17 +87,29 @@ export default function OrderTrackDetails() {
   };
 
   // NEW MAR/31
-  // const normalizeUrl = (v = "") => String(v || "").trim();
-
+  // const normalizeUrl = (url = "") => {
+  //   const clean = String(url || "").trim();
+  
+  //   // Detect Google Drive "file/d/" format
+  //   const match = clean.match(/\/file\/d\/([^/]+)/);
+  
+  //   if (match && match[1]) {
+  //     const fileId = match[1];
+  //     return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  //   }
+  
+  //   return clean;
+  // };
   const normalizeUrl = (url = "") => {
     const clean = String(url || "").trim();
   
-    // Detect Google Drive "file/d/" format
     const match = clean.match(/\/file\/d\/([^/]+)/);
   
     if (match && match[1]) {
       const fileId = match[1];
-      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+  
+      // ✅ Use preview instead of forced download
+      return `https://drive.google.com/file/d/${fileId}/preview`;
     }
   
     return clean;
