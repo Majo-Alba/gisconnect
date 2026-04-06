@@ -676,6 +676,11 @@ export default function OrderTrackDetails() {
         // apr06
         const { download, fileId } = normalizeUrl(docs?.[docKey]);
 
+        const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+        const safeBaseName = `${item.product}_${cleanDocName}`
+          .replace(/[^\w\-]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+
         files.push({
           url: download,
           fileId,
