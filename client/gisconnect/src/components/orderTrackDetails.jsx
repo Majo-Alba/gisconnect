@@ -7,6 +7,8 @@ import "react-step-progress-bar/styles.css";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
+import { saveAs } from "file-saver";
+
 import { faHouse, faUser, faCartShopping } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
@@ -714,7 +716,8 @@ export default function OrderTrackDetails() {
       if (isIOSPWA) {
         for (const file of files) {
           const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
-          window.open(link, "_blank");
+          // window.open(link, "_blank");
+          window.location.href = link;
         }
         return;
       }

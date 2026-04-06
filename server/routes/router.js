@@ -2653,6 +2653,31 @@ router.post("/download-product-docs", async (req, res) => {
   }
 });
 
+// router.get("/proxy-download", async (req, res) => {
+//   try {
+//     const { fileId, name } = req.query;
+
+//     if (!fileId) {
+//       return res.status(400).send("Missing fileId");
+//     }
+
+//     const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+
+//     const response = await fetch(driveUrl);
+
+//     if (!response.ok) {
+//       throw new Error("Failed to fetch file");
+//     }
+
+//     res.setHeader("Content-Type", "application/pdf");
+//     res.setHeader("Content-Disposition", `attachment; filename="${name || "file.pdf"}"`);
+
+//     response.body.pipe(res);
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).send("Download error");
+//   }
+// });
 router.get("/proxy-download", async (req, res) => {
   try {
     const { fileId, name } = req.query;
@@ -2663,18 +2688,20 @@ router.get("/proxy-download", async (req, res) => {
 
     const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
 
-    const response = await fetch(driveUrl);
-
-    if (!response.ok) {
-      throw new Error("Failed to fetch file");
-    }
+    const response = await axios.get(driveUrl, {
+      responseType: "stream",
+    });
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${name || "file.pdf"}"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${name || "file.pdf"}"`
+    );
 
-    response.body.pipe(res);
+    response.data.pipe(res);
+
   } catch (err) {
-    console.error(err);
+    console.error("❌ proxy-download error:", err.message);
     res.status(500).send("Download error");
   }
 });
