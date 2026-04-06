@@ -17,6 +17,10 @@ const nodemailer = require("nodemailer");
 const axios = require("axios");
 const sharp = require("sharp");
 
+// new apr06
+const JSZip = require ("jszip");
+// end apr06
+
 const newUserModel = require("../models/newUserModel");
 const newOrderModel = require("../models/orderModel");
 const Order = require("../models/orderEvidenceModel"); // if used elsewhere
@@ -2611,6 +2615,44 @@ router.post("/orders/:id/release-delivery", async (req, res) => {
     return res.status(500).json({ error: "Server error" });
   }
 });
+
+// apr06
+router.post("/download-product-docs", async (req, res) => {
+  try {
+    const { files } = req.body;
+
+    if (!files || !files.length) {
+      return res.status(400).json({ error: "No files provided" });
+    }
+
+    const zip = new JSZip();
+
+    for (const file of files) {
+      try {
+        const response = await axios.get(file.url, {
+          responseType: "arraybuffer",
+        });
+
+        zip.file(file.name, response.data);
+      } catch (err) {
+        console.warn("Failed file:", file.url);
+      }
+    }
+
+    const content = await zip.generateAsync({ type: "nodebuffer" });
+
+    res.set({
+      "Content-Type": "application/zip",
+      "Content-Disposition": "attachment; filename=documentos.zip",
+    });
+
+    res.send(content);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error generating ZIP" });
+  }
+});
+// apr06
 
 // ✅ Multer error handler (prevents generic 500 on file too large, etc.)
 // router.use((err, req, res, next) => {

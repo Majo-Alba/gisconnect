@@ -1,5 +1,6 @@
-// hey chatgpt, in orderTrackDetails.jsx, once the status of an order has changed to "Preparando Pedido", I'd like to give user access to download the products' certificates and technical specs pdf. We have four possible documents the user can download: 1) Ficha Técnica, 2) Hoja de Seguridad, 3) Certificado OMRI, 4) Cetificado de Análisis. Not all products have all, so keep that in mind. Now, all of these files are stored in a google drive file, and the links for each file are stored in our database "Inventario_Base" (https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv)under the columns "CERTIFICADO_OMRI_URL", "FICHA_TECNICA_URL", "HOJA_DE_SEGURIDAD_URL", "CERTIFICADO_DE_ANALISIS_URL". I'd like, once the stage has changed to "Preparando Pedido", for two dropdown menus to become available right under "Fecha de Pedido". The first dropdown has a checkbox menu from which the user can select which documents he want to download (add all four documents I mentioned as options, as well as an option "Descargar todos" to download all for documents rather than having to check off each one). The second dropdown menu will include all procucts the person has bought. Once again, make this dropdown a checkbox situation so user can select which products he want the documents for. Once again, add option "Todos los productos". Under these dropdowns, add button "Descargar" and, when user presses it, download all corresponding files. Here is my current orderTrackDetails.jsx, please direct edit 
-import { useEffect, useState } from "react";
+// hey chatgpt, in orderTrackDetails.jsx, once the status of an order has changed to "Preparando Pedido", I'd like to give user access to download the products' certificates and technical specs pdf. We have four possible documents the user can download: 1) Ficha Técnica, 2) Hoja de Seguridad, 3) Certificado OMRI, 4) Cetificado de Análisis. Not all products have all, so keep that in mind. Now, all of these files are stored in a google drive file, and the links for each file are stored in our database "Inventario_Base" (https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv)under the columns "CERTIFICADO_OMRI_URL", "FICHA_TECNICA_URL", "HOJA_DE_SEGURIDAD_URL", "CERTIFICADO_DE_ANALISIS_URL". I'd like, once the stage has changed to "Preparando Pedido", for two dropdown menus to become available right under "Fecha de Pedido". The first dropdown has a checkbox menu from which the user can select which documents he wants to download (add all four documents I mentioned as options, as well as an option "Descargar todos" to download all for documents rather than having to check off each one). The second dropdown menu will include all products the person has bought. Once again, make this dropdown a checkbox situation so user can select which products he want the documents for. Once again, add option "Todos los productos". Under these dropdowns, add button "Descargar" and, when user presses it, download all corresponding files. Now the problem I faced before while doing this implementation was that, due to the fact that the app had to constantly fetch information from the database and bring it back, the app crashed and it was super hard to get it back on track. So I guess first off, what is the best way to make this function work (allowing customers to download their product files) without it resulting super taxing (I'm guessing having to get the link from the google database and move on from there is not the best way around to implement such functionality. Now, I dont know if "Hard coding" all pdf's as files withing the code - example: creating a folder client/gisconnect/src/certificates - would be a better solution or what else would you propose). Here is my current orderTrackDetails.jsx, please suggest and direct edit in any case
+
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { ProgressBar, Step } from "react-step-progress-bar";
 import "react-step-progress-bar/styles.css";
@@ -39,6 +40,29 @@ export default function OrderTrackDetails() {
   // ====== IMAGE LOOKUP (robust keys) ======
   const [imageLookup, setImageLookup] = useState({});
 
+  // NEW MAR/31
+  const INVENTARIO_BASE_CSV_URL =
+  "https://docs.google.com/spreadsheets/d/e/2PACX-1vQJ3DHshfkMqlCrOlbh8DT_KYbLopkDOt5l4pdBldFqBgzuxGj0LMkaLxPpqevV7s6sUjk1Ock7d-M8/pub?gid=21868348&single=true&output=csv";
+
+  const DOC_TYPES = [
+    { key: "FICHA_TECNICA_URL", label: "Ficha Técnica" },
+    { key: "HOJA_DE_SEGURIDAD_URL", label: "Hoja de Seguridad" },
+    { key: "CERTIFICADO_OMRI_URL", label: "Certificado OMRI" },
+    { key: "CERTIFICADO_DE_ANALISIS_URL", label: "Certificado de Análisis" },
+  ];
+
+  const [docLookup, setDocLookup] = useState({});
+  const [docsLoading, setDocsLoading] = useState(false);
+  const [docsLoaded, setDocsLoaded] = useState(false);
+  const [docsErr, setDocsErr] = useState("");
+
+  const [docDropdownOpen, setDocDropdownOpen] = useState(false);
+  const [productDropdownOpen, setProductDropdownOpen] = useState(false);
+
+  const [selectedDocTypes, setSelectedDocTypes] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  // END MAR/31
+
   const canon = (s = "") =>
     String(s)
       .normalize("NFD")
@@ -50,6 +74,66 @@ export default function OrderTrackDetails() {
 
   const makeKey = (product = "", presentation = "") =>
     `${canon(product)}__${canon(presentation)}`;
+
+  const getCurrentPosition = (status) => {
+    if (!status) return 0;
+    const s = status.toLowerCase();
+    if (s.includes("realizado")) return 0;
+    if (s.includes("evidencia")) return 1;
+    if (s.includes("verificado")) return 2;
+    if (s.includes("preparando")) return 3;
+    if (s.includes("etiqueta")) return 4;
+    if (s.includes("entregado")) return 5;
+    return 0;
+  };
+
+  // NEW MAR/31
+  // const normalizeUrl = (v = "") => String(v || "").trim();
+
+  const normalizeUrl = (url = "") => {
+    const clean = String(url || "").trim();
+  
+    // Detect Google Drive "file/d/" format
+    const match = clean.match(/\/file\/d\/([^/]+)/);
+  
+    if (match && match[1]) {
+      const fileId = match[1];
+      return `https://drive.google.com/uc?export=download&id=${fileId}`;
+    }
+  
+    return clean;
+  };
+
+  const isPreparingOrLater = useMemo(() => {
+    return getCurrentPosition(order?.orderStatus) >= 3;
+  }, [order?.orderStatus]);
+
+  const uniqueOrderProducts = useMemo(() => {
+    const arr = Array.isArray(order?.items) ? order.items : [];
+    const seen = new Set();
+
+    return arr.filter((item) => {
+      const key = makeKey(item?.product || "", item?.presentation || "");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [order]);
+
+  const selectedDocTypeKeys = useMemo(() => {
+    if (selectedDocTypes.includes("ALL_DOCS")) {
+      return DOC_TYPES.map((d) => d.key);
+    }
+    return selectedDocTypes;
+  }, [selectedDocTypes]);
+
+  const selectedProductKeys = useMemo(() => {
+    if (selectedProducts.includes("ALL_PRODUCTS")) {
+      return uniqueOrderProducts.map((item) => makeKey(item.product, item.presentation));
+    }
+    return selectedProducts;
+  }, [selectedProducts, uniqueOrderProducts]);
+  // END MAR/31
 
   // Load order (fresh)
   useEffect(() => {
@@ -105,6 +189,74 @@ export default function OrderTrackDetails() {
       .catch((err) => console.error("Error fetching product image CSV:", err));
   }, []);
 
+  // NEW MAR/31
+  useEffect(() => {
+    if (!isPreparingOrLater) return;
+    if (docsLoaded) return;
+
+    const cacheKey = "gis_inventory_docs_v1";
+
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setDocLookup(parsed || {});
+        setDocsLoaded(true);
+        return;
+      } catch {
+        sessionStorage.removeItem(cacheKey);
+      }
+    }
+
+    setDocsLoading(true);
+    setDocsErr("");
+
+    axios
+      .get(INVENTARIO_BASE_CSV_URL)
+      .then((response) => {
+        Papa.parse(response.data, {
+          header: true,
+          skipEmptyLines: true,
+          complete: ({ data }) => {
+            const map = {};
+
+            data.forEach((row) => {
+              const name = row.NOMBRE_PRODUCTO || "";
+              const peso = (row.PESO_PRODUCTO || "").toString().trim();
+              const unidad = (row.UNIDAD_MEDICION || "").toString().trim();
+
+              const presNoSpace = `${peso}${unidad}`;
+              const presWithSpace = `${peso} ${unidad}`.trim();
+
+              const docs = {
+                FICHA_TECNICA_URL: normalizeUrl(row.FICHA_TECNICA_URL),
+                HOJA_DE_SEGURIDAD_URL: normalizeUrl(row.HOJA_DE_SEGURIDAD_URL),
+                CERTIFICADO_OMRI_URL: normalizeUrl(row.CERTIFICADO_OMRI_URL),
+                CERTIFICADO_DE_ANALISIS_URL: normalizeUrl(row.CERTIFICADO_DE_ANALISIS_URL),
+              };
+
+              if (!name) return;
+
+              map[makeKey(name, presNoSpace)] = docs;
+              map[makeKey(name, presWithSpace)] = docs;
+            });
+
+            setDocLookup(map);
+            setDocsLoaded(true);
+            sessionStorage.setItem(cacheKey, JSON.stringify(map));
+          },
+        });
+      })
+      .catch((err) => {
+        console.error("Error fetching inventory docs CSV:", err);
+        setDocsErr("No se pudieron cargar los documentos del producto.");
+      })
+      .finally(() => {
+        setDocsLoading(false);
+      });
+  }, [isPreparingOrLater, docsLoaded]);
+  // END MAR/31
+
   const getItemImage = (item) => {
     const prod = item?.product || "";
     const pres = item?.presentation || "";
@@ -119,6 +271,41 @@ export default function OrderTrackDetails() {
     return url && url.length > 0 ? url : fallbackImg;
   };
 
+  // NEW MAR/31
+  const toggleDocType = (key) => {
+    setSelectedDocTypes((prev) => {
+      if (key === "ALL_DOCS") {
+        return prev.includes("ALL_DOCS") ? [] : ["ALL_DOCS"];
+      }
+
+      const withoutAll = prev.filter((x) => x !== "ALL_DOCS");
+      return withoutAll.includes(key)
+        ? withoutAll.filter((x) => x !== key)
+        : [...withoutAll, key];
+    });
+  };
+
+  const toggleProduct = (key) => {
+    setSelectedProducts((prev) => {
+      if (key === "ALL_PRODUCTS") {
+        return prev.includes("ALL_PRODUCTS") ? [] : ["ALL_PRODUCTS"];
+      }
+
+      const withoutAll = prev.filter((x) => x !== "ALL_PRODUCTS");
+      return withoutAll.includes(key)
+        ? withoutAll.filter((x) => x !== key)
+        : [...withoutAll, key];
+    });
+  };
+
+  const getDocsForItem = (item) => {
+    const k1 = makeKey(item?.product || "", item?.presentation || "");
+    const k2 = makeKey(item?.product || "", String(item?.presentation || "").replace(/\s+/g, ""));
+    const k3 = makeKey(item?.product || "", String(item?.presentation || "").replace(/\s*/g, " "));
+    return docLookup[k1] || docLookup[k2] || docLookup[k3] || null;
+  };
+  // END MAR/31
+
   const labels = [
     "Pedido \n Realizado",
     "Evidencia \n de Pago",
@@ -128,18 +315,6 @@ export default function OrderTrackDetails() {
     // "Pedido \n Listo",
     "Pedido \n Entregado",
   ];
-
-  const getCurrentPosition = (status) => {
-    if (!status) return 0;
-    const s = status.toLowerCase();
-    if (s.includes("realizado")) return 0;
-    if (s.includes("evidencia")) return 1;
-    if (s.includes("verificado")) return 2;
-    if (s.includes("preparando")) return 3;
-    if (s.includes("etiqueta")) return 4;
-    if (s.includes("entregado")) return 5;
-    return 0;
-  };
 
   const ship = order?.shippingInfo || {};
   const bill = order?.billingInfo || {};
@@ -388,6 +563,124 @@ export default function OrderTrackDetails() {
       setTimeout(() => setUploadProgress(0), 800);
     }
   }
+
+  // NEW MAR/31
+  // async function downloadSelectedDocs() {
+  //   if (!selectedDocTypeKeys.length) {
+  //     alert("Selecciona al menos un tipo de documento.");
+  //     return;
+  //   }
+  
+  //   if (!selectedProductKeys.length) {
+  //     alert("Selecciona al menos un producto.");
+  //     return;
+  //   }
+  
+  //   const chosenItems = uniqueOrderProducts.filter((item) =>
+  //     selectedProductKeys.includes(makeKey(item.product, item.presentation))
+  //   );
+  
+  //   const files = [];
+  
+  //   for (const item of chosenItems) {
+  //     const docs = getDocsForItem(item);
+  //     if (!docs) continue;
+  
+  //     for (const docKey of selectedDocTypeKeys) {
+  //       const url = normalizeUrl(docs?.[docKey]);
+  //       if (!url) continue;
+  
+  //       const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+  
+  //       files.push({
+  //         url,
+  //         name: `${item.product}_${cleanDocName}.pdf`.replace(/[^\w]/g, "_"),
+  //       });
+  //     }
+  //   }
+  
+  //   if (!files.length) {
+  //     alert("No encontramos documentos disponibles.");
+  //     return;
+  //   }
+  
+  //   try {
+  //     const res = await fetch(`${API}/download-product-docs`, {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({ files }),
+  //     });
+  
+  //     const blob = await res.blob();
+  //     saveAs(blob, `documentos_pedido_${orderId}.zip`);
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Error descargando documentos.");
+  //   }
+  // }
+  
+  async function downloadSelectedDocs() {
+    if (!selectedDocTypeKeys.length) {
+      alert("Selecciona al menos un tipo de documento.");
+      return;
+    }
+  
+    if (!selectedProductKeys.length) {
+      alert("Selecciona al menos un producto.");
+      return;
+    }
+  
+    const chosenItems = uniqueOrderProducts.filter((item) =>
+      selectedProductKeys.includes(makeKey(item.product, item.presentation))
+    );
+  
+    const files = [];
+  
+    for (const item of chosenItems) {
+      const docs = getDocsForItem(item);
+      if (!docs) continue;
+  
+      for (const docKey of selectedDocTypeKeys) {
+        const url = normalizeUrl(docs?.[docKey]);
+        if (!url) continue;
+  
+        const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+  
+        const safeBaseName = `${item.product}_${cleanDocName}`
+          .replace(/[^\w\-]+/g, "_")
+          .replace(/^_+|_+$/g, "");
+  
+        files.push({
+          url,
+          name: `${safeBaseName}.pdf`,
+        });
+      }
+    }
+  
+    if (!files.length) {
+      alert("No encontramos documentos disponibles.");
+      return;
+    }
+  
+    try {
+      const res = await fetch(`${API}/download-product-docs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ files }),
+      });
+  
+      const blob = await res.blob();
+      saveAs(blob, `documentos_pedido_${orderId}.zip`);
+    } catch (err) {
+      console.error(err);
+      alert("Error descargando documentos.");
+    }
+  }
+  // END MAR/31
   
   // async function uploadEvidence() {
   //   if (!evidenceFile || !order?._id) {
@@ -460,7 +753,9 @@ export default function OrderTrackDetails() {
 
   return (
     <body className="app-shell body-BG-Gradient">
-      <div className="app-header loginLogo-ParentDiv">
+
+      <div className="app-header">
+      {/* <div className="app-header loginLogo-ParentDiv"> */}
         <img
           className="secondaryPages-GISLogo"
           src={logoImage}
@@ -472,7 +767,11 @@ export default function OrderTrackDetails() {
       </div>
 
       <div className="app-main">
-      <div className="orderTracker-LimitedScroll">
+
+      <div>
+      {/* <div className="orderTracker-LimitedScroll"> */}
+      <div className="stickyTopSection">
+
         <div className="edit-titleIcon-Div">
           <label className="editAddress-headerLabel">Rastrea tu orden</label>
           <img src={pedidoIcon} alt="Pedido" width="35" height="35" />
@@ -489,6 +788,141 @@ export default function OrderTrackDetails() {
             })}
           </label>
         </div>
+        </div>
+
+        {/* MAR/31 */}
+        {isPreparingOrLater && (
+          <div className="orderFiles-Div" style={{ marginTop: 10 }}>
+            <label className="orderNumber-Label">DOCUMENTOS DEL PRODUCTO</label>
+
+            <div className="selectFilesAndProducts-Div" style={{ display: "grid", gap: 10, marginTop: 10}}>
+              {/* Dropdown documentos */}
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="selectFilesDropdown-Btn"
+                  style={{ width: "100%", maxWidth: 250, marginLeft: "8.5%", marginTop: "6%", fontStyle: "italic", color: "gray", fontWeight:"normal", textAlign:"left", paddingLeft:"5%"  }}
+                  onClick={() => setDocDropdownOpen((v) => !v)}
+                >
+                  Seleccionar documentos ▼
+                </button>
+
+                {docDropdownOpen && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      marginLeft: "8.5%",
+                      background: "#fff",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      padding: 10,
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+                      zIndex: 20,
+                      position: "relative",
+                      width: "100%",
+                      maxWidth: 250,
+
+                    }}
+                  >
+                    <label style={{ display: "block", marginBottom: 8,  }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedDocTypes.includes("ALL_DOCS")}
+                        onChange={() => toggleDocType("ALL_DOCS")}
+                      />{" "}
+                      Descargar todos
+                    </label>
+
+                    {DOC_TYPES.map((doc) => (
+                      <label key={doc.key} style={{ display: "block", marginBottom: 8 }}>
+                        <input
+                          type="checkbox"
+                          checked={
+                            selectedDocTypes.includes("ALL_DOCS") ||
+                            selectedDocTypes.includes(doc.key)
+                          }
+                          onChange={() => toggleDocType(doc.key)}
+                        />{" "}
+                        {doc.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Dropdown productos */}
+              <div style={{ position: "relative" }}>
+                <button
+                  type="button"
+                  className="selectFilesDropdown-Btn"
+                  style={{ width: "100%", maxWidth: 250, marginLeft: "8.5%", marginTop: "4%", fontStyle: "italic", color: "gray", fontWeight:"normal", textAlign:"left", paddingLeft:"5%" }}
+                  onClick={() => setProductDropdownOpen((v) => !v)}
+                >
+                  Seleccionar productos  ▼
+                </button>
+
+                {productDropdownOpen && (
+                  <div
+                    style={{
+                      marginTop: 8,
+                      marginLeft: "8.5%",
+                      background: "#fff",
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      padding: 10,
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.12)",
+                      zIndex: 20,
+                      position: "relative",
+                      width: "100%",
+                      maxWidth: 250,
+                    }}
+                  >
+                    <label style={{ display: "block", marginBottom: 8 }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedProducts.includes("ALL_PRODUCTS")}
+                        onChange={() => toggleProduct("ALL_PRODUCTS")}
+                      />{" "}
+                      Todos los productos
+                    </label>
+
+                    {uniqueOrderProducts.map((item, idx) => {
+                      const key = makeKey(item.product, item.presentation);
+                      return (
+                        <label key={`${key}-${idx}`} style={{ display: "block", marginBottom: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={
+                              selectedProducts.includes("ALL_PRODUCTS") ||
+                              selectedProducts.includes(key)
+                            }
+                            onChange={() => toggleProduct(key)}
+                          />{" "}
+                          {item.product} {item.presentation ? `(${item.presentation})` : ""}
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                className="uploadPaymentEvidence-Btn"
+                style={{ width: "100%", maxWidth: 130, marginLeft: 145, marginTop: "4%" }}
+                onClick={downloadSelectedDocs}
+                disabled={docsLoading || !docsLoaded}
+              >
+                {docsLoading ? "Cargando..." : "Descargar"}
+              </button>
+
+              {docsErr && (
+                <div style={{ color: "#b00", fontSize: 12 }}>{docsErr}</div>
+              )}
+            </div>
+          </div>
+        )}
+        {/* MAR/31 */}
 
         {/* sep06 */}
          {/* ✅ Show tracking number only when delivered and present */}
@@ -551,7 +985,8 @@ export default function OrderTrackDetails() {
           </ProgressBar>
         </div>
 
-        <div className="orderTracker-Scroll">
+        <div>
+        {/* <div className="orderTracker-Scroll"> */}
           <div className="orderNumberAndDate-Div">
             <label className="orderNumber-Label">DESCRIPCIÓN DEL PEDIDO</label>
             {(order.items || []).map((item, idx) => (
