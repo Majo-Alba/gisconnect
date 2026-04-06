@@ -683,8 +683,19 @@ export default function OrderTrackDetails() {
           .replace(/[^\w\-]+/g, "_")
           .replace(/^_+|_+$/g, "");
 
+        if (!fileId) {
+          console.warn("⚠️ Invalid file skipped:", docs?.[docKey]);
+          continue;
+        }
+
+        console.log("📄 FILE:", {
+          product: item.product,
+          docKey,
+          originalUrl: docs?.[docKey],
+          fileId,
+        });
+
         files.push({
-          url: download,
           fileId,
           name: `${safeBaseName}.pdf`,
         });

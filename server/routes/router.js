@@ -2687,6 +2687,7 @@ router.get("/proxy-download", async (req, res) => {
     }
 
     const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    console.log("📥 Fetching:", driveUrl);
 
     const response = await axios.get(driveUrl, {
       responseType: "stream",
