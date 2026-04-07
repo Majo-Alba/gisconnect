@@ -2627,18 +2627,6 @@ router.post("/download-product-docs", async (req, res) => {
 
     const zip = new JSZip();
 
-    // for (const file of files) {
-    //   try {
-    //     const response = await axios.get(file.url, {
-    //       responseType: "arraybuffer",
-    //     });
-
-    //     zip.file(file.name, response.data);
-    //   } catch (err) {
-    //     console.warn("Failed file:", file.url);
-    //   }
-    // }
-
     // apr07
     for (const file of files) {
       try {
@@ -2657,15 +2645,28 @@ router.post("/download-product-docs", async (req, res) => {
       }
     }
     // apr07
-
-    const content = await zip.generateAsync({ type: "nodebuffer" });
-
+    const content = await zip.generateAsync({
+      type: "nodebuffer",
+      compression: "DEFLATE",
+      compressionOptions: { level: 5 },
+    });
+    
     res.set({
       "Content-Type": "application/zip",
       "Content-Disposition": "attachment; filename=documentos.zip",
+      "Content-Length": content.length,
     });
+    
+    res.end(content);
 
-    res.send(content);
+    // const content = await zip.generateAsync({ type: "nodebuffer" });
+
+    // res.set({
+    //   "Content-Type": "application/zip",
+    //   "Content-Disposition": "attachment; filename=documentos.zip",
+    // });
+
+    // res.send(content);
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Error generating ZIP" });

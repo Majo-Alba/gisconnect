@@ -660,83 +660,25 @@ export default function OrderTrackDetails() {
     for (const item of chosenItems) {
       const docs = getDocsForItem(item);
       if (!docs) continue;
-
-      // apr06
+  
       for (const docKey of selectedDocTypeKeys) {
         const docObj = docs?.[docKey];
-      
+  
         if (!docObj || !docObj.fileId) {
           console.warn("⚠️ Invalid file skipped:", docObj);
           continue;
         }
-      
+  
         const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
         const safeBaseName = `${item.product}_${cleanDocName}`
           .replace(/[^\w\-]+/g, "_")
           .replace(/^_+|_+$/g, "");
-      
-        console.log("📄 FILE:", {
-          product: item.product,
-          docKey,
-          fileId: docObj.fileId,
-        });
-      
+  
         files.push({
           fileId: docObj.fileId,
           name: `${safeBaseName}.pdf`,
         });
       }
-      // apr06
-  
-      // for (const docKey of selectedDocTypeKeys) {
-      //   // const url = normalizeUrl(docs?.[docKey]);
-      //   // if (!url) continue;
-  
-      //   // const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-      //   // const safeBaseName = `${item.product}_${cleanDocName}`
-      //   //   .replace(/[^\w\-]+/g, "_")
-      //   //   .replace(/^_+|_+$/g, "");
-  
-      //   // files.push({
-      //   //   url,
-      //   //   name: `${safeBaseName}.pdf`,
-      //   // });
-
-      //   // apr06
-
-      //   // const { download, fileId } = normalizeUrl(docs?.[docKey]);
-      //   const docObj = docs?.[docKey];
-
-      //   if (!docObj || !docObj.fileId) {
-      //     console.warn("⚠️ Invalid file skipped:", docObj);
-      //     continue;
-      //   }
-
-      //   const fileId = docObj.fileId;
-
-      //   const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-      //   const safeBaseName = `${item.product}_${cleanDocName}`
-      //     .replace(/[^\w\-]+/g, "_")
-      //     .replace(/^_+|_+$/g, "");
-
-      //   if (!fileId) {
-      //     console.warn("⚠️ Invalid file skipped:", docs?.[docKey]);
-      //     continue;
-      //   }
-
-      //   console.log("📄 FILE:", {
-      //     product: item.product,
-      //     docKey,
-      //     originalUrl: docs?.[docKey],
-      //     fileId,
-      //   });
-
-      //   files.push({
-      //     fileId,
-      //     name: `${safeBaseName}.pdf`,
-      //   });
-      //   // apr06
-      // }
     }
   
     if (!files.length) {
@@ -744,52 +686,23 @@ export default function OrderTrackDetails() {
       return;
     }
   
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-    const isStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      window.navigator.standalone === true;
-  
-    const isIOSPWA = isIOS && isStandalone;
-  
     try {
-      // iPhone installed app fallback:
-      // if (isIOSPWA) {
-      //   for (const file of files) {
-      //     const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
-      //     // window.open(link, "_blank");
-      //     window.location.href = link;
-      //   }
-      //   return;
-      // }
-
-      // apr07
-      if (isIOSPWA) {
-        for (const file of files) {
-          const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
-          
-          window.open(link, "_blank");
-      
-          await new Promise((r) => setTimeout(r, 300)); // 👈 KEY
+      // ✅ ALWAYS use ZIP (fixes iPhone + Chrome QUIC error)
+      const res = await axios.post(
+        `${API}/download-product-docs`,
+        { files },
+        {
+          responseType: "blob",
         }
-        return;
-      }
-      // apr07
+      );
   
-      // desktop / normal browsers
-      const res = await fetch(`${API}/download-product-docs`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ files }),
-      });
+      // iOS PWA fix
+      const blobUrl = window.URL.createObjectURL(res.data);
+      window.open(blobUrl);
   
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
-      }
+      // Desktop fallback (also triggers download)
+      saveAs(res.data, `documentos_pedido_${orderId}.zip`);
   
-      const blob = await res.blob();
-      saveAs(blob, `documentos_pedido_${orderId}.zip`);
     } catch (err) {
       console.error(err);
       alert("Error descargando documentos.");
