@@ -754,20 +754,26 @@ export default function OrderTrackDetails() {
     try {
       // iPhone installed app fallback:
       // if (isIOSPWA) {
-      //   // open one by one instead of ZIP blob
       //   for (const file of files) {
-      //     window.open(file.url, "_blank", "noopener,noreferrer");
+      //     const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
+      //     // window.open(link, "_blank");
+      //     window.location.href = link;
       //   }
       //   return;
       // }
+
+      // apr07
       if (isIOSPWA) {
         for (const file of files) {
           const link = `${API}/proxy-download?fileId=${file.fileId}&name=${file.name}`;
-          // window.open(link, "_blank");
-          window.location.href = link;
+          
+          window.open(link, "_blank");
+      
+          await new Promise((r) => setTimeout(r, 300)); // 👈 KEY
         }
         return;
       }
+      // apr07
   
       // desktop / normal browsers
       const res = await fetch(`${API}/download-product-docs`, {

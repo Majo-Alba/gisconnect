@@ -2627,17 +2627,36 @@ router.post("/download-product-docs", async (req, res) => {
 
     const zip = new JSZip();
 
+    // for (const file of files) {
+    //   try {
+    //     const response = await axios.get(file.url, {
+    //       responseType: "arraybuffer",
+    //     });
+
+    //     zip.file(file.name, response.data);
+    //   } catch (err) {
+    //     console.warn("Failed file:", file.url);
+    //   }
+    // }
+
+    // apr07
     for (const file of files) {
       try {
-        const response = await axios.get(file.url, {
+        const driveUrl = `https://drive.google.com/uc?export=download&id=${file.fileId}`;
+    
+        console.log("📥 Fetching:", driveUrl);
+    
+        const response = await axios.get(driveUrl, {
           responseType: "arraybuffer",
         });
-
+    
         zip.file(file.name, response.data);
+    
       } catch (err) {
-        console.warn("Failed file:", file.url);
+        console.warn("❌ Failed file:", file.fileId);
       }
     }
+    // apr07
 
     const content = await zip.generateAsync({ type: "nodebuffer" });
 
@@ -2651,6 +2670,7 @@ router.post("/download-product-docs", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Error generating ZIP" });
   }
+  console.log("FILES RECEIVED:", files)
 });
 
 // router.get("/proxy-download", async (req, res) => {
@@ -2686,7 +2706,8 @@ router.get("/proxy-download", async (req, res) => {
       return res.status(400).send("Missing fileId");
     }
 
-    const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    // const driveUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+    const driveUrl = `https://drive.google.com/uc?id=${fileId}&export=download&confirm=t`;
     console.log("📥 Fetching:", driveUrl);
 
     const response = await axios.get(driveUrl, {
