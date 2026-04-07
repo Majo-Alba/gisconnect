@@ -2671,7 +2671,7 @@ router.post("/download-product-docs", async (req, res) => {
     console.error(err);
     res.status(500).json({ error: "Error generating ZIP" });
   }
-  console.log("FILES RECEIVED:", files)
+  // console.log("FILES RECEIVED:", files)
 });
 
 // router.get("/proxy-download", async (req, res) => {
