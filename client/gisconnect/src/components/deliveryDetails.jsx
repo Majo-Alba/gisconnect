@@ -1,4 +1,4 @@
-// in deliveryDetails.jsx if on mongodb's new_orders field "insureShipment" is false, then don't show "Monto Asegurado". As well, we currently have an automatically displayed "Número de Guía", which is causing confusion, so can we not have anything autopopulating that field
+// in deliveryDetails.jsx, I'd like to add an extra div right before "direccion de envio" called "Detalles del pedido" where we add details of the products, amounts, and observations this order is sending. (Remember we have such info in mongodb). Here is my current deliveryDetails.jsx, as well as how we're implementign the same concept in deliveredSummary, since I want it exactly like that. Under that new div, add a second new div called "Observaciones", where you put mongodb field "observations"
 import { useState, useEffect, useMemo, useCallback, useRef } from "react"; 
 import { useParams, useNavigate } from "react-router-dom"; 
 import axios from "axios"; 
@@ -430,6 +430,67 @@ export default function DeliveryDetails() {
                 {/* Keep inputs usable — do NOT freeze the form */} 
                 <div className="deliveryDetails-Div"> 
                     <div className="paymentDetails-Div"> 
+                        {/* apr10 */}
+                        {/* ===== DETALLES DEL PEDIDO ===== */}
+                        <div className="deliveryDets-AddressDiv">
+                        <div className="headerEditIcon-Div">
+                            <label className="newUserData-Label">Detalles del Pedido</label>
+                        </div>
+
+                        {/* <div className="existingQuote-Div"> */}
+                        <div className="orderDelivered-ProductsDiv">
+                            {/* <div className="quoteAndFile-Div"> */}
+                            <div className="orderDetails-Div">
+                            {Array.isArray(order?.items) && order.items.length > 0 ? (
+                                <>
+                                {order.items.map((item, idx) => (
+                                    // <div key={idx} style={{ marginBottom: 8 }}>
+                                    <div className="newOrderDets-Div" key={idx} style={{ marginBottom: 8 }}>
+                                    {/* <label className="productDetail-Label"> */}
+                                    <div className="orderDetails-Div">
+                                        <label className="orderDets-Label">
+                                            <b>{item.product}</b>
+                                        </label>
+
+                                        {item.presentation && (
+                                            <label className="orderDets-Label">
+                                            <b>Presentación:</b> {item.presentation}
+                                            </label>
+                                        )}
+
+                                        <label className="orderDets-Label">
+                                            <b>Cantidad:</b> {item.amount}
+                                        </label>
+                                        </div>
+                                    </div>
+                                ))}
+                                </>
+                            ) : (
+                                <label className="productDetail-Label">
+                                No hay productos en este pedido.
+                                </label>
+                            )}
+                            </div>
+                        </div>
+                        </div>
+
+                        {/* ===== OBSERVACIONES ===== */}
+                        <div className="deliveryDets-AddressDiv">
+                        <div className="headerEditIcon-Div">
+                            <label className="newUserData-Label">Observaciones</label>
+                        </div>
+
+                        <div className="existingQuote-Div">
+                            <div className="quoteAndFile-Div">
+                            <label className="productDetail-Label">
+                                {order?.observations?.trim()
+                                ? order.observations
+                                : "Sin observaciones"}
+                            </label>
+                            </div>
+                        </div>
+                        </div>
+                        {/* apr10 */}
                         {/* ✅ Swap title + body when pickup */} 
                         <div className="deliveryDets-AddressDiv">
                             <div className="headerEditIcon-Div"> 

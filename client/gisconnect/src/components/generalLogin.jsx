@@ -25,6 +25,7 @@ export default function GeneralLogin() {
     "administracion@greenimportsol.com",
     "administracion2@greenimportsol.com",
     "almacen@greenimportsol.com",
+    "almacen2@greenimportsol.com",
   ]);
 
   const ADMIN_FACTURAS_Y_LOGISTICA = new Set([
@@ -35,7 +36,6 @@ export default function GeneralLogin() {
 
   const LOGISTICA_Y_ALMACEN = new Set([
     "logistica@greenimportsol.com",
-    "almacen2@greenimportsol.com",
     "almacen3@greenimportsol.com",
     "almacen4@greenimportsol.com",
   ]);
