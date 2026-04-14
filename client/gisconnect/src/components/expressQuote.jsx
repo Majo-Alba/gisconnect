@@ -1,4 +1,4 @@
-// in expressQuote.jsx, we are using SPECIAL_PRICES_URL. We are having kind of a situation when assigning prices because we have rhe following going on: Some products are in USD, while others are expressed in MXN. Though our database has columnos "PRECIO_PIEZA_DOLARES" & "PRECIO_PIEZA_MXN" to differentiatie amongst which products fall into which category, when assigning special prices we just have all prices ligned up under the user. I've added a new column "UNIDAD_MONETARIA" which expresses the currency for each product. Can we please take into consideration that column too to correctly - and double check - the assignment of a products currency  
+// in expressQuote.jsx, we have "INVENTORY_LATEST_CSV_URL" to check if the product the user is selecting is in existance. However, the function has a loopwhole that's messing up a bit. Our inventory column "EXISTENCIA"is expressed in terms of existing kilos. However, the client inputs in field "Cantidad Deseada" the packed units he wants to order. To explain myself better, here's the example where we detected the bug so you can help me fix it: In inventory "INVENTORY_LATEST_CSV_URL" we have a product "GLUTAMIC-GREEN", which has 5 in existance. The client inputed "Cantidad Deseada" 2 units of 10kg each, of 10kg each, thus 20kg of the product make up his order. Now, GISConnect allowed him to order because currently we take the "Existencia" field in inventory as packed units, rather than total kilos available. Please fix this so existencias in database is taken as kilos and the app multiplies "Cantidad deseada" by "presentación" (which tells us how many kilos are being requested total). Here is my current expressQuote.jsx, please direct edit    
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -88,6 +88,17 @@ export default function ExpressQuote() {
     if (!Number.isFinite(num)) return 0;
     return Math.max(0, Math.floor(num));
   };
+
+  // new apr14
+  const getRequestedKilos = () => {
+    const qtyNum = asQty(amount);
+    const weightNum = n(weight); // PESO_PRODUCTO
+  
+    if (!Number.isFinite(qtyNum) || !Number.isFinite(weightNum)) return 0;
+  
+    return qtyNum * weightNum;
+  };
+  // end apr14
 
   // Helper to get timestamp from Mongo _id
   const _idToMs = (id) => {
@@ -621,7 +632,12 @@ export default function ExpressQuote() {
   const qty = asQty(amount);
   const stockNum = n(stock);
   const hasFiniteStock = Number.isFinite(stockNum);
-  const outOfStock = hasFiniteStock && qty > 0 && qty > stockNum;
+
+  // modif apr14
+  // const outOfStock = hasFiniteStock && qty > 0 && qty > stockNum;
+  const requestedKilos = getRequestedKilos();
+  const outOfStock = hasFiniteStock && requestedKilos > stockNum;
+  // modif apr14
 
   const handleAddItem = () => {
     const baseRow = csvData.find(
@@ -640,7 +656,9 @@ export default function ExpressQuote() {
       return;
     }
     if (outOfStock) {
-      alert(`Solo hay ${stockNum} unidades disponibles.`);
+      // modif apr14
+      // alert(`Solo hay ${stockNum} unidades disponibles.`);
+      alert(`Solo hay ${stockNum} kg disponibles. Estás solicitando ${requestedKilos} kg.`);
       return;
     }
     const unitPrice = n(price) || 0;

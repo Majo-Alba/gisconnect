@@ -89,6 +89,17 @@ export default function NewOrder() {
     return Math.max(0, Math.floor(num));
   };
 
+    // new apr14
+    const getRequestedKilos = () => {
+      const qtyNum = asQty(amount);
+      const weightNum = n(weight); // PESO_PRODUCTO
+    
+      if (!Number.isFinite(qtyNum) || !Number.isFinite(weightNum)) return 0;
+    
+      return qtyNum * weightNum;
+    };
+    // end apr14
+
   // Helper to get timestamp from Mongo _id
   const _idToMs = (id) => {
     try {
@@ -621,7 +632,12 @@ export default function NewOrder() {
   const qty = asQty(amount);
   const stockNum = n(stock);
   const hasFiniteStock = Number.isFinite(stockNum);
-  const outOfStock = hasFiniteStock && qty > 0 && qty > stockNum;
+
+  // modif apr14
+  // const outOfStock = hasFiniteStock && qty > 0 && qty > stockNum;
+  const requestedKilos = getRequestedKilos();
+  const outOfStock = hasFiniteStock && requestedKilos > stockNum;
+  // modif apr14
 
   const handleAddItem = () => {
     const baseRow = csvData.find(
@@ -640,7 +656,9 @@ export default function NewOrder() {
       return;
     }
     if (outOfStock) {
-      alert(`Solo hay ${stockNum} unidades disponibles.`);
+      // alert(`Solo hay ${stockNum} unidades disponibles.`);
+      alert(`Solo hay ${stockNum} kg disponibles. Estás solicitando ${requestedKilos} kg.`);
+
       return;
     }
     const unitPrice = n(price) || 0;
