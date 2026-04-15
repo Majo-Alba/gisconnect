@@ -1,4 +1,4 @@
-// in orderNow.jsx, when changing "Transportista" and/or "Mercancia Asegurada", we are patching shipping-preferences, but instead I'd like to avoid modifying the shipping preferences of newuser in mongodb and instead add a field in the existing mongodb order "preferredCarrier" and "insureShipment" with this items. Here is my current orderNow.jsx, orderModel.js and router.js
+// in orderNow.jsx we'll have the following tweak: regardless of the currency the user selects to pay for his order (USD or MXN) we want him to be able to see the order's total expressed in both currencies. Now, since we have "payment rules" (products that are originally listed in MXN must be payed in MXN, while products originally listed in USD can be payed either in usd when client selects as prefered currency USD, or can be payed in MXN when client selects MXN as prefered currency), I think the best aproach to do this is as follows: in div "Resumen de Orden" let's show all possibilities. Then, let's have a separate div "Preferencias de Pago" where the current financial summary is shown, with the users preferences
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -932,6 +932,37 @@ export default function OrderNow() {
   const vatMXN = wantsDesgloseIVA && baseAllMXN != null && baseAllMXN > 0
     ? +(baseAllMXN - baseAllMXN / (1 + VAT_RATE)).toFixed(2)
     : 0;
+
+  // new apr15
+  // ===== DISPLAY SCENARIOS (NEW) =====
+  const paymentScenarios = useMemo(() => {
+    const hasRate = Number.isFinite(dof2) && dof2 > 0;
+
+    const usd = sumUSD;
+    const mxn = sumMXN;
+
+    const usdToMxn = hasRate ? usd * dof2 : null;
+    const mxnToUsd = hasRate ? mxn / dof2 : null;
+
+    return {
+      usd: {
+        usdItems: usd,
+        mxnItems: mxn,
+        totalUSD: usd,
+        totalMXNConverted: mxnToUsd,
+        canConvert: hasRate
+      },
+      mxn: {
+        usdItems: usd,
+        mxnItems: mxn,
+        totalMXN: mxn,
+        totalUSDConverted: usdToMxn,
+        totalCombined: hasRate ? (mxn + usdToMxn) : null,
+        canConvert: hasRate
+      }
+    };
+  }, [sumUSD, sumMXN, dof2]);
+  // end apr15
 
   // ========== inventory hold helpers ==========
   const splitPresentation = (presentation = "") => {
@@ -2055,11 +2086,12 @@ export default function OrderNow() {
           )}
 
           {/* Items */}
-          <div className="headerAndDets-Div">
+          {/* MODIF APR15 */}
+          {/* <div className="headerAndDets-Div">
             <label className="orderSummary-Label">Resumen de orden</label>
-          </div>
+          </div> */}
 
-          <div className="products-Div">
+          {/* <div className="products-Div">
             <ul>
               {items.map((item, i) => {
                 const cur = (item.currency || "USD").toUpperCase();
@@ -2105,10 +2137,10 @@ export default function OrderNow() {
                   </div>
                 );
               })}
-            </ul>
+            </ul> */}
 
             {/* Summary box (NATURAL totals; show breakdown only if wantsInvoice && DESGLOSE_IVA === "Sí") */}
-            <div className="orderNow-summaryDiv">
+            {/* <div className="orderNow-summaryDiv">
               {(() => {
                 const rows = [{ label: "Moneda de pago:", value: preferredCurrency, boldLabel: true, labelClass: "accent"  }];
 
@@ -2171,7 +2203,6 @@ export default function OrderNow() {
                         labelClass: "muted",
                         valueClass: dofRate ? "muted" : "",
                         value: dofRate
-                          // ? `${dofRate.toFixed(2)} MXN/USD${dofDate ? ` (DOF ${dofDate})` : ""}`
                           ? `${dofRate.toFixed(2)} MXN/USD`
                           : fxError
                           ? "—"
@@ -2209,7 +2240,234 @@ export default function OrderNow() {
                 );
               })()}
             </div>
+          </div> */}
+          {/* MODIF APR15 */}
+
+          {/* NEW APR15 */}
+          <div className="orderSummaryBox">
+            <div className="headerAndDets-Div">
+              <label className="orderSummary-Label">Resumen de orden</label>
+            </div>
+
+            <div className="products-Div">
+            <ul>
+              {items.map((item, i) => {
+                const cur = (item.currency || "USD").toUpperCase();
+                const unit =
+                  cur === "MXN"
+                    ? `${Number(item.priceMXN ?? item.price).toFixed(2)} MXN`
+                    : `${Number(item.priceUSD ?? item.price).toFixed(2)} USD`;
+                const line =
+                  cur === "MXN"
+                    ? (Number(item.amount) * Number(item.priceMXN ?? item.price)).toFixed(2) + " MXN"
+                    : (Number(item.amount) * Number(item.priceUSD ?? item.price)).toFixed(2) + " USD";
+
+                return (
+                  <div className="orderImageAndDets-Div" key={i}>
+                    <img
+                      src={getItemImage(item)}
+                      alt={item.product}
+                      width="75"
+                      height="75"
+                      onError={(e) => {
+                        e.currentTarget.src = fallbackImg;
+                      }}
+                    />
+                    <div className="orderDetails-Div">
+                      <label className="orderDets-Label">
+                        <b>{item.product}</b>
+                      </label>
+                      <label className="orderDets-Label">
+                        <b>Presentación: {item.presentation}</b>
+                        {item.packPresentation ? ` — ${item.packPresentation}` : ""}
+                      </label>
+                      <br />
+                      <label className="orderDets-Label">
+                        <b>Cantidad:</b> {item.amount}
+                      </label>
+                      <label className="orderDets-Label">
+                        <b>Precio Unitario:</b> ${unit}
+                      </label>
+                      <label className="orderDetsTotal-Label">
+                        <b>Total:</b> ${line}
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
+            </ul>
+
+            <div className="orderNow-summaryDiv">
+              <div style={{ marginBottom: 12 }}>
+                <div style={{marginBottom: 10}}>
+                  <label style={{color: "#0B9444", fontSize:"14px", fontWeight:"bold"}}>Total del pedido</label><br></br>
+                  <label style={{color: "#0B9444", fontSize:"14px", fontWeight:"normal", fontStyle:"italic"}}>(expresado en USD) :</label><br></br>
+                </div>
+                {hasUSD && (
+                  <div>
+                    <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Productos en USD:</label> <br></br>
+                    <label style={{marginTop:"4px", fontSize:"14px"}}>{fmtUSD(sumUSD)}</label>
+                  </div>
+
+                )}
+
+                {hasMXN && (
+                  <div style={{marginTop:"5px"}}>
+                    <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Productos en MXN: </label>
+                    <label style={{marginTop:"4px", fontSize:"14px"}}>
+                      {fmtMXN(sumMXN)}
+                      {/* {paymentScenarios.usd.canConvert && (
+                        <> ({fmtUSD(paymentScenarios.usd.totalMXNConverted)})</>
+                      )} */}
+                    </label>
+                  </div>
+                )}
+
+                {/* TOTAL USD */}
+                {/* {hasUSD && !hasMXN && (
+                  <div><strong>Total: {fmtUSD(sumUSD)}</strong></div>
+                )} */}
+
+                {/* Mixed */}
+                {hasUSD && hasMXN && (
+                  <div style={{ fontSize: 12, opacity: 0.8, color:"red", fontWeight:"bold", marginTop:"3px" }}>
+                    * Productos listados en MXN solo se pueden pagar en MXN
+                  </div>
+                )}
+                {!hasUSD && hasMXN && (
+                  <div style={{ fontSize: 12, opacity: 0.8, color:"red", fontWeight:"bold", marginTop:"3px" }}>
+                    * Productos listados en MXN solo se pueden pagar en MXN
+                  </div>
+                )}
+
+                {/* Only MXN */}
+                {/* {!hasUSD && hasMXN && (
+                  <div><strong>Total: {fmtMXN(sumMXN)}</strong></div>
+                )} */}
+              </div>
+
+              {/* ===== PAGO EN MXN ===== */}
+              <div>
+                <div style={{marginBottom: 10}}>
+                  <label style={{color: "#0B9444", fontSize:"14px", fontWeight:"bold"}}>Total del pedido</label><br></br>
+                  <label style={{color: "#0B9444", fontSize:"14px", fontWeight:"normal", fontStyle:"italic"}}>(expresado en MXN) :</label><br></br>
+                </div>
+
+                {hasMXN && (
+                  <div>
+                    <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Productos en MXN:</label><br></br>
+                    <label style={{marginTop:"4px", fontSize:"14px"}}>{fmtMXN(sumMXN)}</label>
+                  </div>
+                )}
+
+                {hasUSD && (
+                  <div>
+                    <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Productos en USD: </label><br></br>
+                    <label style={{marginTop:"4px", fontSize:"14px"}}>
+                      {paymentScenarios.mxn.canConvert && (
+                        <> {fmtMXN(paymentScenarios.mxn.totalUSDConverted)}</>
+                      )}
+                    </label>
+                    {Number.isFinite(dof2) && (
+                      <div style={{ fontSize: 12, opacity: 0.7, marginTop:"4px", fontStyle:"italic" }}>
+                        Tipo de cambio: {dof2} MXN/USD {dofDate && `(Fecha: ${dofDate})`}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* TOTAL MXN */}
+                {paymentScenarios.mxn.totalCombined != null && (
+                  <div style={{marginTop:"5px"}}>
+                    <label style={{marginTop:"6px", fontSize:"14px", fontWeight:"bold"}}>
+                      Total: 
+                    </label><br></br>
+                    <label style={{marginTop:"4px", fontSize:"14px"}}>
+                      {fmtMXN(paymentScenarios.mxn.totalCombined)}
+                    </label>
+                  </div>
+                )}
+
+                {/* Only USD */}
+                {/* {hasUSD && !hasMXN && paymentScenarios.mxn.canConvert && (
+                  <div>
+                    <strong>Total: {fmtMXN(paymentScenarios.mxn.totalUSDConverted)}</strong>
+                  </div>
+                )} */}
+              </div>
+            </div>
+            </div>
+            {/* here */}
+            {/* ===== PAGO EN USD ===== */}
+
           </div>
+          {/* END APR15 */}
+
+          {/* NEW APR15 */}
+          <div className="orderSummaryBox">
+            <div className="headerAndeDets-Div">
+              <label className="orderSummary-Label">Preferencias de Pago</label>
+            </div>
+
+            <div className="products-Div">
+              {/* 🔥 NEW MESSAGE */}
+              <div style={{marginTop:10, marginBottom:10}}>
+                {/* <label style={{ marginBottom: 10, fontWeight: "bold", color:"red" }}>
+                  IMPORTANTE:
+                </label><br></br> */}
+
+                <label style={{fontWeight: "normal", fontStyle:"italic" }}>
+                  Usted ha elegido {preferredCurrency} como moneda de preferencia para su orden.
+                </label>
+              </div>
+
+              <div className="orderNow-summaryDiv">
+                <div>
+                  <label style={{color: "#0B9444", fontSize:"14px", fontWeight:"bold"}}>Moneda de pago: </label><br></br>
+                  <label>{preferredCurrency}</label>
+                </div>
+
+                {preferredCurrency === "USD" && (
+                  <>
+                    {hasUSD && <div>
+                      <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Total a pagar en USD:</label><br></br>
+                      <label style={{marginTop:"4px", fontSize:"14px"}}> {fmtUSD(sumUSD)}</label>
+                    </div>}
+                    {hasMXN && <div>
+                      <label style={{marginTop:"4px", fontSize:"14px", fontWeight:"bold"}}>Total a pagar en MXN: </label>
+                      <label style={{marginTop:"4px", fontSize:"14px"}}>{fmtMXN(sumMXN)}</label>
+                    </div>}
+                  </>
+                )}
+
+                {preferredCurrency === "MXN" && (
+                  <>
+                    {paymentScenarios.mxn.totalCombined != null ? (
+                      <div>
+                        Total a pagar: {fmtMXN(paymentScenarios.mxn.totalCombined)}
+                      </div>
+                    ) : (
+                      <div style={{ color: "red" }}>
+                        No hay tipo de cambio disponible
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* FX */}
+                {Number.isFinite(dof2) && (
+                  <div style={{ fontSize: 12, opacity: 0.7, fontStyle:"italic" }}>
+                    Tipo de cambio: {dof2} MXN/USD {dofDate && `(Fecha: ${dofDate})`}
+                  </div>
+                )}
+
+                <div>
+                  <label style={{fontSize:"14px", fontWeight:"bold", color:"red"}}>IMPORTANTE: En órdenes mixtas, los artículos listados en MXN deben pagarse en MXN.</label><br></br>
+                </div>
+              </div>
+            </div>
+          </div>
+          {/* END APR15 */}
 
           {/* Payment option / Credit */}
           <div className="headerAndDets-Div" style={{ marginTop: 16 }}>
