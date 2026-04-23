@@ -1,3 +1,4 @@
+// in newOrderdetails.jsx, inside the order summary box we have Total USD and Total MXN, but only show the amount in the prefered currency selected by the user. However, I'd like to show total amount in both currencies. Thus if in MongoDb paymentCurrency is USD, check "currencyExchange" for "rate" in order to also display in MXN and viceversa, if MXN is paymentCurrency, then convert to USD. Here is current newOrderDetails.jsx, please edit
 import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
 import { API } from "/src/lib/api";
@@ -410,21 +411,55 @@ export default function NewOrderDetails() {
     [order?.paymentCurrency, order?.preferredCurrency]
   );
 
+  // modif apr23
+  // const displayTotals = useMemo(() => {
+  //   const usdNative = numOr0(latestTotals.totalUSDNative);
+  //   const mxnNative = numOr0(latestTotals.totalMXNNative);
+  //   const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
+
+  //   if (payCurrency === "USD") {
+  //     return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || 0, note: null };
+  //   }
+
+  //   if (payCurrency === "MXN") {
+  //     return { showUSD: true, usd: 0, showMXN: true, mxn: allMXN, note: null };
+  //   }
+
+  //   return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || allMXN || 0, note: null };
+  // }, [latestTotals, payCurrency]);
+
   const displayTotals = useMemo(() => {
     const usdNative = numOr0(latestTotals.totalUSDNative);
     const mxnNative = numOr0(latestTotals.totalMXNNative);
-    const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
-
-    if (payCurrency === "USD") {
-      return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || 0, note: null };
+  
+    const rate = Number(order?.currencyExchange?.rate) || null;
+  
+    let usdFinal = usdNative;
+    let mxnFinal = mxnNative;
+  
+    // 🔥 If one currency is missing → calculate it
+    if (rate) {
+      if (usdNative > 0 && mxnNative === 0) {
+        mxnFinal = usdNative * rate;
+      }
+  
+      if (mxnNative > 0 && usdNative === 0) {
+        usdFinal = mxnNative / rate;
+      }
+  
+      // Mixed order but missing combined MXN
+      if (usdNative > 0 && mxnNative > 0) {
+        mxnFinal = mxnNative + (usdNative * rate);
+      }
     }
-
-    if (payCurrency === "MXN") {
-      return { showUSD: true, usd: 0, showMXN: true, mxn: allMXN, note: null };
-    }
-
-    return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || allMXN || 0, note: null };
-  }, [latestTotals, payCurrency]);
+  
+    return {
+      usd: usdFinal,
+      mxn: mxnFinal,
+      rate,
+    };
+  }, [latestTotals, order?.currencyExchange]);
+  // modif apr23
 
   // Actions
   const handleValidatePayment = async () => {
@@ -568,7 +603,8 @@ export default function NewOrderDetails() {
             <p>No hay productos en este pedido.</p>
           )}
 
-          {displayTotals.showUSD && (
+          {/* modif apr23 */}
+          {/* {displayTotals.showUSD && (
             <label className="newOrderDetsTotal-Label">
               <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")}
             </label>
@@ -577,13 +613,34 @@ export default function NewOrderDetails() {
             <label className="newOrderDetsTotal-Label">
               <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")}
             </label>
+          )} */}
+          <label className="newOrderDetsTotal-Label">
+            <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")} USD
+          </label>
+
+          <label className="newOrderDetsTotal-Label">
+            <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")} MXN
+          </label>
+
+          {/* 🔥 Show FX used */}
+          {displayTotals.rate && (
+            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+              Tipo de cambio aplicado: {displayTotals.rate} MXN/USD
+            </div>
           )}
-          {displayTotals.note && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>}
+
+          {payCurrency && (
+            <div style={{ fontWeight: "bold", fontSize:"12px", fontStyle:"italic", marginTop: 10 }}>
+              Moneda elegida por cliente: {payCurrency}
+            </div>
+          )}
+          {/* modif apr23 */}
+          {/* {displayTotals.note && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>}
           {!displayTotals.showUSD && !displayTotals.showMXN && (
             <label className="newOrderDetsTotal-Label" style={{ color: "#b45309" }}>
               (Totales no disponibles en el registro actual)
             </label>
-          )}
+          )} */}
         </div>
 
         {/* Payment details */}
