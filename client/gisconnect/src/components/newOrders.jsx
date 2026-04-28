@@ -1,3 +1,4 @@
+// in newOrders.jsx I'd like to add order time as part of the information being displayed for each order. In mongodb, orderDate includes date and time in the following format "2026-03-02T18:22:28.114+00:00". Please include in order div, as local time, right under date 
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -348,6 +349,24 @@ export default function NewOrders() {
                   <label className="orderQuick-Label">
                     {displayName}
                   </label>
+
+                  {/* new apr28 */}
+                  <label className="orderQuick-Label">
+                    {order.orderDate
+                      ? (() => {
+                          const d = new Date(order.orderDate);
+
+                          // ⏰ Time (local device time)
+                          const time = d.toLocaleTimeString("es-MX", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                          });
+                          return `${time}`;
+                        })()
+                      : "Sin fecha"}
+                  </label> <br></br>
+                  {/* end apr28 */}
 
                   {isCredit && (
                     <label style={{ marginLeft: "-185%", marginTop: "20%", fontSize: 12, color: "#B91C1C", fontWeight: 600, lineHeight: 1.2 }}>

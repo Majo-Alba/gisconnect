@@ -568,6 +568,24 @@ export default function NewOrderDetails() {
               })()
             : "Sin fecha"}
         </label>
+
+        {/* new apr28 */}
+        <label>
+          {order.orderDate
+            ? (() => {
+              const d = new Date(order.orderDate);
+
+              // ⏰ Time (local device time)
+              const time = d.toLocaleTimeString("es-MX", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              });
+              return `${time}`;
+            })()
+          : "Sin fecha"}
+        </label>
+        {/* end apr28 */}
       </div>
 
       <div className="newOrderDets-Scroll">

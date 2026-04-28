@@ -495,6 +495,23 @@ export default function DeliveredSummary() {
 
           <label><b>Pedido:</b> #{String(order?._id || "").slice(-5)}</label>
           <label><b>Fecha de Pedido: </b><label>{formatDate(order?.orderDate)}</label></label>
+          <label><b>Hora de Pedido: </b>
+            <label>
+              {order.orderDate
+                ? (() => {
+                  const d = new Date(order.orderDate);
+
+                  // ⏰ Time (local device time)
+                  const time = d.toLocaleTimeString("es-MX", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                  });
+                  return `${time}`;
+                })()
+              : "Sin fecha"}
+            </label>
+          </label>
           <br/>
 
           {/* ================== Productos ================== */}

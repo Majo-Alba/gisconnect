@@ -300,6 +300,22 @@ export default function DeliverReady() {
                 </label>
 
                 <label className="orderQuick-Label">
+                  {order.orderDate
+                    ? (() => {
+                      const d = new Date(order.orderDate);
+
+                      // ⏰ Time (local device time)
+                      const time = d.toLocaleTimeString("es-MX", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: true,
+                      });
+                      return `${time}`;
+                    })()
+                  : "Sin fecha"}
+                </label> <br></br>
+
+                <label className="orderQuick-Label">
                   No. {String(order._id).slice(-5)}
                 </label>
 
