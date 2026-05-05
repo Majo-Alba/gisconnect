@@ -1377,21 +1377,42 @@ router.delete("/orders/:orderId", async (req, res) => {
   }
 });
 
-// SWITCH FEB17
-router.get("/orders/:orderId/evidence/payment", async (req, res) => {
-  try {
-    const order = await newOrderModel
-      .findById(req.params.orderId)
-      .select({ evidenceFile: 1 })  // ✅ only this field
-      .lean();
+// MODIF APR29
+// router.get("/orders/:orderId/evidence/payment", async (req, res) => {
+//   try {
+//     const order = await newOrderModel
+//       .findById(req.params.orderId)
+//       .select({ evidenceFile: 1 })  // ✅ only this field
+//       .lean();
 
-    if (!order) return res.status(404).send("Order not found");
-    return sendFileFromDoc(res, order.evidenceFile, "payment-evidence");
-  } catch (e) {
-    console.error(e);
-    res.status(500).send("Server error");
-  }
-});
+//     if (!order) return res.status(404).send("Order not found");
+//     return sendFileFromDoc(res, order.evidenceFile, "payment-evidence");
+//   } catch (e) {
+//     console.error(e);
+//     res.status(500).send("Server error");
+//   }
+// });
+
+// OFF MAY04
+// router.get("/orders/:orderId/evidence/payment", async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+
+//     const order = await newOrderModel.findById(orderId);
+//     if (!order || !order.evidenceFile || !order.evidenceFile.data) {
+//       return res.status(404).send("No evidence");
+//     }
+
+//     res.set("Content-Type", order.evidenceFile.mimetype || "image/jpeg");
+//     res.send(order.evidenceFile.data);
+
+//   } catch (err) {
+//     console.error("serve payment evidence error:", err);
+//     res.status(500).send("Server error");
+//   }
+// });
+// OFF MAY04
+// MODIF APR29
 
 // SWITCH FEB17
 // POST /orders/:orderId/evidence/delivery  (up to 3 images)
@@ -1714,52 +1735,154 @@ router.get("/orders/:orderId/evidence/packing/:index", async (req, res) => {
 // POST /orders/:orderId/evidence/mark-payment
 // Purpose: trigger EVIDENCIA_DE_PAGO push (optionally store a pointer / timestamp)
 // Body: { s3Url?: string, filename?: string }
+
+// modif apr28
+// router.post("/orders/:orderId/evidence/mark-payment", async (req, res) => {
+//   try {
+//     const { orderId } = req.params;
+//     const { s3Url, filename } = req.body || {};
+//     const order = await newOrderModel.findById(orderId);
+//     if (!order) return res.status(404).json({ ok:false, error: "Order not found" });
+
+//     // Optional: store lightweight evidence metadata (won’t affect your existing evidenceFile buffer usage)
+//     const meta = {
+//       url: s3Url || "",
+//       filename: filename || "",
+//       markedAt: new Date()
+//     };
+//     // keep a simple field to check first-time notify without needing the buffer route
+//     if (!order.paymentEvidenceMeta?.markedAt) {
+//       order.paymentEvidenceMeta = meta;
+//       await order.save();
+
+//       const shortId = String(order._id || "").slice(-5);
+//       const userEmail = order.userEmail || order.email || "cliente";
+//       const displayName = await resolveDisplayNameByEmail(userEmail);
+
+//       await notifyStage(
+//         STAGES.EVIDENCIA_DE_PAGO,
+//         // "Evidencia de pago recibida",
+//         "Orden en: Pedidos Nuevos",
+//         `Pedido #${shortId} — Cliente: ${displayName}`,
+//         {
+//           orderId: String(order._id),
+//           stage: STAGES.EVIDENCIA_DE_PAGO,
+//           email: userEmail,
+//           clientName: displayName,             // NEW
+//           orderStatus: order.orderStatus || "",
+//           deepLink: "https://gisconnect-web.onrender.com/adminHome",
+//         }
+//       );
+//       return res.json({ ok: true, notified: true, firstTime: true });
+//     }
+
+//     // Already marked once; no extra ping (idempotent behavior)
+//     return res.json({ ok: true, notified: false, firstTime: false });
+//   } catch (e) {
+//     console.error("mark-payment error:", e);
+//     res.status(500).json({ ok:false, error: e.message });
+//   }
+// });
+
 router.post("/orders/:orderId/evidence/mark-payment", async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { s3Url, filename } = req.body || {};
+    const { files, s3Url, filename } = req.body || {};
+
     const order = await newOrderModel.findById(orderId);
-    if (!order) return res.status(404).json({ ok:false, error: "Order not found" });
+    if (!order) {
+      return res.status(404).json({ ok: false, error: "Order not found" });
+    }
 
-    // Optional: store lightweight evidence metadata (won’t affect your existing evidenceFile buffer usage)
-    const meta = {
-      url: s3Url || "",
-      filename: filename || "",
-      markedAt: new Date()
+    const incomingFiles = Array.isArray(files)
+      ? files
+      : s3Url
+        ? [{ url: s3Url, filename: filename || "" }]
+        : [];
+
+    if (incomingFiles.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "No evidence file URLs received.",
+      });
+    }
+
+    // modif may04
+    // const cleanFiles = incomingFiles
+    //   .map((f) => ({
+    //     url: String(f.url || "").trim(),
+    //     filename: String(f.filename || "").trim(),
+    //     uploadedAt: new Date(),
+    //   }))
+    //   .filter((f) => f.url);
+
+    // if (cleanFiles.length === 0) {
+    //   return res.status(400).json({
+    //     ok: false,
+    //     error: "Evidence files received, but all URLs are empty.",
+    //   });
+    // }
+
+    const cleanFiles = incomingFiles
+      .map((f) => ({
+        url: String(f.url || "").trim(), // optional now
+        key: String(f.key || "").trim(), // 🔥 IMPORTANT
+        filename: String(f.filename || "").trim(),
+        uploadedAt: new Date(),
+      }))
+      .filter((f) => f.key || f.url); // ✅ accept either
+
+    if (cleanFiles.length === 0) {
+      return res.status(400).json({
+        ok: false,
+        error: "No valid evidence files (missing key/url).",
+      });
+    }
+    // modif end may04
+
+
+
+    const firstTime = !order.paymentEvidenceMeta?.markedAt;
+
+    order.paymentEvidenceMeta = {
+      files: cleanFiles,
+      markedAt: order.paymentEvidenceMeta?.markedAt || new Date(),
     };
-    // keep a simple field to check first-time notify without needing the buffer route
-    if (!order.paymentEvidenceMeta?.markedAt) {
-      order.paymentEvidenceMeta = meta;
-      await order.save();
 
+    await order.save();
+
+    if (firstTime) {
       const shortId = String(order._id || "").slice(-5);
       const userEmail = order.userEmail || order.email || "cliente";
       const displayName = await resolveDisplayNameByEmail(userEmail);
 
       await notifyStage(
         STAGES.EVIDENCIA_DE_PAGO,
-        // "Evidencia de pago recibida",
         "Orden en: Pedidos Nuevos",
         `Pedido #${shortId} — Cliente: ${displayName}`,
         {
           orderId: String(order._id),
           stage: STAGES.EVIDENCIA_DE_PAGO,
           email: userEmail,
-          clientName: displayName,             // NEW
+          clientName: displayName,
           orderStatus: order.orderStatus || "",
           deepLink: "https://gisconnect-web.onrender.com/adminHome",
         }
       );
-      return res.json({ ok: true, notified: true, firstTime: true });
     }
 
-    // Already marked once; no extra ping (idempotent behavior)
-    return res.json({ ok: true, notified: false, firstTime: false });
+    return res.json({
+      ok: true,
+      notified: firstTime,
+      firstTime,
+      files: cleanFiles,
+    });
   } catch (e) {
     console.error("mark-payment error:", e);
-    res.status(500).json({ ok:false, error: e.message });
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
+// modif apr28
 
 
 // =========================== SHIPPING & BILLING ADDRESSES ===========================
@@ -2729,6 +2852,118 @@ router.get("/proxy-download", async (req, res) => {
   }
 });
 // apr06
+
+router.post(
+  "/orders/:orderId/evidence/payment/upload",
+  (req, res, next) => {
+    console.log("🔥 ROUTE HIT /evidence/payment");
+
+    upload.any()(req, res, (err) => {   // ✅ FIX HERE
+      if (err) {
+        console.error("MULTER PAYMENT ERROR:", err);
+        return res.status(400).json({
+          ok: false,
+          error: err.message || "Multer upload error",
+          code: err.code || null,
+        });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const { orderId } = req.params;
+
+      console.log("FILES RECEIVED:", req.files);
+
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({
+          ok: false,
+          error: "No files received",
+        });
+      }
+
+      const order = await newOrderModel.findById(orderId);
+      if (!order) {
+        return res.status(404).json({
+          ok: false,
+          error: "Order not found",
+        });
+      }
+
+      const files = req.files.slice(0, 3).map((f) => ({
+        filename: f.originalname,
+        mimetype: f.mimetype,
+        data: f.buffer,
+        uploadedAt: new Date(),
+      }));
+
+      order.paymentEvidence = files;
+      await order.save();
+
+      return res.json({ ok: true });
+    } catch (err) {
+      console.error("UPLOAD ERROR:", err);
+      return res.status(500).json({
+        ok: false,
+        error: err.message,
+      });
+    }
+  }
+);
+
+router.get("/orders/:id/evidence/payment", async (req, res) => {
+  try {
+    const order = await newOrderModel.findById(req.params.id);
+
+    if (!order) return res.status(404).send("Order not found");
+
+    const files = order.paymentEvidence;
+
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(404).send("No evidence");
+    }
+
+    // 👉 return FIRST image (for now)
+    const file = files[0];
+
+    const buffer = Buffer.from(file.data, "base64");
+
+    res.set("Content-Type", file.mimetype || "image/jpeg");
+    res.send(buffer);
+
+  } catch (err) {
+    console.error("Error fetching payment evidence:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+router.get("/orders/:id/evidence/payment/:idx", async (req, res) => {
+  try {
+    const order = await newOrderModel.findById(req.params.id);
+
+    if (!order) return res.status(404).send("Order not found");
+
+    const files = order.paymentEvidence;
+
+    if (!files || !files[req.params.idx]) {
+      return res.status(404).send("File not found");
+    }
+
+    const file = files[req.params.idx];
+    const buffer = Buffer.from(file.data, "base64");
+
+    res.set("Content-Type", file.mimetype || "image/jpeg");
+    res.send(buffer);
+
+  } catch (err) {
+    res.status(500).send("Server error");
+  }
+});
+// END MAY04
+
+
+// apr29
 
 // ✅ Multer error handler (prevents generic 500 on file too large, etc.)
 // router.use((err, req, res, next) => {

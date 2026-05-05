@@ -1,4 +1,3 @@
-// in newOrderdetails.jsx, inside the order summary box we have Total USD and Total MXN, but only show the amount in the prefered currency selected by the user. However, I'd like to show total amount in both currencies. Thus if in MongoDb paymentCurrency is USD, check "currencyExchange" for "rate" in order to also display in MXN and viceversa, if MXN is paymentCurrency, then convert to USD. Here is current newOrderDetails.jsx, please edit
 import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
 import { API } from "/src/lib/api";
@@ -28,7 +27,10 @@ export default function NewOrderDetails() {
   const [deleting, setDeleting] = useState(false);
 
   // Evidence image url + lightbox
-  const [evidenceUrl, setEvidenceUrl] = useState(null);
+  const [evidenceUrls, setEvidenceUrls] = useState([]);
+  const [evidenceLoaded, setEvidenceLoaded] = useState(false);
+
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
   // ======== Google Sheets client DB (fallbacks) ========
@@ -232,17 +234,43 @@ export default function NewOrderDetails() {
         setOrder(data);
         setError(null);
 
-        let url = null;
-        if (data?.evidenceFile?.data) {
-          url = bufferToObjectUrl(data.evidenceFile);
-        } else if (data?.paymentEvidence?.data) {
-          url = bufferToObjectUrl(data.paymentEvidence);
+        let urls = [];
+
+        // ✅ CASE 1: paymentEvidenceMeta.files (YOUR REAL STRUCTURE)
+        if (Array.isArray(data?.paymentEvidence)) {
+          urls = data.paymentEvidence.map((_, idx) => {
+            return `${API}/orders/${orderId}/evidence/payment/${idx}`;
+          });
+        }
+        
+        // ✅ CASE 2: legacy single buffer
+        else if (data?.evidenceFile) {
+          urls = [`${API}/orders/${orderId}/evidence/payment/upload`];
         }
 
-        setEvidenceUrl((prev) => {
-          if (prev) URL.revokeObjectURL(prev);
-          return url;
-        });
+        // ✅ Case 3: single object
+        else if (data?.paymentEvidenceMeta?.url) {
+          urls = [data.paymentEvidenceMeta.url];
+        }
+
+        // ✅ fallback: legacy buffer
+        else if (Array.isArray(data?.paymentEvidenceFiles)) {
+          urls = data.paymentEvidenceFiles
+            .map(file => bufferToObjectUrl(file))
+            .filter(Boolean);
+        }
+
+        else if (data?.evidenceFile?.data) {
+          const single = bufferToObjectUrl(data.evidenceFile);
+          if (single) urls = [single];
+        }
+
+        console.log("FINAL URLS:", urls); // 🔥 DEBUG
+        console.log("FULL ORDER DATA:", data);
+
+        setEvidenceUrls(urls);
+        setEvidenceLoaded(true);
+
       } catch (err) {
         console.error(err);
         setError("Error loading order details.");
@@ -252,15 +280,21 @@ export default function NewOrderDetails() {
     fetchOrderDetails();
 
     return () => {
-      if (evidenceUrl) URL.revokeObjectURL(evidenceUrl);
+      evidenceUrls.forEach(url => {
+        if (url.startsWith("blob:")) {
+          URL.revokeObjectURL(url);
+        }
+      });
     };
+    // modif apr29
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
   // Lightbox handlers
   const openLightbox = useCallback(() => {
-    if (evidenceUrl) setIsLightboxOpen(true);
-  }, [evidenceUrl]);
+    if (evidenceUrls.length > 0) setIsLightboxOpen(true);
+  }, [evidenceUrls]);
 
   const closeLightbox = useCallback(() => {
     setIsLightboxOpen(false);
@@ -272,19 +306,6 @@ export default function NewOrderDetails() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [isLightboxOpen, closeLightbox]);
-
-  useEffect(() => {
-    load();
-  }, [orderId]);
-
-  async function load() {
-    try {
-      const res = await axios.get(`${API}/orders/${orderId}`);
-      setOrder(res.data);
-    } catch (e) {
-      console.error("Load order error:", e);
-    }
-  }
 
   // ======== RECEIVING ACCOUNT OPTIONS (based on billingInfo) ========
   const hasInvoiceBilling = useMemo(() => {
@@ -411,23 +432,6 @@ export default function NewOrderDetails() {
     [order?.paymentCurrency, order?.preferredCurrency]
   );
 
-  // modif apr23
-  // const displayTotals = useMemo(() => {
-  //   const usdNative = numOr0(latestTotals.totalUSDNative);
-  //   const mxnNative = numOr0(latestTotals.totalMXNNative);
-  //   const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
-
-  //   if (payCurrency === "USD") {
-  //     return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || 0, note: null };
-  //   }
-
-  //   if (payCurrency === "MXN") {
-  //     return { showUSD: true, usd: 0, showMXN: true, mxn: allMXN, note: null };
-  //   }
-
-  //   return { showUSD: true, usd: usdNative, showMXN: true, mxn: mxnNative || allMXN || 0, note: null };
-  // }, [latestTotals, payCurrency]);
-
   const displayTotals = useMemo(() => {
     const usdNative = numOr0(latestTotals.totalUSDNative);
     const mxnNative = numOr0(latestTotals.totalMXNNative);
@@ -464,11 +468,6 @@ export default function NewOrderDetails() {
   // Actions
   const handleValidatePayment = async () => {
     try {
-      // const updatedData = {
-      //   paymentMethod,
-      //   paymentAccount: account,
-      //   orderStatus: "Pago Verificado",
-      // };
       const updatedData = {
         paymentMethod,
         paymentAccount: account,
@@ -620,18 +619,6 @@ export default function NewOrderDetails() {
           ) : (
             <p>No hay productos en este pedido.</p>
           )}
-
-          {/* modif apr23 */}
-          {/* {displayTotals.showUSD && (
-            <label className="newOrderDetsTotal-Label">
-              <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")}
-            </label>
-          )}
-          {displayTotals.showMXN && (
-            <label className="newOrderDetsTotal-Label">
-              <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")}
-            </label>
-          )} */}
           <label className="newOrderDetsTotal-Label">
             <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")} USD
           </label>
@@ -652,13 +639,6 @@ export default function NewOrderDetails() {
               Moneda elegida por cliente: {payCurrency}
             </div>
           )}
-          {/* modif apr23 */}
-          {/* {displayTotals.note && <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>}
-          {!displayTotals.showUSD && !displayTotals.showMXN && (
-            <label className="newOrderDetsTotal-Label" style={{ color: "#b45309" }}>
-              (Totales no disponibles en el registro actual)
-            </label>
-          )} */}
         </div>
 
         {/* Payment details */}
@@ -692,30 +672,39 @@ export default function NewOrderDetails() {
 
           <div className="paymentDets-Dropdown">
             <div className="headerEditIcon-Div">
-              <label className="newUserData-Label">Evidencia de Pago</label>
-              <div className="existingQuote-Div">
-                {order?.evidenceFileExt ? (
-                  <EvidenceGallery orderId={orderId} evidenceFileExt={order.evidenceFileExt} />
+              <label className="newUserData-Label">Evidencia de Pago</label> <br></br>
+              <div className="paymentEvidence-gallery">
+
+                {!evidenceLoaded ? (
+                  <div style={{ fontSize: 12, color: "#999" }}>
+                    Cargando evidencia...
+                  </div>
+                ) : evidenceUrls.length > 0 ? (
+                  evidenceUrls.map((url, idx) => (
+                    <img
+                      key={idx}
+                      src={url}
+                      alt={`Evidencia ${idx + 1}`}
+                      className="paymentEvidence-thumb"
+                      onClick={() => {
+                        setCurrentImageIndex(idx);
+                        setIsLightboxOpen(true);
+                      }}
+                    />
+                  ))
                 ) : (
-                  <div style={{ fontSize: 12, color: "#666" }}>Aún no hay evidencia de pago cargada por el cliente.</div>
+                  <div style={{ fontSize: 12, color: "#666" }}>
+                    No hay evidencia disponible.
+                  </div>
                 )}
               </div>
+              {/* modif apr29 */}
             </div>
-          </div>
-
-          <div className="paymentEvidence-Div" style={{ gap: 12, alignItems: "center" }}>
-            <img
-              src={evidenceUrl}
-              alt=""
-              style={{ cursor: evidenceUrl ? "zoom-in" : "default", objectFit: "cover" }}
-              onClick={evidenceUrl ? () => setIsLightboxOpen(true) : undefined}
-            />
           </div>
         </div>
 
         {/* ✅ Validate + Delete (aligned) */}
-        <div style={{ display: "grid", gridTemplateColumns: "50% 50%", gap: 10, marginBottom:"15%", marginLeft: "10%" }}>
-        {/* <div className="validatePaymentSubmitBtn-Div" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}> */}
+        <div style={{ display: "grid", gridTemplateColumns: "50% 50%", gap: 10, marginBottom:"25%", marginLeft: "10%" }}>
           <button className="submitOrder-Btn" type="button" onClick={handleValidatePayment} disabled={deleting}>
             Validar Pago
           </button>
@@ -753,7 +742,9 @@ export default function NewOrderDetails() {
       </div>
 
       {/* LIGHTBOX */}
-      {isLightboxOpen && evidenceUrl && (
+      {/* modif apr29 */}
+      {isLightboxOpen && evidenceUrls.length > 0 && (
+      // modif apr29
         <div
           onClick={closeLightbox}
           style={{
@@ -769,10 +760,10 @@ export default function NewOrderDetails() {
         >
           <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", maxWidth: "95vw", maxHeight: "95vh" }}>
             <img
-              src={evidenceUrl}
-              alt="Evidencia de pago (ampliada)"
-              style={{ maxWidth: "95vw", maxHeight: "90vh", display: "block", borderRadius: 8 }}
+              src={evidenceUrls[currentImageIndex]}
+              alt="Evidencia ampliada"
             />
+            {/* modif apr29 */}
             <button
               onClick={closeLightbox}
               style={{
@@ -798,6 +789,10 @@ export default function NewOrderDetails() {
     </body>
   );
 }
+
+
+
+
 // // in newOrderDetails.jsx I'd like the ability to delete orders. Im thinking of adding a button at the bottom (aligned with existing "Validar Pago" button) "Borrar". Im guessing we'll also need to add an endpoint to make sure this order gets deleted from mongodb cluster "new_orders". Here is my current newOrderDetails.jsx, please direct edit
 // import EvidenceGallery from "/src/components/EvidenceGallery";
 // import axios from "axios";

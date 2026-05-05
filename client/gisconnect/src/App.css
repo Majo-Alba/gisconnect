@@ -1649,6 +1649,37 @@ input:checked + .quoterSlider:before {
 }
 
 /* TRACK ORDER - orderTrackDetails.jsx */
+.file-preview-container {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.file-preview-item {
+  width: 70px;
+  height: 70px;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9f9f9;
+}
+
+.file-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-preview-pdf {
+  font-size: 10px;
+  text-align: center;
+  padding: 5px;
+}
+
 .stickyTopSection{
   position: sticky;
   top: 0.1px;
@@ -2770,6 +2801,39 @@ input:checked + .quoterSlider:before {
 }
 
 /* NEW ORDER DETAILS - ADMIN SIDE */
+.evidence-gallery {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.evidence-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: zoom-in;
+  border: 1px solid #ddd;
+}
+
+.paymentEvidence-gallery {
+  display: flex;
+  gap: 10px;
+
+  margin-left: 40%;
+  margin-top: 5%;
+  margin-bottom: 5%;
+}
+
+.paymentEvidence-thumb {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 8px;
+  cursor: zoom-in;
+  border: 1px solid #ddd;
+}
+
 .newOrderDets-Scroll{
   height:555px;
   overflow-y: scroll;

@@ -1,4 +1,4 @@
-// with this modificaction to downloadSelectedDocs, when downloading in iphone now I'm redirected to a secondary screen "drive.usercontent.google.com" that has a progress bar on top, but nothing else shows. Progress bar stops loading at about 10% full and rest of the page remains white with no documents showing or being downloaded
+// in orderTrackFetails.jsx I'd like for the user to be able to upload up to 3 images, instead of only 1 as it currently allows. Here is current orderTrackDetails.jsx and router.js
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { ProgressBar, Step } from "react-step-progress-bar";
@@ -32,9 +32,10 @@ export default function OrderTrackDetails() {
   const [order, setOrder] = useState(location.state?.order || null);
 
   // Upload UI state
-  const [evidenceFile, setEvidenceFile] = useState(null);
+  const [evidenceFiles, setEvidenceFiles] = useState([]);
   const [uploadBusy, setUploadBusy] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [progress, setProgress] = useState(0);
   const [uploadErr, setUploadErr] = useState("");
   const [uploadOk, setUploadOk] = useState("");
 
@@ -88,21 +89,6 @@ export default function OrderTrackDetails() {
     return 0;
   };
 
-  // NEW MAR/31
-  // const normalizeUrl = (url = "") => {
-  //   const clean = String(url || "").trim();
-  
-  //   const match = clean.match(/\/file\/d\/([^/]+)/);
-  
-  //   if (match && match[1]) {
-  //     const fileId = match[1];
-  
-  //     // ✅ Use preview instead of forced download
-  //     return `https://drive.google.com/file/d/${fileId}/preview`;
-  //   }
-  
-  //   return clean;
-  // };
   const normalizeUrl = (url = "") => {
     const clean = String(url || "").trim();
     const match = clean.match(/\/file\/d\/([^/]+)/);
@@ -515,18 +501,9 @@ export default function OrderTrackDetails() {
 
   // ===== Upload Evidence (user flow with your original UI) =====
   async function uploadEvidence() {
-    if (!evidenceFile || !order?._id) {
-      alert("Seleccione una imagen válida.");
-      return;
-    }
-  
-    const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
-    if (!isAllowed) {
-      alert("Formato no permitido. Sube imagen o PDF.");
-      return;
-    }
-    if (evidenceFile.size > 25 * 1024 * 1024) {
-      alert("Archivo excede 25MB.");
+    // modif may04
+    if (!evidenceFiles || evidenceFiles.length === 0) {
+      alert("Seleccione al menos un archivo.");
       return;
     }
   
@@ -536,109 +513,41 @@ export default function OrderTrackDetails() {
     setUploadProgress(0);
   
     try {
-      // 1) Upload to your existing S3-backed endpoint (unchanged)
       const form = new FormData();
-      form.append("file", evidenceFile);
+      evidenceFiles.forEach((file) => form.append("paymentImages", file));
   
-      const s3Resp = await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
-        onUploadProgress: (pe) => {
-          if (!pe.total) return;
-          setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
-        },
-      });
+      // MODIF MAY04
+      await axios.post(
+        `${API}/orders/${orderId}/evidence/payment/upload`,
+        form,
+        {
+          onUploadProgress: (pe) => {
+            if (!pe.total) return;
+            const progress = Math.round((pe.loaded / pe.total) * 100);
+            setUploadProgress(progress);
+          },
+        }
+      );
   
-      // If your S3 route returns the file URL/filename, pluck them here
-      const s3Url    = s3Resp?.data?.url || s3Resp?.data?.Location || "";
-      const filename = s3Resp?.data?.filename || evidenceFile.name || "";
-  
-      // 2) Tell the API to trigger the evidence-stage push (no re-upload)
-      await fetch(`${API}/orders/${order._id}/evidence/mark-payment`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ s3Url, filename }),
-      });
-  
-      // 3) Keep your original status update so the progress bar & lists move
-      await fetch(`${API}/order/${order._id}/status`, {
+      // update status
+      await fetch(`${API}/order/${orderId}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
       });
   
-      // 4) Local optimistics + refresh
-      setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
-      setUploadOk("¡Evidencia subida con éxito!");
-      setEvidenceFile(null);
+      setUploadOk("¡Evidencias subidas con éxito!");
+      setEvidenceFiles([]);
       await loadOrder();
+  
     } catch (e) {
-      console.error("Error al subir evidencia:", e);
-      setUploadErr(e?.response?.data?.error || e.message || "No se pudo subir la evidencia.");
+      console.error("Error:", e);
+      setUploadErr("No se pudo subir la evidencia.");
     } finally {
       setUploadBusy(false);
       setTimeout(() => setUploadProgress(0), 800);
     }
   }
-
-  // NEW MAR/31
-  // async function downloadSelectedDocs() {
-  //   if (!selectedDocTypeKeys.length) {
-  //     alert("Selecciona al menos un tipo de documento.");
-  //     return;
-  //   }
-  
-  //   if (!selectedProductKeys.length) {
-  //     alert("Selecciona al menos un producto.");
-  //     return;
-  //   }
-  
-  //   const chosenItems = uniqueOrderProducts.filter((item) =>
-  //     selectedProductKeys.includes(makeKey(item.product, item.presentation))
-  //   );
-  
-  //   const files = [];
-  
-  //   for (const item of chosenItems) {
-  //     const docs = getDocsForItem(item);
-  //     if (!docs) continue;
-  
-  //     for (const docKey of selectedDocTypeKeys) {
-  //       const url = normalizeUrl(docs?.[docKey]);
-  //       if (!url) continue;
-  
-  //       const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
-  
-  //       const safeBaseName = `${item.product}_${cleanDocName}`
-  //         .replace(/[^\w\-]+/g, "_")
-  //         .replace(/^_+|_+$/g, "");
-  
-  //       files.push({
-  //         url,
-  //         name: `${safeBaseName}.pdf`,
-  //       });
-  //     }
-  //   }
-  
-  //   if (!files.length) {
-  //     alert("No encontramos documentos disponibles.");
-  //     return;
-  //   }
-  
-  //   try {
-  //     const res = await fetch(`${API}/download-product-docs`, {
-  //       method: "POST",
-  //       headers: {
-  //         "Content-Type": "application/json",
-  //       },
-  //       body: JSON.stringify({ files }),
-  //     });
-  
-  //     const blob = await res.blob();
-  //     saveAs(blob, `documentos_pedido_${orderId}.zip`);
-  //   } catch (err) {
-  //     console.error(err);
-  //     alert("Error descargando documentos.");
-  //   }
-  // }
 
   async function downloadSelectedDocs() {
     if (!selectedDocTypeKeys.length) {
@@ -708,62 +617,7 @@ export default function OrderTrackDetails() {
       alert("Error descargando documentos.");
     }
   }
-  // END MAR/31
-  
-  // async function uploadEvidence() {
-  //   if (!evidenceFile || !order?._id) {
-  //     alert("Seleccione una imagen válida.");
-  //     return;
-  //   }
 
-  //   // allow images or PDF; 25MB cap
-  //   const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
-  //   if (!isAllowed) {
-  //     alert("Formato no permitido. Sube imagen o PDF.");
-  //     return;
-  //   }
-  //   if (evidenceFile.size > 25 * 1024 * 1024) {
-  //     alert("Archivo excede 25MB.");
-  //     return;
-  //   }
-
-  //   setUploadErr("");
-  //   setUploadOk("");
-  //   setUploadBusy(true);
-  //   setUploadProgress(0);
-
-  //   try {
-  //     // 1) Upload to new S3-backed endpoint (field name: "file")
-  //     const form = new FormData();
-  //     form.append("file", evidenceFile);
-
-  //     await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
-  //       onUploadProgress: (pe) => {
-  //         if (!pe.total) return;
-  //         setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
-  //       },
-  //     });
-
-  //     // 2) Update status so timeline moves & admin sees it
-  //     await fetch(`${API}/order/${order._id}/status`, {
-  //       method: "PATCH",
-  //       headers: { "Content-Type": "application/json" },
-  //       body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
-  //     });
-
-  //     // 3) Optimistic local update + reload order to refresh evidence fields
-  //     setOrder((prev) => (prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev));
-  //     setUploadOk("¡Evidencia subida con éxito!");
-  //     setEvidenceFile(null);
-  //     await loadOrder();
-  //   } catch (e) {
-  //     console.error("Error al subir evidencia:", e);
-  //     setUploadErr(e?.response?.data?.error || e.message || "No se pudo subir la evidencia.");
-  //   } finally {
-  //     setUploadBusy(false);
-  //     setTimeout(() => setUploadProgress(0), 800);
-  //   }
-  // }
 
   if (!order) return <p>Cargando detalles del pedido...</p>;
 
@@ -783,7 +637,6 @@ export default function OrderTrackDetails() {
     <body className="app-shell body-BG-Gradient">
 
       <div className="app-header">
-      {/* <div className="app-header loginLogo-ParentDiv"> */}
         <img
           className="secondaryPages-GISLogo"
           src={logoImage}
@@ -797,7 +650,6 @@ export default function OrderTrackDetails() {
       <div className="app-main">
 
       <div>
-      {/* <div className="orderTracker-LimitedScroll"> */}
       <div className="stickyTopSection">
 
         <div className="edit-titleIcon-Div">
@@ -818,7 +670,6 @@ export default function OrderTrackDetails() {
         </div>
         </div>
 
-        {/* MAR/31 */}
         {isPreparingOrLater && (
           <div className="orderFiles-Div" style={{ marginTop: 10 }}>
             <label className="orderNumber-Label">DOCUMENTOS DEL PRODUCTO</label>
@@ -950,9 +801,7 @@ export default function OrderTrackDetails() {
             </div>
           </div>
         )}
-        {/* MAR/31 */}
 
-        {/* sep06 */}
          {/* ✅ Show tracking number only when delivered and present */}
          {order?.orderStatus === "Pedido Entregado" && (
           <div className="orderNumberAndDate-Div">
@@ -975,12 +824,10 @@ export default function OrderTrackDetails() {
                 month: "short",
                 year: "numeric",
               })}
-              {/* {order?.deliveryDate || "No disponible"} */}
             </span>
             </div>
           </div>
           )}
-        {/* sep06 */}
         
 
         <div style={{ margin: "20px", padding: "20px" }}>
@@ -1014,7 +861,6 @@ export default function OrderTrackDetails() {
         </div>
 
         <div>
-        {/* <div className="orderTracker-Scroll"> */}
           <div className="orderNumberAndDate-Div">
             <label className="orderNumber-Label">DESCRIPCIÓN DEL PEDIDO</label>
             {(order.items || []).map((item, idx) => (
@@ -1107,23 +953,6 @@ export default function OrderTrackDetails() {
             </div>
           </div>
 
-          {/* <div className="orderTrack-BillingDiv">
-            <label className="orderNumber-Label">DATOS DE FACTURACIÓN</label>
-            <div className="shippingAddress-Div">
-              <label className="orderDate-Label">{order?.billingInfo?.razonSocial || ""}</label>
-              <label className="orderDate-Label">{order?.billingInfo?.rfcEmpresa || ""}</label>
-              <label className="orderDate-Label">
-                {(order?.billingInfo?.calleFiscal || "")} #{order?.billingInfo?.exteriorFiscal || ""} Int.
-                {order?.billingInfo?.interiorFiscal || ""}
-              </label>
-              <label className="orderDate-Label">Col. {order?.billingInfo?.coloniaFiscal || ""}</label>
-              <label className="orderDate-Label">
-                {(order?.billingInfo?.ciudadFiscal || "")}, {(order?.billingInfo?.estadoFiscal || "")}
-              </label>
-              <label className="orderDate-Label">C.P. {order?.billingInfo?.cpFiscal || ""}</label>
-            </div>
-          </div> */}
-
           {/* ===== SUBIR EVIDENCIA (tu UI original, pero con el nuevo endpoint) ===== */}
           <div className="orderTracker-UploadEvidenceDiv">
             <label className="orderNumber-Label">SUBIR EVIDENCIA DE PAGO</label>
@@ -1136,20 +965,63 @@ export default function OrderTrackDetails() {
                 id="evidenceFile"
                 type="file"
                 accept="image/*,application/pdf"
-                onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+
+                  // 🚫 Limit to 3 files
+                  if (files.length > 3) {
+                    alert("Máximo 3 archivos.");
+                    return;
+                  }
+
+                  // 🚫 Validate size per file (IMPORTANT for iPhone)
+                  const oversized = files.find(f => f.size > 8 * 1024 * 1024); // 8MB safer for mobile
+                  if (oversized) {
+                    alert("Cada archivo debe ser menor a 8MB.");
+                    return;
+                  }
+
+                  setEvidenceFiles(files);
+                }}
                 style={{ display: "none" }}
               />
-              <span className="file-selected-text">
-                {evidenceFile ? evidenceFile.name : "Ningún archivo seleccionado"}
-              </span>
+              <div className="file-preview-container">
+                {evidenceFiles.length > 0 ? (
+                  evidenceFiles.map((file, idx) => {
+                    const isImage = file.type.startsWith("image/");
+
+                    return (
+                      <div key={idx} className="file-preview-item">
+                        {isImage ? (
+                          <img
+                            src={URL.createObjectURL(file)}
+                            alt={file.name}
+                            className="file-preview-img"
+                          />
+                        ) : (
+                          <div className="file-preview-pdf">
+                            📄 {file.name}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <span className="file-selected-text">
+                    Ningún archivo seleccionado
+                  </span>
+                )}
+              </div>
+
             </div>
 
             <button
               className="uploadPaymentEvidence-Btn"
               type="button"
               onClick={uploadEvidence}
-              disabled={!evidenceFile || uploadBusy}
-              title={!evidenceFile ? "Selecciona un archivo primero" : ""}
+              disabled={!evidenceFiles.length || uploadBusy}
+              title={!evidenceFiles ? "Selecciona un archivo primero" : ""}
             >
               {uploadBusy ? `Subiendo... ${uploadProgress || 0}%` : <>Subir <br />Evidencia</>}
             </button>
@@ -1182,7 +1054,386 @@ export default function OrderTrackDetails() {
 }
 
 
+// REMOVED AREAS (MAY04): ADDING LOGIC FOR UPLOADING UP TO 3 PIECES OF PAYMENT EVIDENCE
 
+  // const [evidenceFile, setEvidenceFile] = useState(null);
+
+    // NEW MAR/31
+  // const normalizeUrl = (url = "") => {
+  //   const clean = String(url || "").trim();
+  
+  //   const match = clean.match(/\/file\/d\/([^/]+)/);
+  
+  //   if (match && match[1]) {
+  //     const fileId = match[1];
+  
+  //     // ✅ Use preview instead of forced download
+  //     return `https://drive.google.com/file/d/${fileId}/preview`;
+  //   }
+  
+  //   return clean;
+  // };
+
+
+   // modif apr28
+
+  // async function uploadEvidence() {
+  //   if (!evidenceFile || !order?._id) {
+  //     alert("Seleccione una imagen válida.");
+  //     return;
+  //   }
+  
+  //   const isAllowed = evidenceFile.type.startsWith("image/") || evidenceFile.type === "application/pdf";
+  //   if (!isAllowed) {
+  //     alert("Formato no permitido. Sube imagen o PDF.");
+  //     return;
+  //   }
+  //   if (evidenceFile.size > 25 * 1024 * 1024) {
+  //     alert("Archivo excede 25MB.");
+  //     return;
+  //   }
+  
+  //   setUploadErr("");
+  //   setUploadOk("");
+  //   setUploadBusy(true);
+  //   setUploadProgress(0);
+  
+  //   try {
+  //     // 1) Upload to your existing S3-backed endpoint (unchanged)
+  //     const form = new FormData();
+  //     form.append("file", evidenceFile);
+  
+  //     const s3Resp = await axios.post(`${API}/orders/${order._id}/evidence/payment`, form, {
+  //       onUploadProgress: (pe) => {
+  //         if (!pe.total) return;
+  //         setUploadProgress(Math.round((pe.loaded / pe.total) * 100));
+  //       },
+  //     });
+  
+  //     // If your S3 route returns the file URL/filename, pluck them here
+  //     const s3Url    = s3Resp?.data?.url || s3Resp?.data?.Location || "";
+  //     const filename = s3Resp?.data?.filename || evidenceFile.name || "";
+  
+  //     // 2) Tell the API to trigger the evidence-stage push (no re-upload)
+  //     await fetch(`${API}/orders/${order._id}/evidence/mark-payment`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ s3Url, filename }),
+  //     });
+  
+  //     // 3) Keep your original status update so the progress bar & lists move
+  //     await fetch(`${API}/order/${order._id}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
+  //     });
+  
+  //     // 4) Local optimistics + refresh
+  //     setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
+  //     setUploadOk("¡Evidencia subida con éxito!");
+  //     setEvidenceFile(null);
+  //     await loadOrder();
+  //   } catch (e) {
+  //     console.error("Error al subir evidencia:", e);
+  //     setUploadErr(e?.response?.data?.error || e.message || "No se pudo subir la evidencia.");
+  //   } finally {
+  //     setUploadBusy(false);
+  //     setTimeout(() => setUploadProgress(0), 800);
+  //   }
+  // }
+
+  // NEW MAR/31
+  // async function downloadSelectedDocs() {
+  //   if (!selectedDocTypeKeys.length) {
+  //     alert("Selecciona al menos un tipo de documento.");
+  //     return;
+  //   }
+  
+  //   if (!selectedProductKeys.length) {
+  //     alert("Selecciona al menos un producto.");
+  //     return;
+  //   }
+  
+  //   const chosenItems = uniqueOrderProducts.filter((item) =>
+  //     selectedProductKeys.includes(makeKey(item.product, item.presentation))
+  //   );
+  
+  //   const files = [];
+  
+  //   for (const item of chosenItems) {
+  //     const docs = getDocsForItem(item);
+  //     if (!docs) continue;
+  
+  //     for (const docKey of selectedDocTypeKeys) {
+  //       const url = normalizeUrl(docs?.[docKey]);
+  //       if (!url) continue;
+  
+  //       const cleanDocName = docKey.replace(/_URL$/, "").toLowerCase();
+  
+  //       const safeBaseName = `${item.product}_${cleanDocName}`
+  //         .replace(/[^\w\-]+/g, "_")
+  //         .replace(/^_+|_+$/g, "");
+  
+  //       files.push({
+  //         url,
+  //         name: `${safeBaseName}.pdf`,
+  //       });
+  //     }
+  //   }
+  
+  //   if (!files.length) {
+  //     alert("No encontramos documentos disponibles.");
+  //     return;
+  //   }
+  
+  //   try {
+  //     const res = await fetch(`${API}/download-product-docs`, {
+  //       method: "POST",
+  //       headers: {
+  //         "Content-Type": "application/json",
+  //       },
+  //       body: JSON.stringify({ files }),
+  //     });
+  
+  //     const blob = await res.blob();
+  //     saveAs(blob, `documentos_pedido_${orderId}.zip`);
+  //   } catch (err) {
+  //     console.error(err);
+  //     alert("Error descargando documentos.");
+  //   }
+  // }
+
+  // here apr29
+  // async function uploadEvidence() {
+  //   if (!evidenceFiles.length || !order?._id) {
+  //     alert("Seleccione al menos un archivo.");
+  //     return;
+  //   }
+  
+  //   setUploadErr("");
+  //   setUploadOk("");
+  //   setUploadBusy(true);
+  //   setUploadProgress(0);
+  
+  //   try {
+  //     const uploadedFiles = [];
+  
+  //     // 🚀 Upload sequentially (IMPORTANT for memory stability)
+  //     for (let i = 0; i < evidenceFiles.length; i++) {
+  //       const file = evidenceFiles[i];
+  
+  //       const form = new FormData();
+  //       form.append("file", file);
+  
+  //       const res = await axios.post(
+  //         `${API}/orders/${order._id}/evidence/payment`,
+  //         form,
+  //         {
+  //           onUploadProgress: (pe) => {
+  //             if (!pe.total) return;
+  //             const progress = Math.round((pe.loaded / pe.total) * 100);
+  //             setUploadProgress(progress);
+  //           },
+  //         }
+  //       );
+  
+  //       uploadedFiles.push({
+  //         url: res?.data?.url || res?.data?.Location || "",
+  //         filename: res?.data?.filename || file.name,
+  //       });
+  //     }
+  
+  //     // 🔥 Send ALL files metadata
+  //     await fetch(`${API}/orders/${order._id}/evidence/mark-payment`, {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ files: uploadedFiles }),
+  //     });
+  
+  //     // status update
+  //     await fetch(`${API}/order/${order._id}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
+  //     });
+  
+  //     setOrder(prev => prev ? { ...prev, orderStatus: "Evidencia Subida" } : prev);
+  //     setUploadOk("¡Evidencias subidas con éxito!");
+  //     setEvidenceFiles([]);
+  //     await loadOrder();
+  
+  //   } catch (e) {
+  //     console.error("Error al subir evidencia:", e);
+  //     setUploadErr("No se pudo subir la evidencia.");
+  //   } finally {
+  //     setUploadBusy(false);
+  //     setTimeout(() => setUploadProgress(0), 800);
+  //   }
+  // }
+
+  // MOFID MAY04
+  // async function uploadEvidence() {
+  //   if (!evidenceFiles.length || !order?._id) {
+  //     alert("Seleccione al menos un archivo.");
+  //     return;
+  //   }
+  
+  //   setUploadErr("");
+  //   setUploadOk("");
+  //   setUploadBusy(true);
+  //   setUploadProgress(0);
+  
+  //   try {
+  //     const uploadedFiles = [];
+  
+  //     for (let i = 0; i < evidenceFiles.length; i++) {
+  //       const file = evidenceFiles[i];
+  
+  //       const form = new FormData();
+  //       form.append("file", file);
+  
+  //       const res = await axios.post(
+  //         `${API}/orders/${order._id}/evidence/payment`,
+  //         form,
+  //         {
+  //           headers: { "Content-Type": "multipart/form-data" },
+  //           onUploadProgress: (pe) => {
+  //             if (!pe.total) return;
+  //             const progress = Math.round((pe.loaded / pe.total) * 100);
+  //             setUploadProgress(progress);
+  //           },
+  //         }
+  //       );
+  
+  //       const data = res?.data || {};
+  
+  //       // Modif may04
+  //       // const fileUrl =
+  //       //   data.url ||
+  //       //   data.s3Url ||
+  //       //   data.Location ||
+  //       //   data.location ||
+  //       //   data.fileUrl ||
+  //       //   data.publicUrl ||
+  //       //   data.data?.url ||
+  //       //   data.data?.s3Url ||
+  //       //   data.file?.url ||
+  //       //   data.file?.Location ||
+  //       //   "";
+
+  //       // --> here
+  //       const fileUrl =
+  //         data.url ||
+  //         data.s3Url ||
+  //         data.Location ||
+  //         data.location ||
+  //         data.fileUrl ||
+  //         data.publicUrl ||
+  //         data.data?.url ||
+  //         data.data?.s3Url ||
+  //         data.file?.url ||
+  //         data.file?.Location ||
+  //         "";
+
+  //       const fileKey =
+  //         data.key ||
+  //         data.s3Key ||
+  //         data.data?.key ||
+  //         data.file?.key ||
+  //         "";
+
+  //       // --> end here
+  
+  //       const fileName =
+  //         data.filename ||
+  //         data.fileName ||
+  //         data.originalname ||
+  //         data.file?.filename ||
+  //         data.file?.originalname ||
+  //         file.name;
+  
+  //     //   if (!fileUrl) {
+  //     //     console.error("Upload response did not include URL:", data);
+  //     //     throw new Error("La evidencia se subió, pero el servidor no regresó URL.");
+  //     //   }
+  
+  //     //   uploadedFiles.push({
+  //     //     url: String(fileUrl).trim(),
+  //     //     filename: String(fileName).trim(),
+  //     //   });
+  //     // }
+
+  //       // --> Here apr04
+  //       if (!fileUrl && !fileKey) {
+  //         console.error("Upload response did not include URL or key:", data);
+  //         throw new Error("La evidencia se subió, pero el servidor no regresó URL ni key.");
+  //       }
+        
+  //       // OFF MAY04
+  //       // uploadedFiles.push({
+  //       //   url: String(fileUrl || "").trim(),
+  //       //   key: String(fileKey || "").trim(),
+  //       //   filename: String(fileName).trim(),
+  //       // });
+  //       // OFF MAY04
+  //     }
+  //     // --> end here apr04
+  //     // modif apr04
+  
+  //     // OFF MAY04
+  //     // const markRes = await fetch(`${API}/orders/${order._id}/evidence/mark-payment`, {
+  //     //   method: "POST",
+  //     //   headers: { "Content-Type": "application/json" },
+  //     //   body: JSON.stringify({ files: uploadedFiles }),
+  //     // });
+  //     // OFF MAY04
+  
+  //     const markData = await markRes.json().catch(() => ({}));
+  
+  //     if (!markRes.ok || !markData?.ok) {
+  //       console.error("mark-payment failed:", markData);
+  //       throw new Error(markData?.error || "No se pudo marcar la evidencia de pago.");
+  //     }
+  
+  //     const statusRes = await fetch(`${API}/order/${order._id}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Evidencia Subida" }),
+  //     });
+  
+  //     if (!statusRes.ok) {
+  //       const statusText = await statusRes.text().catch(() => "");
+  //       throw new Error(statusText || "No se pudo actualizar el estado.");
+  //     }
+  
+  //     setOrder((prev) =>
+  //       prev
+  //         ? {
+  //             ...prev,
+  //             orderStatus: "Evidencia Subida",
+  //             paymentEvidenceMeta: {
+  //               ...(prev.paymentEvidenceMeta || {}),
+  //               files: uploadedFiles,
+  //               markedAt: new Date().toISOString(),
+  //             },
+  //           }
+  //         : prev
+  //     );
+  
+  //     setUploadOk("¡Evidencias subidas con éxito!");
+  //     setEvidenceFiles([]);
+  //     await loadOrder();
+  //   } catch (e) {
+  //     console.error("Error al subir evidencia:", e);
+  //     setUploadErr(e?.message || "No se pudo subir la evidencia.");
+  //   } finally {
+  //     setUploadBusy(false);
+  //     setTimeout(() => setUploadProgress(0), 800);
+  //   }
+  // }
+
+
+// END REMOVED AREAS (MAY04): ADDING LOGIC FOR UPLOADING UP TO 3 PIECES OF PAYMENT EVIDENCE
 
 
 

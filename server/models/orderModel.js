@@ -158,6 +158,10 @@ const orderSchema = new Schema(
     // Payment evidence (legacy, buffer)
     evidenceFile: fileDocSchema,
 
+    // NEW MAY04
+    paymentEvidence: [fileDocSchema],
+    // END MAY04
+
     // Quote PDF (legacy, buffer)
     quotePdf: {
       filename: String,
@@ -175,6 +179,22 @@ const orderSchema = new Schema(
     evidenceFileExt: fileExternalSchema,        // payment evidence (single)
     deliveryEvidenceExt: fileExternalSchema,    // delivery evidence (single)
     packingEvidenceExt: [fileExternalSchema],   // packing evidence (array)
+
+    // OFF MAY04
+    // new apr28
+    // paymentEvidenceMeta: {
+    //   files: [
+    //     {
+    //       url: { type: String, default: "" },
+    //       filename: { type: String, default: "" },
+    //       uploadedAt: { type: Date, default: Date.now },
+    //     },
+    //   ],
+    //   markedAt: { type: Date, default: null },
+    // },
+    // end apr28
+    // OFF MAY04
+
 
     // Legacy extras (optional; keep if used)
     packerName: String,

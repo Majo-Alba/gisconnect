@@ -590,7 +590,8 @@ export default function DeliveredSummary() {
                       }${dofDate ? `  (DOF ${dofDate})` : ""}`}
                     </div>
 
-                    {order?.evidenceFileExt && (
+                    {/* mODIF MAY04 */}
+                    {/* {order?.evidenceFileExt && (
                       <div style={{ marginTop: 10 }}>
                         <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
                           <b>Evidencia de pago:</b>
@@ -607,7 +608,71 @@ export default function DeliveredSummary() {
                           )}
                         </a>
                       </div>
-                    )}
+                    )} */}
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 12, color: "#374151", marginBottom: 6 }}>
+                        <b>Evidencia de pago:</b>
+                      </div>
+
+                      {/* ✅ CASE 1: NUEVO → múltiples imágenes */}
+                      {Array.isArray(order?.paymentEvidence) && order.paymentEvidence.length > 0 ? (
+                        <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+                            gap: 10,
+                          }}
+                        >
+                          {order.paymentEvidence.map((_, idx) => (
+                            <a
+                              key={`pay-${idx}`}
+                              href={`${API}/orders/${orderId}/evidence/payment/${idx}`}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <img
+                                src={`${API}/orders/${orderId}/evidence/payment/${idx}`}
+                                alt={`evidencia_${idx + 1}`}
+                                style={{
+                                  width: "100%",
+                                  height: 120,
+                                  objectFit: "cover",
+                                  borderRadius: 8,
+                                  boxShadow: "0 1px 6px rgba(0,0,0,.12)",
+                                }}
+                              />
+                            </a>
+                          ))}
+                        </div>
+                      ) : 
+
+                      /* 🟡 CASE 2: LEGACY → una sola imagen */
+                      order?.evidenceFileExt ? (
+                        <a href={fileUrl("payment")} target="_blank" rel="noreferrer">
+                          {isImageMime(order.evidenceFileExt.mimetype) ? (
+                            <img
+                              src={fileUrl("payment")}
+                              alt={order.evidenceFileExt.filename || "evidencia_de_pago"}
+                              style={{
+                                maxWidth: "100%",
+                                borderRadius: 8,
+                                boxShadow: "0 1px 6px rgba(0,0,0,.12)",
+                              }}
+                            />
+                          ) : (
+                            <span>Descargar: {order.evidenceFileExt.filename || "pago"}</span>
+                          )}
+                        </a>
+                      ) : 
+
+                      /* 🔴 CASE 3: NO HAY NADA */
+                      (
+                        <span style={{ fontSize: 12, color: "#6b7280" }}>
+                          (Sin evidencia de pago)
+                        </span>
+                      )}
+                    </div>
+                    {/* MODIF MAY04 */}
                   </div>
                 </div>
               </>
