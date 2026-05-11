@@ -625,6 +625,35 @@ export default function NewOrder() {
 
   console.log(csvClientData)
 
+  // NEW MAY11
+  // ===== GROUP PRODUCTS BY FAMILY =====
+  const groupedProducts = (() => {
+    const familyMap = new Map();
+
+    csvData.forEach((row) => {
+      const family = (row.FAMILIA_PRODUCTO || "Sin categoría").trim();
+      const product = (row.NOMBRE_PRODUCTO || "").trim();
+
+      if (!product) return;
+
+      // Preserve family insertion order from Google Sheets
+      if (!familyMap.has(family)) {
+        familyMap.set(family, new Set());
+      }
+
+      familyMap.get(family).add(product);
+    });
+
+    // Convert to ordered array
+    return Array.from(familyMap.entries()).map(([family, products]) => ({
+      family,
+      products: Array.from(products).sort((a, b) =>
+        a.localeCompare(b, "es", { sensitivity: "base" })
+      ),
+    }));
+  })();
+  // END MAY11
+
   const presentationOptions = csvData
     .filter((r) => r.NOMBRE_PRODUCTO === selectedProduct)
     .map((r) => (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || ""));
@@ -1260,12 +1289,31 @@ export default function NewOrder() {
                 setStockReady(false);
               }}
             >
-              <option value="">Selecciona producto</option>
+              {/* MODIF MAY11 */}
+              {/* <option value="">Selecciona producto</option>
               {[...new Set(csvData.map((i) => i.NOMBRE_PRODUCTO))].map((prod, idx) => (
                 <option key={idx} value={prod}>
                   {prod}
                 </option>
+              ))} */}
+              <option value="">Selecciona producto</option>
+
+              {groupedProducts.map((group, groupIdx) => (
+                <optgroup
+                  key={groupIdx}
+                  label={group.family}
+                >
+                  {group.products.map((prod, prodIdx) => (
+                    <option
+                      key={`${groupIdx}-${prodIdx}`}
+                      value={prod}
+                    >
+                      {prod}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
+              {/* MODIF MAY11 */}
             </select>
           </div>
 

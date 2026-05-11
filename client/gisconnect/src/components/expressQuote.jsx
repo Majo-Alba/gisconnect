@@ -1,4 +1,4 @@
-// in expressQuote.jsx, we have "INVENTORY_LATEST_CSV_URL" to check if the product the user is selecting is in existance. However, the function has a loopwhole that's messing up a bit. Our inventory column "EXISTENCIA"is expressed in terms of existing kilos. However, the client inputs in field "Cantidad Deseada" the packed units he wants to order. To explain myself better, here's the example where we detected the bug so you can help me fix it: In inventory "INVENTORY_LATEST_CSV_URL" we have a product "GLUTAMIC-GREEN", which has 5 in existance. The client inputed "Cantidad Deseada" 2 units of 10kg each, of 10kg each, thus 20kg of the product make up his order. Now, GISConnect allowed him to order because currently we take the "Existencia" field in inventory as packed units, rather than total kilos available. Please fix this so existencias in database is taken as kilos and the app multiplies "Cantidad deseada" by "presentación" (which tells us how many kilos are being requested total). Here is my current expressQuote.jsx, please direct edit    
+// in expressQuote.jsx I made a slight modification to PRODUCTS_CSV_URL: I added colmn "FAMILA_PRODUCTO" to determine which family each product belongs to (Current existing families are: Productos Orgánicos, Microorganismos Benéficos, Microbiología Agrícola, Control Biológico de Nemátodos, Control Biológico de Enfermedades, Control Biológico de Plagas, Reguladores de Crecimiento, Auxinas, Brassinoesteroides, Citocininas, Giberelinas, Otras Materias Primas). Now, I would like for the products to be displayed in the dropdown "Encuentra tu producto" respecting the family. So, In the dropdown list, place family name first, followed by all products belonging to that family, arranged in alphabetical order. As for the arrangement of the families themselves, please use the order in which the appear on the google sheets database   
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -625,6 +625,35 @@ export default function ExpressQuote() {
 
   console.log(csvClientData)
 
+  // NEW MAY11
+  // ===== GROUP PRODUCTS BY FAMILY =====
+  const groupedProducts = (() => {
+    const familyMap = new Map();
+
+    csvData.forEach((row) => {
+      const family = (row.FAMILIA_PRODUCTO || "Sin categoría").trim();
+      const product = (row.NOMBRE_PRODUCTO || "").trim();
+
+      if (!product) return;
+
+      // Preserve family insertion order from Google Sheets
+      if (!familyMap.has(family)) {
+        familyMap.set(family, new Set());
+      }
+
+      familyMap.get(family).add(product);
+    });
+
+    // Convert to ordered array
+    return Array.from(familyMap.entries()).map(([family, products]) => ({
+      family,
+      products: Array.from(products).sort((a, b) =>
+        a.localeCompare(b, "es", { sensitivity: "base" })
+      ),
+    }));
+  })();
+  // END MAY11
+
   const presentationOptions = csvData
     .filter((r) => r.NOMBRE_PRODUCTO === selectedProduct)
     .map((r) => (r.PESO_PRODUCTO || "") + (r.UNIDAD_MEDICION || ""));
@@ -1249,6 +1278,7 @@ export default function ExpressQuote() {
         <div className="quoterBody-Div">
           <div>
             <label className="newUserData-Label">Encuentra tu producto</label>
+            {/* MODIF MAY11 */}
             <select
               className="productInfo-Input"
               value={selectedProduct}
@@ -1261,12 +1291,25 @@ export default function ExpressQuote() {
               }}
             >
               <option value="">Selecciona producto</option>
-              {[...new Set(csvData.map((i) => i.NOMBRE_PRODUCTO))].map((prod, idx) => (
-                <option key={idx} value={prod}>
-                  {prod}
-                </option>
+
+              {groupedProducts.map((group, groupIdx) => (
+
+                <optgroup
+                  key={groupIdx}
+                  label={group.family}
+                >
+                  {group.products.map((prod, prodIdx) => (
+                    <option
+                      key={`${groupIdx}-${prodIdx}`}
+                      value={prod}
+                    >
+                      {prod}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
+            {/* MODIF MAY11 */}
           </div>
 
           <div>

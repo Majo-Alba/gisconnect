@@ -918,6 +918,18 @@ button, .btn, .clickable {
 }
 
 /* GIS: expressQuote.jsx*/
+.productFamily-Option {
+  font-weight: bold;
+  color: #3F3F46;
+  background-color: #F4F4F5;
+  font-size: 33px;
+}
+
+.productOption {
+  color: #111827;
+  font-weight: normal;
+}
+
 .expressQuote-TrashIt{
   color: #8B5E3B;
   margin-left: 4%;
