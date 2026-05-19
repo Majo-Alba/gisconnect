@@ -33,6 +33,11 @@ export default function ManageDeliveryDetails() {
   const [mongoUser, setMongoUser] = useState(null);
   const [mongoError, setMongoError] = useState(null);
 
+  // NEW MAY19
+  // ===== NEW: Mongo Billing data =====
+  const [billingData, setBillingData] = useState(null);
+  // OFF MAY19
+
   // ===== Shipping method selector =====
   // "Enviar" (default) | "Recoger en matriz"
   const [shipMethod, setShipMethod] = useState("Enviar");
@@ -96,28 +101,78 @@ export default function ManageDeliveryDetails() {
   };
 
   // Fetch Mongo user once we know the order (need order.userEmail)
+  // MODIF MAY19
+  // useEffect(() => {
+  //   const email = (order?.userEmail || "").trim().toLowerCase();
+  //   if (!email) return;
+
+  //   let cancelled = false;
+  //   (async () => {
+  //     try {
+  //       const res = await axios.get(`${API}/users/by-email`, { params: { email } });
+  //       if (cancelled) return;
+  //       setMongoUser(res.data || null);
+  //       setMongoError(null);
+  //     } catch (e) {
+  //       if (cancelled) return;
+  //       console.error("GET /users/by-email error:", e);
+  //       setMongoUser(null);
+  //       setMongoError("No se pudo obtener el usuario de Mongo.");
+  //     }
+  //   })();
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, [order?.userEmail]);
+
   useEffect(() => {
     const email = (order?.userEmail || "").trim().toLowerCase();
     if (!email) return;
-
+  
     let cancelled = false;
+  
     (async () => {
       try {
-        const res = await axios.get(`${API}/users/by-email`, { params: { email } });
-        if (cancelled) return;
-        setMongoUser(res.data || null);
-        setMongoError(null);
+        // USER
+        const userRes = await axios.get(`${API}/users/by-email`, {
+          params: { email },
+        });
+  
+        if (!cancelled) {
+          setMongoUser(userRes.data || null);
+        }
+  
+        // BILLING ADDRESS
+        try {
+          const billingRes = await axios.get(`${API}/by-email`, {
+            params: { email },
+          });
+  
+          if (!cancelled) {
+            setBillingData(billingRes.data || null);
+          }
+        } catch (billingErr) {
+          console.error("Billing fetch error:", billingErr);
+          if (!cancelled) setBillingData(null);
+        }
+  
+        if (!cancelled) setMongoError(null);
+  
       } catch (e) {
         if (cancelled) return;
+  
         console.error("GET /users/by-email error:", e);
+  
         setMongoUser(null);
         setMongoError("No se pudo obtener el usuario de Mongo.");
       }
     })();
+  
     return () => {
       cancelled = true;
     };
   }, [order?.userEmail]);
+  // MODIF MAY19
 
   // ✅ If switch to pickup, clear payment method (since it doesn't apply)
   useEffect(() => {
@@ -364,35 +419,112 @@ export default function ManageDeliveryDetails() {
     if (recCityState) doc.text(recCityState, 10, 82);
     if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
 
+    // NEW MAY19
+    // ==========================
+    // DATOS DE FACTURACIÓN
+    // ==========================
+
+    const fact = billingData || {};
+
+    const razonSocial = fact?.razonSocial || "";
+    const rfcEmpresa = fact?.rfcEmpresa || "";
+    const calleFiscal = fact?.calleFiscal || "";
+    const exteriorFiscal = fact?.exteriorFiscal || "";
+    const interiorFiscal = fact?.interiorFiscal || "";
+    const coloniaFiscal = fact?.coloniaFiscal || "";
+    const ciudadFiscal = fact?.ciudadFiscal || "";
+    const estadoFiscal = fact?.estadoFiscal || "";
+    const cpFiscal = fact?.cpFiscal || "";
+
     doc.setFont("helvetica", "bold");
-    doc.text("Transportista:", 10, 104);
+    doc.text("Datos de Facturación:", 10, 98);
+
     doc.setFont("helvetica", "normal");
-    doc.text(`${preferredCarrier || ""}`, 10, 109);
+
+    let fy = 103;
+
+    if (razonSocial) {
+      doc.text(razonSocial, 10, fy);
+      fy += 5;
+    }
+
+    if (rfcEmpresa) {
+      doc.text(`RFC: ${rfcEmpresa}`, 10, fy);
+      fy += 5;
+    }
+
+    const fiscalStreet =
+      `${calleFiscal}${calleFiscal ? " " : ""}` +
+      `${exteriorFiscal ? `# ${exteriorFiscal}` : ""}` +
+      `${interiorFiscal ? ` Int. ${interiorFiscal}` : ""}`;
+
+    if (fiscalStreet.trim()) {
+      doc.text(fiscalStreet.trim(), 10, fy);
+      fy += 5;
+    }
+
+    if (coloniaFiscal) {
+      doc.text(`Col. ${coloniaFiscal}`, 10, fy);
+      fy += 5;
+    }
+
+    const fiscalCityState =
+      `${ciudadFiscal}${ciudadFiscal && estadoFiscal ? ", " : ""}${estadoFiscal}`;
+
+    if (fiscalCityState.trim()) {
+      doc.text(fiscalCityState, 10, fy);
+      fy += 5;
+    }
+
+    if (cpFiscal) {
+      doc.text(`C.P. ${cpFiscal}`, 10, fy);
+      fy += 5;
+    }
+    // NEW MAY19
+
+    doc.setFont("helvetica", "bold");
+    // OG MAY19 FROM 10, 104
+    // MODIF MAY19 FROM 10, 138
+    doc.text("Transportista:", 75, 98);
+    doc.setFont("helvetica", "normal");
+    // OG MAY19 FROM 10, 109
+    // MODIF MAY19 FROM 10, 143
+    doc.text(`${preferredCarrier || ""}`, 75, 103);
 
     // ✅ NEW: Print shipping payment method on label (only if set and not pickup)
     if (!isPickup && shippingPaymentMethod) {
       doc.setFont("helvetica", "bold");
-      doc.text("Método pago envío:", 10, 116);
+      // MODIF MAY19 FROM 10, 116
+      // MODIF MAY19 FROM 10, 150
+      doc.text("Método pago envío:", 75, 110);
       doc.setFont("helvetica", "normal");
-      doc.text(String(shippingPaymentMethod), 10, 121);
+      // MODIF MAY19 FROM 10, 121
+      // MODIF MAY19 FROM 10, 155
+      doc.text(String(shippingPaymentMethod), 75, 115);
     }
 
     if (insureShipmentLabel === "Sí") {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 0, 0);
-      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 75, 80);
+      // MODIF MAY19 FROM 75, 80
+      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 75, 45);
       doc.setFontSize(9);
-      doc.text("Monto Asegurado:", 75, 90);
-      doc.text(`${fmtMXN(insuredAmountMXN)}`, 75, 95);
+      // MODIF MAY19 FROM 75, 90
+      doc.text("Monto Asegurado:", 75, 55);
+      // MODIF MAY19 FROM 75, 95
+      doc.text(`${fmtMXN(insuredAmountMXN)}`, 75, 60);
       doc.setTextColor(0, 0, 0);
     }
 
     // Gray box for tracking (keep inside new page size)
-    doc.setDrawColor(0);
-    doc.setFillColor(200, 200, 200);
-    doc.rect(10, pageHeight - 35, pageWidth - 20, 20, "F");
-    doc.setFontSize(8);
-    doc.text("Código de rastreo", 30, pageHeight - 28);
+    // OFF MAY19
+    // doc.setDrawColor(0);
+    // doc.setFillColor(200, 200, 200);
+    // doc.rect(10, pageHeight - 35, pageWidth - 20, 20, "F");
+    // doc.setFontSize(8);
+    // doc.text("Código de rastreo", 30, pageHeight - 28);
+    // OFF MAY19
+
 
     const existing = (order.trackingNumber || "").trim();
     const generated = `GIS-${String(order._id).slice(-5)}-${Date.now().toString().slice(-6)}`;
