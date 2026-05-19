@@ -1,4 +1,3 @@
-//In manageDeliveryDetails.jsx lets have same change. Currently paquetería and mercancia asegurada come from userprefs and we want them to come from mongos new_order "preferredCarrier" & "insuredShipment". As well, when we are selecting "Metodo de pago de envio", its not getting stored anywhere, and I wish for it to be stored in mongodb new_order along all other info from this order. Here is current managedDeliveryDetails.jsx, as well as orderModel.js
 import { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -88,11 +87,6 @@ export default function ManageDeliveryDetails() {
 
       // ✅ NEW: preload shipping payment method if you later persist it (optional)
       // Try to read it from order.shippingInfo.shipPayMethod or order.shipPayMethod if exists.
-      // const existingPay =
-      //   (typeof o?.shippingInfo === "object" && o?.shippingInfo?.shipPayMethod) ||
-      //   o?.shipPayMethod ||
-      //   "";
-      // setShippingPaymentMethod(String(existingPay || ""));
       const existingPay = o?.shipPayMethod || "";
       setShippingPaymentMethod(String(existingPay || ""));
     } catch (err) {
@@ -101,30 +95,6 @@ export default function ManageDeliveryDetails() {
   };
 
   // Fetch Mongo user once we know the order (need order.userEmail)
-  // MODIF MAY19
-  // useEffect(() => {
-  //   const email = (order?.userEmail || "").trim().toLowerCase();
-  //   if (!email) return;
-
-  //   let cancelled = false;
-  //   (async () => {
-  //     try {
-  //       const res = await axios.get(`${API}/users/by-email`, { params: { email } });
-  //       if (cancelled) return;
-  //       setMongoUser(res.data || null);
-  //       setMongoError(null);
-  //     } catch (e) {
-  //       if (cancelled) return;
-  //       console.error("GET /users/by-email error:", e);
-  //       setMongoUser(null);
-  //       setMongoError("No se pudo obtener el usuario de Mongo.");
-  //     }
-  //   })();
-  //   return () => {
-  //     cancelled = true;
-  //   };
-  // }, [order?.userEmail]);
-
   useEffect(() => {
     const email = (order?.userEmail || "").trim().toLowerCase();
     if (!email) return;
@@ -172,7 +142,6 @@ export default function ManageDeliveryDetails() {
       cancelled = true;
     };
   }, [order?.userEmail]);
-  // MODIF MAY19
 
   // ✅ If switch to pickup, clear payment method (since it doesn't apply)
   useEffect(() => {
@@ -207,17 +176,6 @@ export default function ManageDeliveryDetails() {
     return () => clearTimeout(t);
   }, [shippingPaymentMethod, isPickup, order?._id]);
 
-  // const preferredCarrier = useMemo(() => {
-  //   return (
-  //     (mongoUser?.shippingPreferences?.preferredCarrier || mongoUser?.preferredCarrier || "")?.toString().trim()
-  //   );
-  // }, [mongoUser]);
-
-  // const insureShipmentLabel = useMemo(() => {
-  //   const val = mongoUser?.shippingPreferences?.insureShipment ?? mongoUser?.insureShipment;
-  //   if (typeof val === "boolean") return val ? "Sí" : "No";
-  //   return "";
-  // }, [mongoUser]);
   const preferredCarrier = useMemo(() => {
     return (order?.preferredCarrier || "").toString().trim();
   }, [order?.preferredCarrier]);
@@ -388,23 +346,39 @@ export default function ManageDeliveryDetails() {
       }
     }
 
-    doc.setFontSize(9);
+    // MODIF MAY19 FROM (9)
+    doc.setFontSize(6.5);
     doc.setFont("helvetica", "normal");
     doc.text(`Pedido #: ${String(order._id).slice(-5)}`, pageWidth - 45, 7);
     doc.text(`Fecha: ${new Date().toLocaleDateString("es-MX")}`, pageWidth - 45, 12);
 
     doc.setFont("helvetica", "bold");
+    // NEW MAY19
+    doc.setFontSize(7.5);
     doc.text("Remitente:", 10, 20);
+    // NEW MAY19
+    doc.setFontSize(6.5);
     doc.setFont("helvetica", "normal");
-    doc.text("GREEN IMPORT SOLUTIONS", 10, 25);
-    doc.text("Monte Everest #2428", 10, 30);
-    doc.text("Col. La Federacha", 10, 35);
-    doc.text("Guadalajara, Jalisco", 10, 40);
-    doc.text("C.P. 44300", 10, 45);
-    doc.text("Tel. 01 (33) 2016 8274", 10, 52);
+    // doc.text("GREEN IMPORT SOLUTIONS", 10, 25);
+    // doc.text("Monte Everest #2428", 10, 30);
+    // doc.text("Col. La Federacha", 10, 35);
+    // doc.text("Guadalajara, Jalisco", 10, 40);
+    // doc.text("C.P. 44300", 10, 45);
+    // doc.text("Tel. 01 (33) 2016 8274", 10, 52);
+    doc.text("GREEN IMPORT SOLUTIONS", 10, 24);
+    doc.text("Monte Everest #2428", 10, 28);
+    doc.text("Col. La Federacha", 10, 32);
+    doc.text("Guadalajara, Jalisco", 10, 36);
+    doc.text("C.P. 44300", 10, 40);
+    doc.text("Tel. 01 (33) 2016 8274", 10, 44);
 
     doc.setFont("helvetica", "bold");
-    doc.text("Destinatario:", 10, 62);
+    // NEW MAY19
+    doc.setFontSize(7.5);
+    // MODIF MAY19 FROM 10,62
+    doc.text("Destinatario:", 10, 52);
+    // NEW MAY19
+    doc.setFontSize(6.5);
     doc.setFont("helvetica", "normal");
 
     const recName = displayName || "";
@@ -413,11 +387,16 @@ export default function ManageDeliveryDetails() {
     const recCityState = `${sCiudad}${sCiudad && sEstado ? ", " : ""}${sEstado}`;
     const recCP = sCP;
 
-    doc.text(recName, 10, 67);
-    if (recStreet) doc.text(recStreet, 10, 72);
-    if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
-    if (recCityState) doc.text(recCityState, 10, 82);
-    if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
+    // doc.text(recName, 10, 67);
+    // if (recStreet) doc.text(recStreet, 10, 72);
+    // if (recCol) doc.text(`Col. ${recCol}`, 10, 77);
+    // if (recCityState) doc.text(recCityState, 10, 82);
+    // if (recCP) doc.text(`C.P. ${recCP}`, 10, 87);
+    doc.text(recName, 10, 56);
+    if (recStreet) doc.text(recStreet, 10, 60);
+    if (recCol) doc.text(`Col. ${recCol}`, 10, 64);
+    if (recCityState) doc.text(recCityState, 10, 68);
+    if (recCP) doc.text(`C.P. ${recCP}`, 10, 72);
 
     // NEW MAY19
     // ==========================
@@ -437,20 +416,27 @@ export default function ManageDeliveryDetails() {
     const cpFiscal = fact?.cpFiscal || "";
 
     doc.setFont("helvetica", "bold");
-    doc.text("Datos de Facturación:", 10, 98);
+    // NEW MAY19
+    doc.setFontSize(7.5);
+    // MODIF MAY19 FROM 10,98
+    doc.text("Datos de Facturación:", 10, 80);
+    // NEW MAY19
+    doc.setFontSize(6.5);
 
     doc.setFont("helvetica", "normal");
 
-    let fy = 103;
+    // MODIF MAY19 FROM 103
+    let fy = 84;
 
     if (razonSocial) {
       doc.text(razonSocial, 10, fy);
-      fy += 5;
+      // MODIF MAY19 FROM 5
+      fy += 3.5;
     }
 
     if (rfcEmpresa) {
       doc.text(`RFC: ${rfcEmpresa}`, 10, fy);
-      fy += 5;
+      fy += 3.5;
     }
 
     const fiscalStreet =
@@ -460,12 +446,12 @@ export default function ManageDeliveryDetails() {
 
     if (fiscalStreet.trim()) {
       doc.text(fiscalStreet.trim(), 10, fy);
-      fy += 5;
+      fy += 3.5;
     }
 
     if (coloniaFiscal) {
       doc.text(`Col. ${coloniaFiscal}`, 10, fy);
-      fy += 5;
+      fy += 3.5;
     }
 
     const fiscalCityState =
@@ -473,46 +459,61 @@ export default function ManageDeliveryDetails() {
 
     if (fiscalCityState.trim()) {
       doc.text(fiscalCityState, 10, fy);
-      fy += 5;
+      fy += 3.5;
     }
 
     if (cpFiscal) {
       doc.text(`C.P. ${cpFiscal}`, 10, fy);
-      fy += 5;
+      fy += 3.5;
     }
     // NEW MAY19
 
     doc.setFont("helvetica", "bold");
     // OG MAY19 FROM 10, 104
     // MODIF MAY19 FROM 10, 138
-    doc.text("Transportista:", 75, 98);
+    // MODIF MAY19 FROM 75,98
+    // NEW MAY19
+    doc.setFontSize(7.5);
+    doc.text("Transportista:", 75, 80);
+    // NEW MAY19
+    doc.setFontSize(6.5);
     doc.setFont("helvetica", "normal");
     // OG MAY19 FROM 10, 109
     // MODIF MAY19 FROM 10, 143
-    doc.text(`${preferredCarrier || ""}`, 75, 103);
+    // MODIF MAY19 FROM 75, 103
+    doc.text(`${preferredCarrier || ""}`, 75, 84);
 
     // ✅ NEW: Print shipping payment method on label (only if set and not pickup)
     if (!isPickup && shippingPaymentMethod) {
       doc.setFont("helvetica", "bold");
       // MODIF MAY19 FROM 10, 116
       // MODIF MAY19 FROM 10, 150
-      doc.text("Método pago envío:", 75, 110);
+      // MODIF MAY19 FROM 75, 110
+      // NEW MAY19
+      doc.setFontSize(7.5);
+      doc.text("Método pago envío:", 75, 91);
+      // NEW MAY19
+      doc.setFontSize(6.5);
       doc.setFont("helvetica", "normal");
       // MODIF MAY19 FROM 10, 121
       // MODIF MAY19 FROM 10, 155
-      doc.text(String(shippingPaymentMethod), 75, 115);
+      // MODIF MAY19 FROM 75, 115
+      doc.text(String(shippingPaymentMethod), 75, 95);
     }
 
     if (insureShipmentLabel === "Sí") {
       doc.setFont("helvetica", "bold");
       doc.setTextColor(255, 0, 0);
       // MODIF MAY19 FROM 75, 80
-      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 75, 45);
+      // MODIF MAY19 FROM 75, 45
+      doc.text(["¡ENVIAR PAQUETE", "ASEGURADO!"], 75, 38);
       doc.setFontSize(9);
       // MODIF MAY19 FROM 75, 90
-      doc.text("Monto Asegurado:", 75, 55);
+      // MODIF MAY19 FROM 75, 55
+      doc.text("Monto Asegurado:", 75, 46);
       // MODIF MAY19 FROM 75, 95
-      doc.text(`${fmtMXN(insuredAmountMXN)}`, 75, 60);
+      // MODIF MAY19 FROM 75, 60
+      doc.text(`${fmtMXN(insuredAmountMXN)}`, 75, 50);
       doc.setTextColor(0, 0, 0);
     }
 
