@@ -13,6 +13,8 @@ const ALLOWED_ADMIN_EMAILS = new Set([
   "ventas@greenimportsol.com",
   "info@greenimportsol.com",
   "majo_test@gmail.com",
+  "administracion@greenimportsol.com",
+  "administracion2@greenimportsol.com",
 ]);
 
 export default function NewOrders() {
