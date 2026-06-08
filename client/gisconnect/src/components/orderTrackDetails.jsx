@@ -528,6 +528,17 @@ export default function OrderTrackDetails() {
           },
         }
       );
+
+        // new jun08
+        await axios.post(
+          `${API}/orders/${orderId}/evidence/mark-payment`,
+          {
+            files: [{
+              key: "evidence-uploaded",
+              filename: "payment-evidence"
+            }]
+          }
+        );
   
       // update status
       await fetch(`${API}/order/${orderId}/status`, {
