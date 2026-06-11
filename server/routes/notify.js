@@ -144,6 +144,14 @@ async function notifyStage(stage, title, body, data = {}) {
       console.error("[notifyStage] Web Push send error:", e);
     }
 
+    // jun11
+    console.log("[notifyStage] targetEmails:", targetEmails);
+    console.log(
+      "[notifyStage] webpush emails:",
+      webSubs.map(s => s.email)
+    );
+    // jun11
+
     console.log(`[notifyStage] summary stage=${stage} :: FCM ok=${fcmSuccess}, FCM fail=${fcmFail}, WebPush tried=${wpTried}, WebPush pruned=${wpPruned}`);
   } catch (err) {
     console.error("notifyStage error:", err);
