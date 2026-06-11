@@ -14,7 +14,7 @@ async function notifyStage(stage, title, body, data = {}) {
 
   // jun11
   console.log(
-    "🔥 NOTIFY FIRED",
+    "🔥 NOTIFY FIRED!",
     {
       stage,
       orderId: data?.orderId,
