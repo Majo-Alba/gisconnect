@@ -11,6 +11,18 @@ const { recipientsForStage } = require("../notifications/roles");
  * - Native Web Push (VAPID) → iOS PWAs (and also works on other browsers)
  */
 async function notifyStage(stage, title, body, data = {}) {
+
+  // jun11
+  console.log(
+    "🔥 NOTIFY FIRED",
+    {
+      stage,
+      orderId: data?.orderId,
+      email: data?.email,
+      timestamp: new Date().toISOString()
+    }
+  );
+  // jun11
   try {
     const targetEmails = recipientsForStage(stage);
     console.log(`[notifyStage] stage=${stage} -> recipients:`, targetEmails);
