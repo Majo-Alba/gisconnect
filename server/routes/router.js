@@ -52,6 +52,7 @@ const roleTopics = {
 };
 const rolesForStage = (stage) => {
   switch (stage) {
+    case "EVIDENCIA_DE_PAGO":         return ["FULL_ACCESS"];
     case "EVIDENCIA_PAGO":            return ["FULL_ACCESS"];
     case "PAGO_VERIFICADO":           return ["ADMIN_FACTURAS_Y_LOGISTICA", "LOGISTICA_Y_ALMACEN", "ALMACEN_LIMITADO"];
     case "PREPARANDO_PEDIDO":         return ["ADMIN_FACTURAS_Y_LOGISTICA"];

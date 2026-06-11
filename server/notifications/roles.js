@@ -44,14 +44,13 @@ function recipientsForStage(stage) {
   const emails = new Set();
   switch (stage) {
     case STAGES.PEDIDO_REALIZADO:
-      // Currently only FULL_ACCESS. If you want Ops to see it too, uncomment:
-      // addAll(emails, ADMIN_FACTURAS_Y_LOGISTICA);
-      // addAll(emails, LOGISTICA_Y_ALMACEN);
       addAll(emails, FULL_ACCESS);
+      addAll(emails, ADMIN_FACTURAS_Y_LOGISTICA);
       break;
 
     case STAGES.EVIDENCIA_DE_PAGO:
       addAll(emails, FULL_ACCESS);
+      addAll(emails, ADMIN_FACTURAS_Y_LOGISTICA);
       break;
 
     case STAGES.PAGO_VERIFICADO:
