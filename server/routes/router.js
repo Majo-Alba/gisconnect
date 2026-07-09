@@ -2507,22 +2507,22 @@ router.get("/admin/webpush/list", async (req, res) => {
 });
 
 // NEW JUL/09
-router.get("/admin/webpush/clear-all", async (req, res) => {
-  try {
-    const result = await WebPushSubscription.deleteMany({});
+// router.get("/admin/webpush/clear-all", async (req, res) => {
+//   try {
+//     const result = await WebPushSubscription.deleteMany({});
 
-    return res.json({
-      ok: true,
-      deletedCount: result.deletedCount,
-    });
-  } catch (err) {
-    console.error("clear-all webpush error:", err);
-    return res.status(500).json({
-      ok: false,
-      error: err.message,
-    });
-  }
-});
+//     return res.json({
+//       ok: true,
+//       deletedCount: result.deletedCount,
+//     });
+//   } catch (err) {
+//     console.error("clear-all webpush error:", err);
+//     return res.status(500).json({
+//       ok: false,
+//       error: err.message,
+//     });
+//   }
+// });
 // END JUL/09
 
 // POST /debug/webpush-to-email?email=...
