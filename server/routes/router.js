@@ -2506,6 +2506,24 @@ router.get("/admin/webpush/list", async (req, res) => {
   res.json({ count: docs.length, rows: docs });
 });
 
+// NEW JUL/09
+router.get("/admin/webpush/clear-all", async (req, res) => {
+  try {
+    const result = await WebPushSubscription.deleteMany({});
+
+    return res.json({
+      ok: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (err) {
+    console.error("clear-all webpush error:", err);
+    return res.status(500).json({
+      ok: false,
+      error: err.message,
+    });
+  }
+});
+// END JUL/09
 
 // POST /debug/webpush-to-email?email=...
 router.post("/debug/webpush-to-email", async (req, res) => {
