@@ -476,11 +476,28 @@ export default function AdminHome() {
         </button> */}
         <button
           className="adminHome-WebPushResubBtn"
+          // MODIF JUL/09
+          // onClick={async () => {
+          //   const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+          //   const email = raw?.correo || localStorage.getItem("userEmail");
+          //   await resubscribeWebPush(API, email);
+          // }}
           onClick={async () => {
-            const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
-            const email = raw?.correo || localStorage.getItem("userEmail");
-            await resubscribeWebPush(API, email);
+            try {
+              const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
+              const email = raw?.correo || localStorage.getItem("userEmail");
+              if (!email) return alert("No email");
+          
+              const { publicKey } = await fetch(`${API}/admin/webpush/public-key`).then(r => r.json());
+              if (!publicKey) throw new Error("No se recibió VAPID public key");
+          
+              await resubscribeWebPush(API, email, publicKey);
+              alert("Web Push re-suscrito correctamente.");
+            } catch (e) {
+              alert(`Error re-suscribiendo Web Push: ${e.message}`);
+            }
           }}
+          // END MODIF JUL/09
         >
           Re-suscribir Web Push
         </button>
