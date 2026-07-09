@@ -39,6 +39,12 @@ WebPushSubscriptionSchema.index(
   { email: 1, "subscription.endpoint": 1 },
   { unique: true }
 );
+// NEW JUL/09
+WebPushSubscriptionSchema.index(
+  { "subscription.endpoint": 1 },
+  { unique: true }
+);
+// END JUL/09
 
 // Keep lastSeenAt fresh
 WebPushSubscriptionSchema.pre("save", function (next) {
@@ -51,6 +57,36 @@ WebPushSubscriptionSchema.pre("save", function (next) {
  * - Ensures uniqueness on (email, endpoint)
  * - Updates keys/expirationTime/userAgent and lastSeenAt on revisit
  */
+
+// MODIF JUL/09
+// WebPushSubscriptionSchema.statics.upsertForEmail = async function ({
+//   email,
+//   subscription,
+//   userAgent,
+// }) {
+//   if (!email || !subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+//     throw new Error("Invalid subscription payload");
+//   }
+
+//   const filter = { email: email.toLowerCase().trim(), "subscription.endpoint": subscription.endpoint };
+
+//   const update = {
+//     email: filter.email,
+//     subscription: {
+//       endpoint: subscription.endpoint,
+//       expirationTime: subscription.expirationTime ?? null,
+//       keys: {
+//         p256dh: subscription.keys.p256dh,
+//         auth: subscription.keys.auth,
+//       },
+//     },
+//     userAgent: userAgent || undefined,
+//     lastSeenAt: new Date(),
+//   };
+
+//   const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
+//   return this.findOneAndUpdate(filter, update, opts).lean();
+// };
 WebPushSubscriptionSchema.statics.upsertForEmail = async function ({
   email,
   subscription,
@@ -60,25 +96,43 @@ WebPushSubscriptionSchema.statics.upsertForEmail = async function ({
     throw new Error("Invalid subscription payload");
   }
 
-  const filter = { email: email.toLowerCase().trim(), "subscription.endpoint": subscription.endpoint };
+  const cleanEmail = String(email).toLowerCase().trim();
+  const endpoint = subscription.endpoint;
+
+  // ✅ CRITICAL: one device endpoint must belong to ONE email only
+  await this.deleteMany({
+    "subscription.endpoint": endpoint,
+    email: { $ne: cleanEmail },
+  });
+
+  const filter = {
+    email: cleanEmail,
+    "subscription.endpoint": endpoint,
+  };
 
   const update = {
-    email: filter.email,
-    subscription: {
-      endpoint: subscription.endpoint,
-      expirationTime: subscription.expirationTime ?? null,
-      keys: {
-        p256dh: subscription.keys.p256dh,
-        auth: subscription.keys.auth,
+    $set: {
+      email: cleanEmail,
+      subscription: {
+        endpoint,
+        expirationTime: subscription.expirationTime ?? null,
+        keys: {
+          p256dh: subscription.keys.p256dh,
+          auth: subscription.keys.auth,
+        },
       },
+      userAgent: userAgent || "",
+      lastSeenAt: new Date(),
     },
-    userAgent: userAgent || undefined,
-    lastSeenAt: new Date(),
+    $setOnInsert: {
+      createdAt: new Date(),
+    },
   };
 
   const opts = { upsert: true, new: true, setDefaultsOnInsert: true };
   return this.findOneAndUpdate(filter, update, opts).lean();
 };
+// END MODIF JUL/09
 
 /**
  * Fetch all subscriptions for a list of emails.

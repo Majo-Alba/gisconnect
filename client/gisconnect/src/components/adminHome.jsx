@@ -197,8 +197,22 @@ export default function AdminHome() {
     console.log("FB projectId =", import.meta.env.VITE_FB_PROJECT_ID);
 
     // 2) Native Web Push subscription (iOS PWA + others)
-    const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY; // you already have this in .env
-    ensureWebPushSubscription(API, email, PUBLIC_VAPID);
+    // MODIF JUL/09
+    // const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY;
+    // ensureWebPushSubscription(API, email, PUBLIC_VAPID);
+    (async () => {
+      const r = await fetch(`${API}/admin/webpush/public-key`);
+      const { publicKey } = await r.json();
+    
+      if (!publicKey) {
+        console.warn("[WebPush] Server did not return VAPID public key");
+        return;
+      }
+    
+      await ensureWebPushSubscription(API, email, publicKey);
+    })();
+    // END MODIF JUL/09
+
   }, []);
 
   useEffect(() => {
