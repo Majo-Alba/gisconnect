@@ -39,63 +39,128 @@ function urlBase64ToUint8Array(base64) {
  * Subscribe browser to native Web Push (works on iOS PWAs and others)
  * and register the subscription on the server.
  */
+// MODIF JUL/09
+// async function ensureWebPushSubscription(API_BASE, email, vapidPublicKey) {
+//   try {
+//     if (!email) return;
+//     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+//       console.log("[WebPush] Not supported in this browser");
+//       return;
+//     }
+
+//     // iOS PWAs: Notification API only exists when opened from Home Screen
+//     if (!("Notification" in window)) {
+//       console.log("[WebPush] Notification API unavailable (open from Home Screen on iOS).");
+//       return;
+//     }
+
+//     // Ask permission if not already granted/denied
+//     let permission = Notification.permission;
+//     if (permission === "default") {
+//       try {
+//         permission = await Notification.requestPermission();
+//       } catch (e) {
+//         console.warn("[WebPush] requestPermission error:", e);
+//       }
+//     }
+//     if (permission !== "granted") {
+//       console.log("[WebPush] Permission not granted:", permission);
+//       return;
+//     }
+
+//     const reg = (await navigator.serviceWorker.getRegistration("/")) || (await navigator.serviceWorker.ready);
+//     if (!reg) {
+//       console.log("[WebPush] No Service Worker registration");
+//       return;
+//     }
+
+//     let sub = await reg.pushManager.getSubscription();
+//     if (!sub) {
+//       if (!vapidPublicKey) {
+//         console.warn("[WebPush] Missing VAPID public key.");
+//         return;
+//       }
+//       sub = await reg.pushManager.subscribe({
+//         userVisibleOnly: true,
+//         applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+//       });
+//     }
+
+//     const resp = await fetch(`${API_BASE}/admin/webpush/register`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ email, subscription: sub }),
+//     });
+//     const js = await resp.json().catch(() => ({}));
+//     console.log("[WebPush] register response:", js);
+//   } catch (err) {
+//     console.error("[WebPush] ensureWebPushSubscription error:", err);
+//   }
+// }
 async function ensureWebPushSubscription(API_BASE, email, vapidPublicKey) {
   try {
-    if (!email) return;
+    if (!email) throw new Error("No email");
+
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      console.log("[WebPush] Not supported in this browser");
-      return;
+      throw new Error("Web Push no soportado en este navegador");
     }
 
-    // iOS PWAs: Notification API only exists when opened from Home Screen
     if (!("Notification" in window)) {
-      console.log("[WebPush] Notification API unavailable (open from Home Screen on iOS).");
-      return;
+      throw new Error("Notification API no disponible. En iPhone abre desde Home Screen.");
     }
 
-    // Ask permission if not already granted/denied
     let permission = Notification.permission;
+
     if (permission === "default") {
-      try {
-        permission = await Notification.requestPermission();
-      } catch (e) {
-        console.warn("[WebPush] requestPermission error:", e);
-      }
-    }
-    if (permission !== "granted") {
-      console.log("[WebPush] Permission not granted:", permission);
-      return;
+      permission = await Notification.requestPermission();
     }
 
-    const reg = (await navigator.serviceWorker.getRegistration("/")) || (await navigator.serviceWorker.ready);
-    if (!reg) {
-      console.log("[WebPush] No Service Worker registration");
-      return;
+    if (permission !== "granted") {
+      throw new Error(`Permiso de notificaciones no concedido: ${permission}`);
+    }
+
+    const reg =
+      (await navigator.serviceWorker.getRegistration("/")) ||
+      (await navigator.serviceWorker.ready);
+
+    if (!reg) throw new Error("No Service Worker registration");
+
+    const serverKey = vapidPublicKey || (await fetchServerVapidKey(API_BASE));
+
+    if (!serverKey) {
+      throw new Error("No se recibió VAPID public key del servidor");
     }
 
     let sub = await reg.pushManager.getSubscription();
+
     if (!sub) {
-      if (!vapidPublicKey) {
-        console.warn("[WebPush] Missing VAPID public key.");
-        return;
-      }
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+        applicationServerKey: urlBase64ToUint8Array(serverKey),
       });
     }
 
     const resp = await fetch(`${API_BASE}/admin/webpush/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, subscription: sub }),
+      body: JSON.stringify({ email, subscription: sub.toJSON ? sub.toJSON() : sub }),
     });
+
     const js = await resp.json().catch(() => ({}));
-    console.log("[WebPush] register response:", js);
+
+    console.log("[WebPush] register HTTP:", resp.status, js);
+
+    if (!resp.ok || js?.ok !== true) {
+      throw new Error(js?.error || `Register failed HTTP ${resp.status}`);
+    }
+
+    return js;
   } catch (err) {
     console.error("[WebPush] ensureWebPushSubscription error:", err);
+    throw err;
   }
 }
+// END MODIF JUL/90
 
 // oct25
 async function resubscribeWebPush(API_BASE, email, vapidPublicKey) {
@@ -380,9 +445,17 @@ export default function AdminHome() {
             const raw = JSON.parse(localStorage.getItem("userLoginCreds") || "null");
             const email = raw?.correo || localStorage.getItem("userEmail");
             if (!email) return alert("No email");
-            const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY;
-            await ensureWebPushSubscription(API, email, PUBLIC_VAPID);
-            alert("Web Push suscripción verificada.");
+            // MODIF JUL/09
+            // const PUBLIC_VAPID = import.meta.env.VITE_FB_VAPID_KEY;
+            // await ensureWebPushSubscription(API, email, PUBLIC_VAPID);
+            // alert("Web Push suscripción verificada.");
+            try {
+              const result = await ensureWebPushSubscription(API, email);
+              alert(`Web Push suscripción verificada. ID: ${result?.id || "ok"}`);
+            } catch (e) {
+              alert(`Error suscribiendo Web Push: ${e.message}`);
+            }
+            // END JUL/09
           }}
           title="Suscribir Web Push (iOS PWA)"
         >
