@@ -97,6 +97,20 @@ function urlBase64ToUint8Array(base64) {
 //     console.error("[WebPush] ensureWebPushSubscription error:", err);
 //   }
 // }
+
+// NEW JUL/09
+async function fetchServerVapidKey(API_BASE) {
+  const res = await fetch(`${API_BASE}/admin/webpush/public-key`);
+  const data = await res.json();
+
+  if (!res.ok || !data?.publicKey) {
+    throw new Error(data?.error || "No se recibió VAPID public key");
+  }
+
+  return data.publicKey;
+}
+// END JUL/09
+
 async function ensureWebPushSubscription(API_BASE, email, vapidPublicKey) {
   try {
     if (!email) throw new Error("No email");
