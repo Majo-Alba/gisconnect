@@ -33,6 +33,7 @@ const { STAGES } = require("../notifications/roles");
 const { admin } = require("../notifications/fcm");
 
 const WebPushSubscription = require("../models/WebPushSubscription");
+const { sendWebPush } = require("../notifications/webpush");
 
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
@@ -2559,6 +2560,98 @@ router.post("/debug/webpush-to-email", async (req, res) => {
     res.status(500).json({ ok:false, error: e.message });
   }
 });
+
+// NEW JUL/19
+router.post("/debug/webpush-to-email", async (req, res) => {
+  try {
+    const email = String(
+      req.query.email || req.body?.email || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const stage = String(
+      req.query.stage || req.body?.stage || "DIRECT_TEST"
+    ).trim();
+
+    if (!email) {
+      return res.status(400).json({
+        ok: false,
+        error: "email is required",
+      });
+    }
+
+    const subs = await WebPushSubscription.findByEmails([email]);
+
+    if (!subs.length) {
+      return res.status(404).json({
+        ok: false,
+        email,
+        error: "No Web Push subscriptions found for this email",
+      });
+    }
+
+    const results = [];
+
+    for (const s of subs) {
+      try {
+        const response = await sendWebPush(
+          s.subscription,
+          {
+            title: `Prueba GISConnect: ${stage}`,
+            body: `Notificación directa para ${email}`,
+            icon: "https://gisconnect-web.onrender.com/icons/icon-192.png",
+            data: {
+              click_action:
+                "https://gisconnect-web.onrender.com/adminHome",
+              stage,
+              directTest: "true",
+            },
+          },
+          {
+            urgency: "high",
+            TTL: 60 * 60,
+            topic: `test-${Date.now()}`
+              .replace(/[^a-zA-Z0-9_-]/g, "")
+              .slice(0, 32),
+          }
+        );
+
+        results.push({
+          ok: true,
+          statusCode: response?.statusCode,
+          endpointPrefix: String(
+            s.subscription?.endpoint || ""
+          ).slice(0, 65),
+        });
+      } catch (error) {
+        results.push({
+          ok: false,
+          statusCode: error?.statusCode || null,
+          error: error?.body || error?.message,
+          endpointPrefix: String(
+            s.subscription?.endpoint || ""
+          ).slice(0, 65),
+        });
+      }
+    }
+
+    return res.json({
+      ok: results.some((r) => r.ok),
+      email,
+      subscriptionCount: subs.length,
+      results,
+    });
+  } catch (error) {
+    console.error("debug/webpush-to-email error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: error.message,
+    });
+  }
+});
+// END JUL/19
 // Nov24
 // helper to decide if a claim is expired
 function isExpired(doc) {

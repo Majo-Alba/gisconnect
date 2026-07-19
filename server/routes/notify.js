@@ -112,32 +112,139 @@ async function notifyStage(stage, title, body, data = {}) {
     // --------------------------------------------------------------------
     // 2) Native Web Push (VAPID) — works on iOS PWAs (and others)
     // --------------------------------------------------------------------
+
+    // MODIF JUL/19
+
+    // let wpTried = 0;
+    // let wpPruned = 0;
+
+    // try {
+    //   const subs = await WebPushSubscription.findByEmails(targetEmails);
+    //   console.log(`[notifyStage] found WebPush subs: ${subs.length}`);
+
+    //   const payload = {
+    //     title: title || "GISConnect",
+    //     body: body || "Actualización de pedido.",
+    //     icon: "https://gisconnect-web.onrender.com/icons/icon-192.png",
+    //     data: { click_action: "https://gisconnect-web.onrender.com/adminHome", stage, ...safeData }
+    //   };
+
+    //   for (const s of subs) {
+    //     wpTried++;
+    //     try {
+    //       await sendWebPush(s.subscription, payload);
+    //     } catch (err) {
+    //       // 410/404 => subscription expired/invalid → remove it
+    //       if (err?.statusCode === 410 || err?.statusCode === 404) {
+    //         await WebPushSubscription.removeByEndpoint(s.subscription.endpoint);
+    //         wpPruned++;
+    //         console.warn("[webpush] pruned expired subscription:", s.subscription.endpoint);
+    //       } else {
+    //         console.warn("[webpush] send failed:", err?.statusCode, err?.body || err?.message);
+    //       }
+    //     }
+    //   }
+    // } catch (e) {
+    //   console.error("[notifyStage] Web Push send error:", e);
+    // }
     let wpTried = 0;
+    let wpSuccess = 0;
+    let wpFailed = 0;
     let wpPruned = 0;
 
     try {
       const subs = await WebPushSubscription.findByEmails(targetEmails);
-      console.log(`[notifyStage] found WebPush subs: ${subs.length}`);
+
+      const normalizeEmail = (value) =>
+        String(value || "").trim().toLowerCase();
+
+      console.log("[notifyStage] target emails:", targetEmails);
+
+      console.log(
+        "[notifyStage] subscriptions found:",
+        subs.map((s) => ({
+          email: normalizeEmail(s.email),
+          endpointPrefix: String(s.subscription?.endpoint || "").slice(0, 65),
+          lastSeenAt: s.lastSeenAt || null,
+          userAgent: s.userAgent || "",
+        }))
+      );
+
+      const emailsWithSubscriptions = new Set(
+        subs.map((s) => normalizeEmail(s.email))
+      );
+
+      const missingEmails = targetEmails.filter(
+        (email) => !emailsWithSubscriptions.has(normalizeEmail(email))
+      );
+
+      console.log(
+        "[notifyStage] recipient emails without Web Push subscription:",
+        missingEmails
+      );
 
       const payload = {
         title: title || "GISConnect",
         body: body || "Actualización de pedido.",
         icon: "https://gisconnect-web.onrender.com/icons/icon-192.png",
-        data: { click_action: "https://gisconnect-web.onrender.com/adminHome", stage, ...safeData }
+        badge: "https://gisconnect-web.onrender.com/icons/icon-192.png",
+
+        data: {
+          click_action: "https://gisconnect-web.onrender.com/adminHome",
+          stage,
+          ...safeData,
+        },
       };
 
       for (const s of subs) {
         wpTried++;
+
+        const subscriptionEmail = normalizeEmail(s.email);
+        const endpoint = s.subscription?.endpoint || "";
+
         try {
-          await sendWebPush(s.subscription, payload);
+          const response = await sendWebPush(
+            s.subscription,
+            payload,
+            {
+              urgency: "high",
+              TTL: 60 * 60 * 24,
+
+              // Unique per stage/order so unrelated notifications aren't collapsed.
+              topic: `${stage}-${safeData.orderId || "general"}`
+                .replace(/[^a-zA-Z0-9_-]/g, "")
+                .slice(0, 32),
+            }
+          );
+
+          wpSuccess++;
+
+          console.log("[webpush] accepted by push service:", {
+            stage,
+            email: subscriptionEmail,
+            statusCode: response?.statusCode,
+            endpointPrefix: endpoint.slice(0, 65),
+          });
         } catch (err) {
-          // 410/404 => subscription expired/invalid → remove it
-          if (err?.statusCode === 410 || err?.statusCode === 404) {
-            await WebPushSubscription.removeByEndpoint(s.subscription.endpoint);
+          wpFailed++;
+
+          console.warn("[webpush] send failed:", {
+            stage,
+            email: subscriptionEmail,
+            statusCode: err?.statusCode,
+            message: err?.body || err?.message,
+            endpointPrefix: endpoint.slice(0, 65),
+          });
+
+          // Subscription expired or no longer exists.
+          if (err?.statusCode === 404 || err?.statusCode === 410) {
+            await WebPushSubscription.removeByEndpoint(endpoint);
             wpPruned++;
-            console.warn("[webpush] pruned expired subscription:", s.subscription.endpoint);
-          } else {
-            console.warn("[webpush] send failed:", err?.statusCode, err?.body || err?.message);
+
+            console.warn("[webpush] pruned expired subscription:", {
+              email: subscriptionEmail,
+              endpointPrefix: endpoint.slice(0, 65),
+            });
           }
         }
       }
@@ -145,7 +252,15 @@ async function notifyStage(stage, title, body, data = {}) {
       console.error("[notifyStage] Web Push send error:", e);
     }
 
-    console.log(`[notifyStage] summary stage=${stage} :: FCM ok=${fcmSuccess}, FCM fail=${fcmFail}, WebPush tried=${wpTried}, WebPush pruned=${wpPruned}`);
+    console.log(
+      `[notifyStage] summary stage=${stage} :: ` +
+      `FCM ok=${fcmSuccess}, FCM fail=${fcmFail}, ` +
+      `WebPush tried=${wpTried}, success=${wpSuccess}, ` +
+      `failed=${wpFailed}, pruned=${wpPruned}`
+    );
+    // MODIFY END JUL/19
+
+    // console.log(`[notifyStage] summary stage=${stage} :: FCM ok=${fcmSuccess}, FCM fail=${fcmFail}, WebPush tried=${wpTried}, WebPush pruned=${wpPruned}`);
   } catch (err) {
     console.error("notifyStage error:", err);
   }
