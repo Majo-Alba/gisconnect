@@ -183,18 +183,43 @@ async function notifyStage(stage, title, body, data = {}) {
         missingEmails
       );
 
+      // MODIF JUL/19
+      // const payload = {
+      //   title: title || "GISConnect",
+      //   body: body || "Actualización de pedido.",
+      //   icon: "https://gisconnect-web.onrender.com/icons/icon-192.png",
+      //   badge: "https://gisconnect-web.onrender.com/icons/icon-192.png",
+
+      //   data: {
+      //     click_action: "https://gisconnect-web.onrender.com/adminHome",
+      //     stage,
+      //     ...safeData,
+      //   },
+      // };
       const payload = {
         title: title || "GISConnect",
         body: body || "Actualización de pedido.",
+      
         icon: "https://gisconnect-web.onrender.com/icons/icon-192.png",
         badge: "https://gisconnect-web.onrender.com/icons/icon-192.png",
-
+      
+        // Ask Android to vibrate.
+        vibrate: [250, 100, 250, 100, 400],
+      
+        // Keep it visible until the user interacts, where supported.
+        requireInteraction: true,
+      
+        // Avoid silently replacing the previous notification.
+        renotify: true,
+        tag: `${stage}-${safeData.orderId || Date.now()}`,
+      
         data: {
           click_action: "https://gisconnect-web.onrender.com/adminHome",
           stage,
           ...safeData,
         },
       };
+      // MODIF END JUL/19
 
       for (const s of subs) {
         wpTried++;
