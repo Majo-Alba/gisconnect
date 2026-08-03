@@ -238,23 +238,59 @@ orderSchema.virtual("packingExpired").get(function () {
 
 /* ---------- Safe JSON output ---------- */
 // Avoid sending raw Buffers in API responses
+// MODIF AUG/03
+// orderSchema.set("toJSON", {
+//   virtuals: true, // include shortId & packingExpired
+//   transform: (_doc, ret) => {
+//     // Drop big buffer payloads if present
+//     if (ret.evidenceFile && ret.evidenceFile.data) delete ret.evidenceFile.data;
+//     if (ret.quotePdf && ret.quotePdf.data) delete ret.quotePdf.data;
+
+//     if (Array.isArray(ret.packingEvidence)) {
+//       ret.packingEvidence = ret.packingEvidence.map((f) => {
+//         if (!f) return f;
+//         const { data, ...rest } = f;
+//         return rest;
+//       });
+//     }
+//     return ret;
+//   },
+// });
 orderSchema.set("toJSON", {
-  virtuals: true, // include shortId & packingExpired
+  virtuals: true,
+
   transform: (_doc, ret) => {
-    // Drop big buffer payloads if present
-    if (ret.evidenceFile && ret.evidenceFile.data) delete ret.evidenceFile.data;
-    if (ret.quotePdf && ret.quotePdf.data) delete ret.quotePdf.data;
+    const removeData = (file) => {
+      if (!file || typeof file !== "object") return file;
+
+      const { data, ...safeFile } = file;
+      return safeFile;
+    };
+
+    if (ret.evidenceFile) {
+      ret.evidenceFile = removeData(ret.evidenceFile);
+    }
+
+    if (ret.quotePdf) {
+      ret.quotePdf = removeData(ret.quotePdf);
+    }
+
+    if (Array.isArray(ret.paymentEvidence)) {
+      ret.paymentEvidence = ret.paymentEvidence.map(removeData);
+    }
 
     if (Array.isArray(ret.packingEvidence)) {
-      ret.packingEvidence = ret.packingEvidence.map((f) => {
-        if (!f) return f;
-        const { data, ...rest } = f;
-        return rest;
-      });
+      ret.packingEvidence = ret.packingEvidence.map(removeData);
     }
+
+    if (Array.isArray(ret.deliveryEvidence)) {
+      ret.deliveryEvidence = ret.deliveryEvidence.map(removeData);
+    }
+
     return ret;
   },
 });
+// MODIF END AUG/03
 
 /* ---------- Model export ---------- */
 const NewOrderModel = mongoose.model("new_order", orderSchema);

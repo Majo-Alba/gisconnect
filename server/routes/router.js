@@ -35,6 +35,23 @@ const { admin } = require("../notifications/fcm");
 const WebPushSubscription = require("../models/WebPushSubscription");
 const { sendWebPush } = require("../notifications/webpush");
 
+// NEW AUG/03
+function logMemory(label) {
+  const memory = process.memoryUsage();
+
+  const toMB = (bytes) =>
+    Math.round((bytes / 1024 / 1024) * 10) / 10;
+
+  console.log(`[MEMORY] ${label}`, {
+    rssMB: toMB(memory.rss),
+    heapUsedMB: toMB(memory.heapUsed),
+    heapTotalMB: toMB(memory.heapTotal),
+    externalMB: toMB(memory.external),
+    arrayBuffersMB: toMB(memory.arrayBuffers || 0),
+  });
+}
+// END AUG/03
+
 
 // --- Optional notifications wiring (safe fallback if helper doesn't exist) ---
 let sendToTopic;
@@ -64,17 +81,23 @@ const rolesForStage = (stage) => {
 };
 
 // --- Multer: memory storage (consistent across file routes) ---
+// MODIF AUG/03
 // const upload = multer({
 //   storage: multer.memoryStorage(),
-//   limits: { fileSize: 5 * 1024 * 1024 }, // 25MB
+//   limits: {
+//     fileSize: 25 * 1024 * 1024, 
+//     files: 3,                   
+//   },
 // });
 const upload = multer({
   storage: multer.memoryStorage(),
+
   limits: {
-    fileSize: 25 * 1024 * 1024, // ✅ 25MB per file
-    files: 3,                   // ✅ max 3 files in a request
+    fileSize: 8 * 1024 * 1024,
+    files: 3,
   },
 });
+// MODIF END AUG/03
 
 // --- Display name resolver (Mongo first, optional Google Sheets fallback) ---
 const CLIENT_DB_URL = process.env.CLIENT_DB_URL || ""; // optional published CSV
@@ -124,21 +147,52 @@ async function resolveDisplayNameByEmail(email) {
 
 // feb17
 // =========================== PROJECTIONS (avoid Buffers) ===========================
+// MODIF AUG/03
+// const ORDER_BUFFERS_OFF = {
+//   "evidenceFile.data": 0,
+//   "quotePdf.data": 0,
+//   "packingEvidence.data": 0,
+//   "deliveryEvidence.data": 0,
+// };
 const ORDER_BUFFERS_OFF = {
   "evidenceFile.data": 0,
+  "paymentEvidence.data": 0,
   "quotePdf.data": 0,
   "packingEvidence.data": 0,
   "deliveryEvidence.data": 0,
 };
+// MODIF END AUG03
 
+// MODIF AUG/03
 // For list screens (admin lists, user list)
+// const ORDER_LIST_PROJECTION = {
+//   ...ORDER_BUFFERS_OFF,
+// };
 const ORDER_LIST_PROJECTION = {
-  ...ORDER_BUFFERS_OFF,
+  _id: 1,
+  userEmail: 1,
+  orderDate: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  orderStatus: 1,
 
-  // Optional: if any screens don't need these, you can also drop them:
-  // shippingInfo: 0,
-  // billingInfo: 0,
+  items: 1,
+  requestBill: 1,
+  invoiceNoteType: 1,
+  paymentVerifiedAt: 1,
+
+  preferredCarrier: 1,
+  insureShipment: 1,
+  pickupDetails: 1,
+
+  packing: 1,
+  deliveryWork: 1,
+
+  deliveryDate: 1,
+  deliveryDateYMD: 1,
+  trackingNumber: 1,
 };
+// MODIF END AUG/03
 
 // For details screen (OrderTrackDetails) — still exclude buffers; use stream endpoints for actual files
 const ORDER_DETAIL_PROJECTION = {
@@ -146,11 +200,22 @@ const ORDER_DETAIL_PROJECTION = {
 };
 
 // =========================== LIMIT HELPERS ===========================
-function parseLimit(raw, def = 200, max = 500) {
+// MODIF AUG/03
+// function parseLimit(raw, def = 200, max = 500) {
+//   const n = Number(raw);
+//   if (!Number.isFinite(n) || n <= 0) return def;
+//   return Math.min(n, max);
+// }
+function parseLimit(raw, def = 50, max = 100) {
   const n = Number(raw);
-  if (!Number.isFinite(n) || n <= 0) return def;
-  return Math.min(n, max);
+
+  if (!Number.isFinite(n) || n <= 0) {
+    return def;
+  }
+
+  return Math.min(Math.floor(n), max);
 }
+// MODF END AUG/03
 // feb17
 
 // =========================== USER AUTH ===========================
@@ -739,6 +804,69 @@ router.get('/orders', async (req, res) => {
     return res.status(500).json({ error: "Error fetching orders" });
   }
 });
+
+// NEW AUG/03
+router.get("/orders", async (req, res) => {
+  try {
+    logMemory("before GET /orders");
+
+    const email = String(req.query.email || "").trim().toLowerCase();
+    const packable =
+      String(req.query.packable || "").toLowerCase() === "true";
+    const packingStatus =
+      String(req.query.packingStatus || "").trim();
+    const claimedBy =
+      String(req.query.claimedBy || "").trim();
+    const status =
+      String(req.query.status || "").trim();
+
+    const limit = parseLimit(req.query.limit);
+
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    res.setHeader("Surrogate-Control", "no-store");
+
+    const findQuery = {};
+
+    if (email) findQuery.userEmail = email;
+    if (status) findQuery.orderStatus = status;
+
+    if (packable) {
+      Object.assign(findQuery, buildPackableFilter());
+    } else {
+      if (packingStatus) {
+        findQuery["packing.status"] = packingStatus;
+      }
+
+      if (claimedBy) {
+        findQuery["packing.claimedBy"] = claimedBy;
+      }
+    }
+
+    const orders = await newOrderModel
+      .find(findQuery)
+      .select(ORDER_LIST_PROJECTION)
+      .sort({ _id: -1 })
+      .limit(limit)
+      .lean();
+
+    logMemory(`after GET /orders count=${orders.length}`);
+
+    return res.json(orders);
+  } catch (err) {
+    console.error("Error fetching orders:", err);
+    logMemory("GET /orders error");
+
+    return res.status(500).json({
+      error: "Error fetching orders",
+    });
+  }
+});
+// END AUG/03
 
 // SWITCH FEB 17
 router.get("/orders/packable", async (req, res) => {
