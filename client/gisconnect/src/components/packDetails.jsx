@@ -312,6 +312,7 @@ export default function PackDetails() {
           <option value="Luis">Luis</option>
           <option value="Mauro">Mauro</option>
           <option value="Memo">Memo</option>
+          <option value="Memo">Beto</option>
         </select>
       </div>
 

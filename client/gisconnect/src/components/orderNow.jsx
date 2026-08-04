@@ -140,9 +140,35 @@ export default function OrderNow() {
   // mar02
 
   // ✅ NEW: pickup toggle & fields
+  // MODIF AUG/04 @ 11:36
+  // const [pickupSelected, setPickupSelected] = useState(false);
+  // const [pickupDate, setPickupDate] = useState("");
+  // const [pickupTime, setPickupTime] = useState("");
   const [pickupSelected, setPickupSelected] = useState(false);
   const [pickupDate, setPickupDate] = useState("");
   const [pickupTime, setPickupTime] = useState("");
+
+  // Payment arrangement for the freight/shipping company.
+  // This belongs to the order, not to the user's permanent profile.
+  const SHIPPING_PAYMENT_OPTIONS = [
+    // "Por cobrar",
+    "Ocurre por cobrar",
+    "Ocurre pagado",
+    "Domicilio por cobrar",
+    "Domicilio pagado",
+    // "Pago contra entrega",
+    // "Pagado",
+    // "Ocurre pagado",
+  ];
+
+  const [shippingPaymentMethod, setShippingPaymentMethod] = useState("");
+
+  useEffect(() => {
+    if (pickupSelected) {
+      setShippingPaymentMethod("");
+    }
+  }, [pickupSelected]);
+  // MODIF END AUG/04 @ 11:36
 
   // ✅ NEW: CTA modal before downloading order
   const [showCtaModal, setShowCtaModal] = useState(false);
@@ -984,7 +1010,14 @@ export default function OrderNow() {
     });
 
   // ===== PDF + Save order (uses new "natural sum + optional desglose" rules) =====
-  const handleDownloadAndSave = async () => {
+  // modif aug/04 @ 11:36
+  // const handleDownloadAndSave = async () => {
+    const handleDownloadAndSave = async () => {
+      if (!pickupSelected && !shippingPaymentMethod.trim()) {
+        alert("Selecciona el método de pago del envío antes de continuar.");
+        return;
+      }
+  // modif end aug/04 @ 11:36
     const doc = new jsPDF();
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -1691,19 +1724,28 @@ export default function OrderNow() {
         : null,
 
        // ✅ add these:
-      // preferredCarrier: (shippingPrefs?.preferredCarrier || "").trim(),
-      // insureShipment: !!shippingPrefs?.insureShipment,
-      // shippingPreferences: { ...shippingPrefs },
-      // mar02
+      // MODIF AUG/04 @ 11:36
+      // preferredCarrier: effectiveCarrier,
+      // insureShipment: effectiveInsure,
+
+      // shippingPreferences: {
+      //   preferredCarrier: effectiveCarrier,
+      //   insureShipment: effectiveInsure,
+      // },
       preferredCarrier: effectiveCarrier,
       insureShipment: effectiveInsure,
 
-      // optional: if you still want the nested snapshot, keep it consistent:
+      // Shipping-company payment arrangement selected by the user.
+      // Pickup orders do not require one.
+      shipPayMethod: pickupSelected
+        ? ""
+        : String(shippingPaymentMethod || "").trim(),
+
       shippingPreferences: {
         preferredCarrier: effectiveCarrier,
         insureShipment: effectiveInsure,
       },
-      // mar02
+      // MODIF END AUG/04 @ 11:36
 
       billingInfo: wantsInvoice ? { ...currentBilling } : {},
       orderDate: new Date().toISOString(),
@@ -1889,6 +1931,36 @@ export default function OrderNow() {
                   >
                     <option value="Sí">Sí</option>
                     <option value="No">No</option>
+                  </select>
+                )}
+              </label>
+
+              {/* Método de pago de envío */}
+              <br />
+
+              <label className="orderNow-Label">
+                <b>Método de pago de envío:</b>
+                <br />
+
+                {pickupSelected ? (
+                  <span>No aplica — recoger en matriz</span>
+                ) : (
+                  <select
+                    className="alternateAddress-Select"
+                    value={shippingPaymentMethod}
+                    onChange={(e) => setShippingPaymentMethod(e.target.value)}
+                    style={{
+                      marginTop: 6,
+                      width: "100%",
+                    }}
+                  >
+                    <option value="">Seleccione</option>
+
+                    {SHIPPING_PAYMENT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
                   </select>
                 )}
               </label>
@@ -2534,7 +2606,17 @@ export default function OrderNow() {
             <button
               className="submitOrder-Btn"
               type="button"
-              onClick={() => setShowCtaModal(true)}  // ⬅️ open CTA modal instead of saving immediately
+              // MODIF AUG/04 @ 11:36
+              // onClick={() => setShowCtaModal(true)}  
+              onClick={() => {
+                if (!pickupSelected && !shippingPaymentMethod.trim()) {
+                  alert("Selecciona el método de pago del envío antes de continuar.");
+                  return;
+                }
+              
+                setShowCtaModal(true);
+              }}
+              // MODIF END AUG/04 @ 11:36
             >
               Descargar <br />
               Orden

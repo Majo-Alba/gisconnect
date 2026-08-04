@@ -43,14 +43,20 @@ export default function ManageDeliveryDetails() {
   const isPickup = shipMethod === "Recoger en matriz";
 
   // ✅ NEW: Payment method for shipping (only when "Enviar")
-  const SHIPPING_PAYMENT_OPTIONS = [
-    "Por cobrar",
-    "Ocurre por cobrar",
-    "Pago contra entrega",
-    "Pagado",
-    "Ocurre pagado",
-  ];
-  const [shippingPaymentMethod, setShippingPaymentMethod] = useState("");
+  // MODIF AUG/04 @ 11:43
+  // const SHIPPING_PAYMENT_OPTIONS = [
+  //   "Por cobrar",
+  //   "Ocurre por cobrar",
+  //   "Pago contra entrega",
+  //   "Pagado",
+  //   "Ocurre pagado",
+  // ];
+  // const [shippingPaymentMethod, setShippingPaymentMethod] = useState("");
+
+  const shippingPaymentMethod = useMemo(() => {
+    return String(order?.shipPayMethod || "").trim();
+  }, [order?.shipPayMethod]);
+  // MODIF END AUG/04 @ 11:43
 
   function goToAdminHome() {
     navigate("/adminHome");
@@ -87,8 +93,10 @@ export default function ManageDeliveryDetails() {
 
       // ✅ NEW: preload shipping payment method if you later persist it (optional)
       // Try to read it from order.shippingInfo.shipPayMethod or order.shipPayMethod if exists.
-      const existingPay = o?.shipPayMethod || "";
-      setShippingPaymentMethod(String(existingPay || ""));
+      // MODIF AUG/04 @ 11:43
+      // const existingPay = o?.shipPayMethod || "";
+      // setShippingPaymentMethod(String(existingPay || ""));
+      // MODIF END AUG/04 @ 11:43
     } catch (err) {
       console.error("Error fetching order:", err);
     }
@@ -144,9 +152,12 @@ export default function ManageDeliveryDetails() {
   }, [order?.userEmail]);
 
   // ✅ If switch to pickup, clear payment method (since it doesn't apply)
-  useEffect(() => {
-    if (isPickup) setShippingPaymentMethod("");
-  }, [isPickup]);
+  // MODIF AUG/04 @ 11:44
+  // useEffect(() => {
+  //   if (isPickup) setShippingPaymentMethod("");
+  // }, [isPickup]);
+  // MODIF END AUG/04 @ 11:44
+
 
   // Convenience getters from Mongo
   const displayName = useMemo(() => {
@@ -156,25 +167,27 @@ export default function ManageDeliveryDetails() {
     return full || order?.userEmail || "";
   }, [mongoUser, order?.userEmail]);
 
-  useEffect(() => {
-    if (!order?._id) return;
-    if (isPickup) return; // shipping payment does not apply
-    if (!shippingPaymentMethod) return;
+  // MODIF AUG/04 @ 11:44
+  // useEffect(() => {
+  //   if (!order?._id) return;
+  //   if (isPickup) return; // shipping payment does not apply
+  //   if (!shippingPaymentMethod) return;
   
-    const t = setTimeout(async () => {
-      try {
-        await axios.patch(
-          `${API}/orders/${order._id}`,
-          { shipPayMethod: shippingPaymentMethod },
-          { headers: { "Content-Type": "application/json" } }
-        );
-      } catch (e) {
-        console.error("Failed to save shipPayMethod:", e?.response?.data || e.message);
-      }
-    }, 400); // small debounce to avoid spamming
+  //   const t = setTimeout(async () => {
+  //     try {
+  //       await axios.patch(
+  //         `${API}/orders/${order._id}`,
+  //         { shipPayMethod: shippingPaymentMethod },
+  //         { headers: { "Content-Type": "application/json" } }
+  //       );
+  //     } catch (e) {
+  //       console.error("Failed to save shipPayMethod:", e?.response?.data || e.message);
+  //     }
+  //   }, 400); // small debounce to avoid spamming
   
-    return () => clearTimeout(t);
-  }, [shippingPaymentMethod, isPickup, order?._id]);
+  //   return () => clearTimeout(t);
+  // }, [shippingPaymentMethod, isPickup, order?._id]);
+    // MODIF END AUG/04 @ 11:44
 
   const preferredCarrier = useMemo(() => {
     return (order?.preferredCarrier || "").toString().trim();
@@ -558,9 +571,9 @@ export default function ManageDeliveryDetails() {
         {
           trackingNumber: trackingToUse,
           orderStatus: "Etiqueta Generada",
-      
-          // Always save the selected shipping payment method.
+          // MODIF AUG/04 @ 11:44 
           shipPayMethod: shippingPaymentMethod || "",
+          // MODIF END AUG/04 @
         },
         {
           headers: {
@@ -694,7 +707,8 @@ export default function ManageDeliveryDetails() {
           </div>
 
           {/* ✅ NEW: Método de pago de envío (only when shipping) */}
-          {!isPickup && (
+          {/* MODIF AUG/04 @ 11:44 */}
+          {/* {!isPickup && (
             <div style={{ marginTop: 12 }}>
               <label style={{ display: "block", marginBottom: 6 }}>
                 Método de pago de envío
@@ -712,7 +726,27 @@ export default function ManageDeliveryDetails() {
                 ))}
               </select>
             </div>
-          )}
+          )} */}
+          <div style={{ marginTop: 12 }}>
+            <label style={{ display: "block", marginBottom: 6 }}>
+              Método de pago de envío
+            </label>
+
+            <div
+              className="shippingDetails-Div"
+              style={{
+                margin: 0,
+                padding: "10px 12px",
+              }}
+            >
+              <label className="productDetail-Label">
+                {isPickup
+                  ? "No aplica — recoger en matriz"
+                  : shippingPaymentMethod || "No especificado por el cliente"}
+              </label>
+            </div>
+          </div>
+          {/* MODIF END AUG/04 @ 11:44 */}
         </div>
 
         {/* Paquetería / Asegurada block — gray & disabled when pickup */}
