@@ -168,30 +168,42 @@ const ORDER_BUFFERS_OFF = {
 // const ORDER_LIST_PROJECTION = {
 //   ...ORDER_BUFFERS_OFF,
 // };
+
+// REMODIF AUG/04 @ 10:34 
+// const ORDER_LIST_PROJECTION = {
+//   _id: 1,
+//   userEmail: 1,
+//   orderDate: 1,
+//   createdAt: 1,
+//   updatedAt: 1,
+//   orderStatus: 1,
+
+//   items: 1,
+//   requestBill: 1,
+//   invoiceNoteType: 1,
+//   paymentVerifiedAt: 1,
+
+//   preferredCarrier: 1,
+//   insureShipment: 1,
+//   pickupDetails: 1,
+
+//   packing: 1,
+//   deliveryWork: 1,
+
+//   deliveryDate: 1,
+//   deliveryDateYMD: 1,
+//   trackingNumber: 1,
+// };
 const ORDER_LIST_PROJECTION = {
-  _id: 1,
-  userEmail: 1,
-  orderDate: 1,
-  createdAt: 1,
-  updatedAt: 1,
-  orderStatus: 1,
-
-  items: 1,
-  requestBill: 1,
-  invoiceNoteType: 1,
-  paymentVerifiedAt: 1,
-
-  preferredCarrier: 1,
-  insureShipment: 1,
-  pickupDetails: 1,
-
-  packing: 1,
-  deliveryWork: 1,
-
-  deliveryDate: 1,
-  deliveryDateYMD: 1,
-  trackingNumber: 1,
+  "evidenceFile.data": 0,
+  "paymentEvidence.data": 0,
+  "quotePdf.data": 0,
+  "packingEvidence.data": 0,
+  "deliveryEvidence.data": 0,
 };
+
+// REMODIF END AUG/04 @ 10:34
+// ^
 // MODIF END AUG/03
 
 // For details screen (OrderTrackDetails) — still exclude buffers; use stream endpoints for actual files
@@ -200,7 +212,7 @@ const ORDER_DETAIL_PROJECTION = {
 };
 
 // =========================== LIMIT HELPERS ===========================
-// MODIF AUG/03
+// MODIF AUG/04 @ 10:36
 // function parseLimit(raw, def = 200, max = 500) {
 //   const n = Number(raw);
 //   if (!Number.isFinite(n) || n <= 0) return def;
@@ -215,7 +227,7 @@ function parseLimit(raw, def = 50, max = 100) {
 
   return Math.min(Math.floor(n), max);
 }
-// MODF END AUG/03
+// MODF END AUG/04 @ 10:36
 // feb17
 
 // =========================== USER AUTH ===========================
@@ -1220,6 +1232,9 @@ router.put(
         const shortId = String(updatedOrder._id || "").slice(-5);
         const userEmail = updatedOrder.userEmail || updatedOrder.email || "cliente";
         const displayName = await resolveDisplayNameByEmail(userEmail);
+        // NEW AUG/04 @ 10:45
+        const uniqueStages = [...new Set(triggeredStages)];
+        // END AUG/04 @ 10:45
 
         const messageForStage = (stage) => {
           switch (stage) {
@@ -1240,7 +1255,10 @@ router.put(
           }
         };
 
-        for (const stage of triggeredStages) {
+        // MODIF AUG/04 @ 10:45
+        // for (const stage of triggeredStages) {
+        for (const stage of uniqueStages) {
+        // MODIF END AUG/04 @ 10:45
           const { title, body } = messageForStage(stage);
           await notifyStage(stage, title, body, {
             orderId: String(updatedOrder._id),
@@ -1279,8 +1297,27 @@ router.patch("/orders/:orderId", async (req, res) => {
       shipPayMethod,
     } = req.body || {};
 
-    const prev = await newOrderModel.findById(orderId);
-    if (!prev) return res.status(404).json({ error: "Order not found" });
+    // MODIF AUG/04 @ 10:40
+    // const prev = await newOrderModel.findById(orderId);
+    // if (!prev) return res.status(404).json({ error: "Order not found" });
+    const prev = await newOrderModel
+      .findById(orderId)
+      .select({
+        _id: 1,
+        userEmail: 1,
+        orderStatus: 1,
+        trackingNumber: 1,
+        paymentVerifiedAt: 1,
+        invoiceNoteDecidedAt: 1,
+      })
+      .lean();
+
+    if (!prev) {
+      return res.status(404).json({
+        error: "Order not found",
+      });
+    }
+    // MODIF END AUG/04 @ 10:40
 
     // mar02
     // ✅ helpers for transitions
@@ -1334,8 +1371,40 @@ router.patch("/orders/:orderId", async (req, res) => {
 
     if (Object.keys($set).length === 0) return res.status(400).json({ error: "No fields to update" });
 
-    const updated = await newOrderModel.findByIdAndUpdate(orderId, { $set }, { new: true });
-    if (!updated) return res.status(404).json({ error: "Order not found after update" });
+    // MODIF AUG/04 @ 10:42
+    // const updated = await newOrderModel.findByIdAndUpdate(orderId, { $set }, { new: true });
+    // if (!updated) return res.status(404).json({ error: "Order not found after update" });
+    const updated = await newOrderModel
+      .findByIdAndUpdate(
+        orderId,
+        { $set },
+        {
+          new: true,
+        }
+      )
+      .select({
+        _id: 1,
+        userEmail: 1,
+        orderStatus: 1,
+        trackingNumber: 1,
+        paymentMethod: 1,
+        paymentAccount: 1,
+        packerName: 1,
+        insuredAmount: 1,
+        deliveryDate: 1,
+        invoiceNoteType: 1,
+        shipPayMethod: 1,
+        paymentVerifiedAt: 1,
+        updatedAt: 1,
+      })
+      .lean();
+
+    if (!updated) {
+      return res.status(404).json({
+        error: "Order not found after update",
+      });
+    }
+    // MODIF END AUG/04 @ 10:42
 
     // ---------- Notifications (JSON patch) ----------
     try {
@@ -1343,6 +1412,9 @@ router.patch("/orders/:orderId", async (req, res) => {
       const shortId = String(updated._id || "").slice(-5);
       const userEmail = updated.userEmail || updated.email || "cliente";
       const displayName = await resolveDisplayNameByEmail(userEmail);
+      // NEW AUG/04 @ 10:45
+      const uniqueStages = [...new Set(triggeredStages)];
+      // END AUG/04 @ 10:45
 
       // Status change?
       const prevStatus = (prev.orderStatus || "").trim().toLowerCase();
@@ -1386,7 +1458,10 @@ router.patch("/orders/:orderId", async (req, res) => {
 
         };
 
-        for (const stage of triggeredStages) {
+        // MODIF AUG/04 @ 10:45
+        // for (const stage of triggeredStages) {
+        for (const stage of uniqueStages) {
+        // MODIF END AUG/04 @ 10:45
           await notifyStage(stage, titles[stage], bodies[stage], {
             orderId: String(updated._id),
             stage,

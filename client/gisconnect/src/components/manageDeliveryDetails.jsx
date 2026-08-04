@@ -533,25 +533,48 @@ export default function ManageDeliveryDetails() {
 
     try {
       // ✅ If you want to persist shipPayMethod, we attach it into shippingInfo object (when possible)
+      // MODIF AUG/03
       const nextShippingInfo =
         typeof order.shippingInfo === "object" && order.shippingInfo !== null
           ? { ...order.shippingInfo, shipPayMethod: shippingPaymentMethod }
           : order.shippingInfo;
 
+      // await axios.patch(
+      //   `${API}/orders/${order._id}`,
+      //   {
+      //     trackingNumber: trackingToUse,
+      //     orderStatus: "Etiqueta Generada",
+      //     ...(typeof nextShippingInfo === "object" && nextShippingInfo !== null
+      //       ? { shippingInfo: nextShippingInfo }
+      //       : {}),
+      //     ...(typeof order.shippingInfo !== "object" && shippingPaymentMethod
+      //       ? { shipPayMethod: shippingPaymentMethod }
+      //       : {}),
+      //   },
+      //   { headers: { "Content-Type": "application/json" }, timeout: 15000, withCredentials: false }
+      // );
       await axios.patch(
         `${API}/orders/${order._id}`,
         {
           trackingNumber: trackingToUse,
           orderStatus: "Etiqueta Generada",
-          ...(typeof nextShippingInfo === "object" && nextShippingInfo !== null
-            ? { shippingInfo: nextShippingInfo }
-            : {}),
-          ...(typeof order.shippingInfo !== "object" && shippingPaymentMethod
-            ? { shipPayMethod: shippingPaymentMethod }
-            : {}),
+      
+          // Always save the selected shipping payment method.
+          shipPayMethod: shippingPaymentMethod || "",
         },
-        { headers: { "Content-Type": "application/json" }, timeout: 15000, withCredentials: false }
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+      
+          // The endpoint should now respond quickly,
+          // but this gives it a reasonable safety margin.
+          timeout: 30000,
+      
+          withCredentials: false,
+        }
       );
+      // MODIF END AUG/03
     } catch (error) {
       console.error("PATCH /orders/:orderId failed:", error?.response?.data || error.message);
       alert("Error al actualizar el estado del pedido.");

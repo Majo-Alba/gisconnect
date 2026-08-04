@@ -221,58 +221,145 @@ async function notifyStage(stage, title, body, data = {}) {
       };
       // MODIF END JUL/19
 
-      for (const s of subs) {
+      // MODIF AUG/04 @ 10:45
+      // for (const s of subs) {
+      //   wpTried++;
+
+      //   const subscriptionEmail = normalizeEmail(s.email);
+      //   const endpoint = s.subscription?.endpoint || "";
+
+      //   try {
+      //     const response = await sendWebPush(
+      //       s.subscription,
+      //       payload,
+      //       {
+      //         urgency: "high",
+      //         TTL: 60 * 60 * 24,
+
+      //         // Unique per stage/order so unrelated notifications aren't collapsed.
+      //         topic: `${stage}-${safeData.orderId || "general"}`
+      //           .replace(/[^a-zA-Z0-9_-]/g, "")
+      //           .slice(0, 32),
+      //       }
+      //     );
+
+      //     wpSuccess++;
+
+      //     console.log("[webpush] accepted by push service:", {
+      //       stage,
+      //       email: subscriptionEmail,
+      //       statusCode: response?.statusCode,
+      //       endpointPrefix: endpoint.slice(0, 65),
+      //     });
+      //   } catch (err) {
+      //     wpFailed++;
+
+      //     console.warn("[webpush] send failed:", {
+      //       stage,
+      //       email: subscriptionEmail,
+      //       statusCode: err?.statusCode,
+      //       message: err?.body || err?.message,
+      //       endpointPrefix: endpoint.slice(0, 65),
+      //     });
+
+      //     // Subscription expired or no longer exists.
+      //     if (err?.statusCode === 404 || err?.statusCode === 410) {
+      //       await WebPushSubscription.removeByEndpoint(endpoint);
+      //       wpPruned++;
+
+      //       console.warn("[webpush] pruned expired subscription:", {
+      //         email: subscriptionEmail,
+      //         endpointPrefix: endpoint.slice(0, 65),
+      //       });
+      //     }
+      //   }
+      // }
+      const webPushResults = await Promise.allSettled(
+        subs.map(async (s) => {
+          const subscriptionEmail = normalizeEmail(s.email);
+          const endpoint = s.subscription?.endpoint || "";
+      
+          try {
+            const response = await sendWebPush(
+              s.subscription,
+              payload,
+              {
+                urgency: "high",
+                TTL: 60 * 60 * 24,
+                topic: `${stage}-${safeData.orderId || "general"}`
+                  .replace(/[^a-zA-Z0-9_-]/g, "")
+                  .slice(0, 32),
+              }
+            );
+      
+            return {
+              ok: true,
+              email: subscriptionEmail,
+              endpoint,
+              statusCode: response?.statusCode || null,
+            };
+          } catch (error) {
+            return {
+              ok: false,
+              email: subscriptionEmail,
+              endpoint,
+              statusCode: error?.statusCode || null,
+              message: error?.body || error?.message,
+            };
+          }
+        })
+      );
+      
+      for (const result of webPushResults) {
         wpTried++;
-
-        const subscriptionEmail = normalizeEmail(s.email);
-        const endpoint = s.subscription?.endpoint || "";
-
-        try {
-          const response = await sendWebPush(
-            s.subscription,
-            payload,
-            {
-              urgency: "high",
-              TTL: 60 * 60 * 24,
-
-              // Unique per stage/order so unrelated notifications aren't collapsed.
-              topic: `${stage}-${safeData.orderId || "general"}`
-                .replace(/[^a-zA-Z0-9_-]/g, "")
-                .slice(0, 32),
-            }
+      
+        if (result.status === "rejected") {
+          wpFailed++;
+      
+          console.warn(
+            "[webpush] unexpected rejected promise:",
+            result.reason?.message || result.reason
           );
-
+      
+          continue;
+        }
+      
+        const value = result.value;
+      
+        if (value.ok) {
           wpSuccess++;
-
+      
           console.log("[webpush] accepted by push service:", {
             stage,
-            email: subscriptionEmail,
-            statusCode: response?.statusCode,
-            endpointPrefix: endpoint.slice(0, 65),
+            email: value.email,
+            statusCode: value.statusCode,
+            endpointPrefix: value.endpoint.slice(0, 65),
           });
-        } catch (err) {
-          wpFailed++;
-
-          console.warn("[webpush] send failed:", {
-            stage,
-            email: subscriptionEmail,
-            statusCode: err?.statusCode,
-            message: err?.body || err?.message,
-            endpointPrefix: endpoint.slice(0, 65),
+      
+          continue;
+        }
+      
+        wpFailed++;
+      
+        console.warn("[webpush] send failed:", {
+          stage,
+          email: value.email,
+          statusCode: value.statusCode,
+          message: value.message,
+          endpointPrefix: value.endpoint.slice(0, 65),
+        });
+      
+        if (value.statusCode === 404 || value.statusCode === 410) {
+          await WebPushSubscription.removeByEndpoint(value.endpoint);
+          wpPruned++;
+      
+          console.warn("[webpush] pruned expired subscription:", {
+            email: value.email,
+            endpointPrefix: value.endpoint.slice(0, 65),
           });
-
-          // Subscription expired or no longer exists.
-          if (err?.statusCode === 404 || err?.statusCode === 410) {
-            await WebPushSubscription.removeByEndpoint(endpoint);
-            wpPruned++;
-
-            console.warn("[webpush] pruned expired subscription:", {
-              email: subscriptionEmail,
-              endpointPrefix: endpoint.slice(0, 65),
-            });
-          }
         }
       }
+      // MODIF END AUG/04 @ 10:45
     } catch (e) {
       console.error("[notifyStage] Web Push send error:", e);
     }
