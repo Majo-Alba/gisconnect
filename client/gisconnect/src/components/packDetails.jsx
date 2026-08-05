@@ -193,64 +193,211 @@ export default function PackDetails() {
     }, 200);
   };
 
+  // MODIF AUG/05 @ 16:21
+  const isPickupOrder = (orderData) => {
+    const shippingInfo = orderData?.shippingInfo;
+  
+    const fromString =
+      typeof shippingInfo === "string" &&
+      shippingInfo.trim().toLowerCase() === "recoger en matriz";
+  
+    const fromObject =
+      !!(
+        shippingInfo &&
+        typeof shippingInfo === "object" &&
+        (
+          shippingInfo.pickup === true ||
+          shippingInfo.method === "pickup"
+        )
+      );
+  
+    return fromString || fromObject;
+  };
+  // MODIF END AUG/05 @ 16:21
+
+  // MODIF AUG/05 @ 16:21
   // Upload packing images, update status, mark-ready, then finish (don’t release)
+  // const handleMarkAsReady = async () => {
+  //   if (!claimedByMe) {
+  //     alert("Debes tomar el pedido antes de continuar (selecciona tu nombre).");
+  //     return;
+  //   }
+  //   if (!evidenceImages || evidenceImages.length === 0) {
+  //     alert("Selecciona al menos una imagen (hasta 3).");
+  //     return;
+  //   }
+  //   if (!packer || packer === "Encargado") {
+  //     alert("Selecciona el encargado de empaque.");
+  //     return;
+  //   }
+
+  //   setBusy(true);
+  //   setProgress(0);
+  //   setErrMsg("");
+  //   setOkMsg("");
+
+  //   try {
+  //     // 1) Upload evidence (multiple). Backend: upload.array('files', 3)
+  //     const form = new FormData();
+  //     evidenceImages.forEach((file) => form.append("packingImages", file));
+  //     form.append("packerName", packer);
+
+  //     await axios.post(`${API}/orders/${orderId}/evidence/packing`, form, {
+  //       onUploadProgress: (pe) => {
+  //         if (!pe.total) return;
+  //         setProgress(Math.round((pe.loaded / pe.total) * 100));
+  //       },
+  //     });
+
+  //     // 2) Update status to "Preparando Pedido"
+  //     await fetch(`${API}/order/${orderId}/status`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ orderStatus: "Preparando Pedido" }),
+  //     });
+
+  //     // 3) Mark as ready (persists packing.status = "ready")
+  //     try {
+  //       await axios.post(`${API}/orders/${orderId}/mark-ready`, { packer });
+  //     } catch (_) {
+  //       // non-fatal if this fails; status already advanced
+  //     }
+
+  //     finishedRef.current = true; // avoid releasing on leave
+  //     setOkMsg("Evidencia subida. Estado actualizado a 'Preparando Pedido'.");
+  //     navigate("/adminHome");
+  //   } catch (error) {
+  //     console.error("Error during packing upload/status:", error);
+  //     setErrMsg(error?.response?.data?.error || error.message || "Ocurrió un error al procesar el pedido.");
+  //   } finally {
+  //     setBusy(false);
+  //     setTimeout(() => setProgress(0), 800);
+  //   }
+  // };
   const handleMarkAsReady = async () => {
     if (!claimedByMe) {
-      alert("Debes tomar el pedido antes de continuar (selecciona tu nombre).");
+      alert(
+        "Debes tomar el pedido antes de continuar (selecciona tu nombre)."
+      );
       return;
     }
+  
     if (!evidenceImages || evidenceImages.length === 0) {
-      alert("Selecciona al menos una imagen (hasta 3).");
+      alert("Selecciona al menos una imagen de empaque (hasta 3).");
       return;
     }
+  
     if (!packer || packer === "Encargado") {
       alert("Selecciona el encargado de empaque.");
       return;
     }
-
+  
     setBusy(true);
     setProgress(0);
     setErrMsg("");
     setOkMsg("");
-
+  
     try {
-      // 1) Upload evidence (multiple). Backend: upload.array('files', 3)
-      const form = new FormData();
-      evidenceImages.forEach((file) => form.append("packingImages", file));
-      form.append("packerName", packer);
-
-      await axios.post(`${API}/orders/${orderId}/evidence/packing`, form, {
-        onUploadProgress: (pe) => {
-          if (!pe.total) return;
-          setProgress(Math.round((pe.loaded / pe.total) * 100));
-        },
-      });
-
-      // 2) Update status to "Preparando Pedido"
-      await fetch(`${API}/order/${orderId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderStatus: "Preparando Pedido" }),
-      });
-
-      // 3) Mark as ready (persists packing.status = "ready")
-      try {
-        await axios.post(`${API}/orders/${orderId}/mark-ready`, { packer });
-      } catch (_) {
-        // non-fatal if this fails; status already advanced
+      /*
+       * Refresh the order before uploading.
+       * The label may have been generated from another device after this
+       * screen was originally opened.
+       */
+      const latestOrderResponse = await axios.get(
+        `${API}/orders/${orderId}`
+      );
+  
+      const latestOrder = latestOrderResponse.data;
+      const pickup = isPickupOrder(latestOrder);
+      const trackingNumber = String(
+        latestOrder?.trackingNumber || ""
+      ).trim();
+  
+      /*
+       * Shipping orders cannot advance until the label was generated.
+       * Pickup orders do not require a tracking number.
+       */
+      if (!pickup && !trackingNumber) {
+        alert(
+          "Este pedido todavía no tiene etiqueta o número de rastreo. Solicita que Administración genere la etiqueta antes de marcar el paquete como listo."
+        );
+  
+        return;
       }
-
-      finishedRef.current = true; // avoid releasing on leave
-      setOkMsg("Evidencia subida. Estado actualizado a 'Preparando Pedido'.");
-      navigate("/adminHome");
+  
+      // 1. Upload packing evidence.
+      const form = new FormData();
+  
+      evidenceImages.forEach((file) => {
+        form.append("packingImages", file);
+      });
+  
+      form.append("packerName", packer);
+  
+      await axios.post(
+        `${API}/orders/${orderId}/evidence/packing`,
+        form,
+        {
+          onUploadProgress: (progressEvent) => {
+            if (!progressEvent.total) return;
+  
+            setProgress(
+              Math.round(
+                (progressEvent.loaded / progressEvent.total) * 100
+              )
+            );
+          },
+        }
+      );
+  
+      /*
+       * 2. Complete packing and advance the funnel in one backend action.
+       * The backend validates tracking/pickup again.
+       */
+      const readyResponse = await axios.post(
+        `${API}/orders/${orderId}/mark-ready`,
+        {
+          packer,
+        },
+        {
+          headers: {
+            "Content-Type": "application/json",
+          },
+          timeout: 30000,
+        }
+      );
+  
+      finishedRef.current = true;
+  
+      setOkMsg(
+        readyResponse?.data?.message ||
+          "Pedido empacado y enviado a Por Entregar."
+      );
+  
+      navigate("/deliverReady");
     } catch (error) {
-      console.error("Error during packing upload/status:", error);
-      setErrMsg(error?.response?.data?.error || error.message || "Ocurrió un error al procesar el pedido.");
+      console.error(
+        "Error during packing completion:",
+        error?.response?.data || error
+      );
+  
+      const message =
+        error?.response?.data?.error ||
+        error?.response?.data?.message ||
+        error?.message ||
+        "Ocurrió un error al procesar el pedido.";
+  
+      setErrMsg(message);
+      alert(message);
     } finally {
       setBusy(false);
-      setTimeout(() => setProgress(0), 800);
+  
+      setTimeout(() => {
+        setProgress(0);
+      }, 800);
     }
   };
+  // MODIF END AUG/05 @ 16:21
 
   if (!order) return <p style={{ padding: 20 }}>Cargando pedido...</p>;
 

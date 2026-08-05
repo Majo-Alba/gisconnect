@@ -1412,9 +1412,7 @@ router.patch("/orders/:orderId", async (req, res) => {
       const shortId = String(updated._id || "").slice(-5);
       const userEmail = updated.userEmail || updated.email || "cliente";
       const displayName = await resolveDisplayNameByEmail(userEmail);
-      // NEW AUG/04 @ 10:45
-      const uniqueStages = [...new Set(triggeredStages)];
-      // END AUG/04 @ 10:45
+
 
       // Status change?
       const prevStatus = (prev.orderStatus || "").trim().toLowerCase();
@@ -1426,13 +1424,18 @@ router.patch("/orders/:orderId", async (req, res) => {
       }
 
       // Tracking added/changed?
-      const prevTracking = (prev.trackingNumber || "").trim();
-      const nextTracking = (updated.trackingNumber || "").trim();
-      if ($set.trackingNumber && nextTracking && nextTracking !== prevTracking) {
-        triggeredStages.push(STAGES.ETIQUETA_GENERADA);
-      }
+      // MODIF AUG/05 @ 16:27
+      // const prevTracking = (prev.trackingNumber || "").trim();
+      // const nextTracking = (updated.trackingNumber || "").trim();
+      // if ($set.trackingNumber && nextTracking && nextTracking !== prevTracking) {
+      //   triggeredStages.push(STAGES.ETIQUETA_GENERADA);
+      // }
+      // MODIF END AUG/05 @ 16:27
 
       if (triggeredStages.length) {
+        // NEW AUG/04 @ 10:45
+        const uniqueStages = [...new Set(triggeredStages)];
+        // END AUG/04 @ 10:45
         const titles = {
           [STAGES.PAGO_VERIFICADO]:   "Pago verificado",
           // [STAGES.PREPARANDO_PEDIDO]: "Atención Admin: Pedido listo para ser etiquetado",
@@ -2953,27 +2956,233 @@ router.post("/orders/:id/release-pack", async (req, res) => {
 
 // POST /orders/:id/mark-ready  { packer: "Oswaldo" }
 // when they finish (your existing handleMarkAsReady can call this at the end)
+// MODIF AUG/05 @ 16:25
+// router.post("/orders/:id/mark-ready", async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const packer = String(req.body?.packer || "").trim();
+
+//     const filter = { _id: id };
+//     const update = { 
+//       $set: { 
+//         "packing.status": "ready",
+//         ...(packer ? { "packing.claimedBy": packer } : {})
+//       }
+//     };
+//     // const doc = await NewOrder.findOneAndUpdate(filter, update, { new: true });
+//     const doc = await newOrderModel.findOneAndUpdate(filter, update, { new: true });
+//     res.json({ ok:true, order: doc });
+//   } catch (e) {
+//     console.error("mark-ready error:", e);
+//     res.status(500).json({ ok:false, error: "Failed to mark ready" });
+//   }
+// });
 router.post("/orders/:id/mark-ready", async (req, res) => {
   try {
     const { id } = req.params;
     const packer = String(req.body?.packer || "").trim();
 
-    const filter = { _id: id };
-    const update = { 
-      $set: { 
-        "packing.status": "ready",
-        ...(packer ? { "packing.claimedBy": packer } : {})
-      }
-    };
-    // const doc = await NewOrder.findOneAndUpdate(filter, update, { new: true });
-    const doc = await newOrderModel.findOneAndUpdate(filter, update, { new: true });
-    res.json({ ok:true, order: doc });
-  } catch (e) {
-    console.error("mark-ready error:", e);
-    res.status(500).json({ ok:false, error: "Failed to mark ready" });
+    if (!packer) {
+      return res.status(400).json({
+        ok: false,
+        error: "packer is required",
+      });
+    }
+
+    /*
+     * Load only operational fields.
+     * Do not load embedded packing/payment evidence buffers.
+     */
+    const currentOrder = await newOrderModel
+      .findById(id)
+      .select({
+        _id: 1,
+        userEmail: 1,
+        orderStatus: 1,
+        trackingNumber: 1,
+        shippingInfo: 1,
+        pickupDetails: 1,
+        packing: 1,
+      })
+      .lean();
+
+    if (!currentOrder) {
+      return res.status(404).json({
+        ok: false,
+        error: "Order not found",
+      });
+    }
+
+    const currentStatus = String(
+      currentOrder.orderStatus || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    /*
+     * Current orders should still be Pago Verificado.
+     * Preparando Pedido is accepted temporarily for legacy orders.
+     */
+    const allowedStatus =
+      currentStatus === "pago verificado" ||
+      currentStatus === "preparando pedido";
+
+    if (!allowedStatus) {
+      return res.status(409).json({
+        ok: false,
+        error: `El pedido no puede finalizar empaque desde el estado "${currentOrder.orderStatus || "sin estado"}".`,
+      });
+    }
+
+    const shippingInfo = currentOrder.shippingInfo;
+
+    const isPickup =
+      (
+        typeof shippingInfo === "string" &&
+        shippingInfo.trim().toLowerCase() === "recoger en matriz"
+      ) ||
+      !!(
+        shippingInfo &&
+        typeof shippingInfo === "object" &&
+        (
+          shippingInfo.pickup === true ||
+          shippingInfo.method === "pickup"
+        )
+      );
+
+    const trackingNumber = String(
+      currentOrder.trackingNumber || ""
+    ).trim();
+
+    /*
+     * Critical funnel protection:
+     * Shipping orders require a generated label/tracking number.
+     */
+    if (!isPickup && !trackingNumber) {
+      return res.status(409).json({
+        ok: false,
+        error:
+          "No se puede finalizar el empaque porque la etiqueta todavía no ha sido generada.",
+      });
+    }
+
+    /*
+     * Ensure the same packer still owns the active claim.
+     */
+    const claimedBy = String(
+      currentOrder?.packing?.claimedBy || ""
+    ).trim();
+
+    if (
+      currentOrder?.packing?.status === "in_progress" &&
+      claimedBy &&
+      claimedBy !== packer
+    ) {
+      return res.status(409).json({
+        ok: false,
+        error: `El pedido está siendo preparado por ${claimedBy}.`,
+      });
+    }
+
+    /*
+     * Atomically mark packing ready and move the funnel.
+     */
+    const updated = await newOrderModel
+      .findOneAndUpdate(
+        {
+          _id: id,
+          orderStatus: currentOrder.orderStatus,
+        },
+        {
+          $set: {
+            orderStatus: "Etiqueta Generada",
+            packerName: packer,
+
+            "packing.status": "ready",
+            "packing.claimedBy": packer,
+            "packing.claimedAt": new Date(),
+          },
+        },
+        {
+          new: true,
+        }
+      )
+      .select({
+        _id: 1,
+        userEmail: 1,
+        orderStatus: 1,
+        trackingNumber: 1,
+        packerName: 1,
+        packing: 1,
+        updatedAt: 1,
+      })
+      .lean();
+
+    if (!updated) {
+      return res.status(409).json({
+        ok: false,
+        error:
+          "El pedido cambió mientras se procesaba. Actualiza la pantalla e intenta nuevamente.",
+      });
+    }
+
+    /*
+     * Trigger ETIQUETA_GENERADA only when the complete package advances,
+     * not merely when a tracking number is created.
+     */
+    try {
+      const shortId = String(updated._id).slice(-5);
+      const userEmail =
+        updated.userEmail ||
+        currentOrder.userEmail ||
+        "cliente";
+
+      const displayName = await resolveDisplayNameByEmail(
+        userEmail
+      );
+
+      await notifyStage(
+        STAGES.ETIQUETA_GENERADA,
+        "Orden en: Por Entregar",
+        `Pedido #${shortId} - Cliente ${displayName}`,
+        {
+          orderId: String(updated._id),
+          stage: STAGES.ETIQUETA_GENERADA,
+          email: userEmail,
+          clientName: displayName,
+          orderStatus: updated.orderStatus,
+          trackingNumber: updated.trackingNumber || "",
+          deepLink:
+            "https://gisconnect-web.onrender.com/adminHome",
+        }
+      );
+    } catch (notificationError) {
+      /*
+       * The funnel update has already succeeded.
+       * A push failure must not roll back or lose the order.
+       */
+      console.error(
+        "POST /orders/:id/mark-ready notification error:",
+        notificationError
+      );
+    }
+
+    return res.status(200).json({
+      ok: true,
+      order: updated,
+      message:
+        "Pedido empacado, etiquetado y enviado a Por Entregar.",
+    });
+  } catch (error) {
+    console.error("mark-ready error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to mark order as ready",
+    });
   }
 });
-// Nov24
+// MODIF END AUG/05 @ 16:25
 
 // Claim delivery (atomic, no state checks beyond "is it already claimed by someone else?")
 router.post("/orders/:id/claim-delivery", async (req, res) => {
