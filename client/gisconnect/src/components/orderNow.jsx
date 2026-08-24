@@ -181,19 +181,41 @@ export default function OrderNow() {
   const [fxSource, setFxSource] = useState("manual"); // "manual"
   const [fxDebug, setFxDebug] = useState(null);
 
-
+  // MODIF AUG24/26
   // NEW: helper to truncate to 2 decimals (not round)
-  const trunc2 = (n) => {
+  // const trunc2 = (n) => {
+  //   const x = Number(n);
+  //   if (!Number.isFinite(x)) return null;
+  //   return Math.trunc(x * 100) / 100;
+  // };
+
+  // // NEW: round to 2 decimals (bankers not needed here)
+  // const round2 = (n) => Math.round(Number(n) * 100) / 100;
+  
+  // // NEW: effective rate used across the app
+  // const dof2 = useMemo(() => trunc2(dofRate), [dofRate]);
+
+  // ===== Currency helpers =====
+
+  // Standard financial rounding to 2 decimals
+  const round2 = (n) => {
     const x = Number(n);
+
     if (!Number.isFinite(x)) return null;
-    return Math.trunc(x * 100) / 100;
+
+    return Math.round((x + Number.EPSILON) * 100) / 100;
   };
 
-  // NEW: round to 2 decimals (bankers not needed here)
-  const round2 = (n) => Math.round(Number(n) * 100) / 100;
-  
-  // NEW: effective rate used across the app
-  const dof2 = useMemo(() => trunc2(dofRate), [dofRate]);
+  // Effective exchange rate used throughout OrderNow.
+  // IMPORTANT:
+  // We ROUND instead of truncating so OrderNow uses the exact
+  // same 2-decimal FX behavior as ExpressQuote.
+  const dof2 = useMemo(() => {
+    if (!Number.isFinite(Number(dofRate))) return null;
+
+    return round2(dofRate);
+  }, [dofRate]);
+  // MODIF END AUG24/26
 
   // Credit
   const CREDIT_SHEET_URL =
