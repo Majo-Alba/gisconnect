@@ -246,8 +246,15 @@ export default function ExpressQuote() {
         }
 
         // Effective moment for the "next" rate: (FECHA_CAPTURA + 1 day) @ 00:00:01 MX
-        const effectiveDate = addOneDay(next.fecha);
-        const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+        // MODIF AUG/25/26
+        // const effectiveDate = addOneDay(next.fecha);
+        // const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+        const effectiveDate = next.fecha;
+
+        const effectiveEpoch = effectiveDate
+          ? toEpochMexico(effectiveDate, "00:00:01")
+          : null;
+        // MODIF AUG/25/26
 
         const now = Date.now(); // ✅ absolute epoch, no timezone parsing bugs
 

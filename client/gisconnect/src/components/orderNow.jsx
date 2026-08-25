@@ -388,8 +388,15 @@ export default function OrderNow() {
         }
 
         // Effective moment: (FECHA_CAPTURA + 1 day) @ 00:00:01
-        const effectiveDate = addOneDay(next.fecha);
-        const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+        // MODIF AUG/25/26
+        // const effectiveDate = addOneDay(next.fecha);
+        // const effectiveEpoch = effectiveDate ? toEpochMexico(effectiveDate, "00:00:01") : null;
+        const effectiveDate = next.fecha;
+
+        const effectiveEpoch = effectiveDate
+          ? toEpochMexico(effectiveDate, "00:00:01")
+          : null;
+        // MODIF END AUG/25/26
 
         const now = Date.now();
 
