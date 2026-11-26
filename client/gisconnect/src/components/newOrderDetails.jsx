@@ -1,3 +1,4 @@
+
 import EvidenceGallery from "/src/components/EvidenceGallery";
 import axios from "axios";
 import { API } from "/src/lib/api";
@@ -370,6 +371,8 @@ export default function NewOrderDetails() {
   };
 
   const getItemCurrency = (it) => {
+    const stored = normCur(it.currency);
+    if (stored === "USD" || stored === "MXN") return stored;
     const row = findProductRow(it);
     const prefersUSD = numOr0(row?.PRECIO_UNITARIO_DOLARES) > 0 || numOr0(row?.PRECIO_PIEZA_DOLARES) > 0;
     const prefersMXN = numOr0(row?.PRECIO_UNITARIO_MXN) > 0 || numOr0(row?.PRECIO_PIEZA_MXN) > 0;
@@ -793,7 +796,11 @@ export default function NewOrderDetails() {
 
 
 
-// // in newOrderDetails.jsx I'd like the ability to delete orders. Im thinking of adding a button at the bottom (aligned with existing "Validar Pago" button) "Borrar". Im guessing we'll also need to add an endpoint to make sure this order gets deleted from mongodb cluster "new_orders". Here is my current newOrderDetails.jsx, please direct edit
+
+// ----> LAST FUNCTIONAL NOV26/26 @ 07:14 <----
+
+
+
 // import EvidenceGallery from "/src/components/EvidenceGallery";
 // import axios from "axios";
 // import { API } from "/src/lib/api";
@@ -819,8 +826,14 @@ export default function NewOrderDetails() {
 //   const [account, setAccount] = useState("");
 //   const [isValidated, setIsValidated] = useState(false);
 
+//   // ✅ NEW: deleting state
+//   const [deleting, setDeleting] = useState(false);
+
 //   // Evidence image url + lightbox
-//   const [evidenceUrl, setEvidenceUrl] = useState(null);
+//   const [evidenceUrls, setEvidenceUrls] = useState([]);
+//   const [evidenceLoaded, setEvidenceLoaded] = useState(false);
+
+//   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 //   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
 
 //   // ======== Google Sheets client DB (fallbacks) ========
@@ -921,7 +934,6 @@ export default function NewOrderDetails() {
 //         }
 //       }
 //       if (!key) continue;
-//       // If duplicates appear, first one wins (or last—doesn't matter much)
 //       if (!index.has(key)) index.set(key, row);
 //     }
 //     return { index, productsCsv };
@@ -932,7 +944,6 @@ export default function NewOrderDetails() {
 //     (item) => {
 //       const norm = (s) => String(s || "").trim().toLowerCase();
 
-//       // Common item identifiers we have in orders
 //       const candidates = [
 //         norm(item.sku),
 //         norm(item.code),
@@ -941,12 +952,10 @@ export default function NewOrderDetails() {
 //         norm(`${item.product} ${item.presentation || ""}`),
 //       ].filter(Boolean);
 
-//       // 1) try direct map hits
 //       for (const c of candidates) {
 //         if (c && productIndex.index.has(c)) return productIndex.index.get(c);
 //       }
 
-//       // 2) fallback: loose contains search across name columns
 //       const NAME_KEYS = ["NOMBRE_PRODUCTO", "DESCRIPCION", "DESCRIPCIÓN", "NOMBRE", "PRODUCTO"];
 //       for (const row of productIndex.productsCsv) {
 //         for (const k of NAME_KEYS) {
@@ -964,9 +973,7 @@ export default function NewOrderDetails() {
 //   const clientInfo = useMemo(() => {
 //     if (!order?.userEmail || csvData.length === 0) return null;
 //     const norm = (s) => String(s || "").trim().toLowerCase();
-//     return (
-//       csvData.find((r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)) || null
-//     );
+//     return csvData.find((r) => norm(r.CORREO_EMPRESA) === norm(order.userEmail)) || null;
 //   }, [csvData, order?.userEmail]);
 
 //   const csvDisplayName = clientInfo?.NOMBRE_APELLIDO || "";
@@ -992,7 +999,7 @@ export default function NewOrderDetails() {
 //           setCompanyFromMongo(empresa);
 //         }
 //       } catch (_err) {
-//         // ignore; fallbacks will be used
+//         // ignore
 //       }
 //     })();
 
@@ -1000,7 +1007,6 @@ export default function NewOrderDetails() {
 //       cancelled = true;
 //     };
 //   }, [order?.userEmail]);
-//   // ============================================================================
 
 //   const bufferToObjectUrl = (fileObj) => {
 //     try {
@@ -1031,18 +1037,43 @@ export default function NewOrderDetails() {
 //         setOrder(data);
 //         setError(null);
 
-//         let url = null;
-//         if (data?.evidenceFile?.data) {
-//           url = bufferToObjectUrl(data.evidenceFile);
-//         } else if (data?.paymentEvidence?.data) {
-//           // legacy field name fallback
-//           url = bufferToObjectUrl(data.paymentEvidence);
+//         let urls = [];
+
+//         // ✅ CASE 1: paymentEvidenceMeta.files (YOUR REAL STRUCTURE)
+//         if (Array.isArray(data?.paymentEvidence)) {
+//           urls = data.paymentEvidence.map((_, idx) => {
+//             return `${API}/orders/${orderId}/evidence/payment/${idx}`;
+//           });
+//         }
+        
+//         // ✅ CASE 2: legacy single buffer
+//         else if (data?.evidenceFile) {
+//           urls = [`${API}/orders/${orderId}/evidence/payment/upload`];
 //         }
 
-//         setEvidenceUrl((prev) => {
-//           if (prev) URL.revokeObjectURL(prev);
-//           return url;
-//         });
+//         // ✅ Case 3: single object
+//         else if (data?.paymentEvidenceMeta?.url) {
+//           urls = [data.paymentEvidenceMeta.url];
+//         }
+
+//         // ✅ fallback: legacy buffer
+//         else if (Array.isArray(data?.paymentEvidenceFiles)) {
+//           urls = data.paymentEvidenceFiles
+//             .map(file => bufferToObjectUrl(file))
+//             .filter(Boolean);
+//         }
+
+//         else if (data?.evidenceFile?.data) {
+//           const single = bufferToObjectUrl(data.evidenceFile);
+//           if (single) urls = [single];
+//         }
+
+//         console.log("FINAL URLS:", urls); // 🔥 DEBUG
+//         console.log("FULL ORDER DATA:", data);
+
+//         setEvidenceUrls(urls);
+//         setEvidenceLoaded(true);
+
 //       } catch (err) {
 //         console.error(err);
 //         setError("Error loading order details.");
@@ -1052,15 +1083,21 @@ export default function NewOrderDetails() {
 //     fetchOrderDetails();
 
 //     return () => {
-//       if (evidenceUrl) URL.revokeObjectURL(evidenceUrl);
+//       evidenceUrls.forEach(url => {
+//         if (url.startsWith("blob:")) {
+//           URL.revokeObjectURL(url);
+//         }
+//       });
 //     };
+//     // modif apr29
+
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [orderId]);
 
 //   // Lightbox handlers
 //   const openLightbox = useCallback(() => {
-//     if (evidenceUrl) setIsLightboxOpen(true);
-//   }, [evidenceUrl]);
+//     if (evidenceUrls.length > 0) setIsLightboxOpen(true);
+//   }, [evidenceUrls]);
 
 //   const closeLightbox = useCallback(() => {
 //     setIsLightboxOpen(false);
@@ -1072,19 +1109,6 @@ export default function NewOrderDetails() {
 //     window.addEventListener("keydown", onKey);
 //     return () => window.removeEventListener("keydown", onKey);
 //   }, [isLightboxOpen, closeLightbox]);
-
-//   useEffect(() => {
-//     load();
-//   }, [orderId]);
-
-//   async function load() {
-//     try {
-//       const res = await axios.get(`${API}/orders/${orderId}`);
-//       setOrder(res.data);
-//     } catch (e) {
-//       console.error("Load order error:", e);
-//     }
-//   }
 
 //   // ======== RECEIVING ACCOUNT OPTIONS (based on billingInfo) ========
 //   const hasInvoiceBilling = useMemo(() => {
@@ -1102,21 +1126,15 @@ export default function NewOrderDetails() {
 //           { value: "MONEX *8341", label: "USD: MONEX *8341" },
 //           { value: "INVEX *4234", label: "USD: INVEX *4234" },
 //         ]
-//       : [
-//           { value: "BBVA *4078", label: "MXN: BBVA *4078" },
-//         ];
-  
-//     // NEW: always include "Pendiente" at the top
+//       : [{ value: "BBVA *4078", label: "MXN: BBVA *4078" }];
+
 //     return [{ value: "Pendiente", label: "Pendiente" }, ...base];
 //   }, [hasInvoiceBilling]);
 
-//   // Keep selected account valid when options change; prefer order.receivingAccount if valid
 //   useEffect(() => {
 //     const allowed = receivingAccountOptions.map((o) => o.value);
 //     if (!allowed.includes(account)) {
-//       const preferred = allowed.includes(order?.receivingAccount) 
-//       ? order?.receivingAccount 
-//       : "";
+//       const preferred = allowed.includes(order?.receivingAccount) ? order?.receivingAccount : "";
 //       setAccount(preferred);
 //     }
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1154,13 +1172,10 @@ export default function NewOrderDetails() {
 //     return Number.isFinite(n) ? n : 0;
 //   };
 
-//   // ⬅️ NEW: currency & price from PRODUCTS_CSV_URL when DB doesn't store currency
 //   const getItemCurrency = (it) => {
 //     const row = findProductRow(it);
-//     const prefersUSD =
-//       numOr0(row?.PRECIO_UNITARIO_DOLARES) > 0 || numOr0(row?.PRECIO_PIEZA_DOLARES) > 0;
-//     const prefersMXN =
-//       numOr0(row?.PRECIO_UNITARIO_MXN) > 0 || numOr0(row?.PRECIO_PIEZA_MXN) > 0;
+//     const prefersUSD = numOr0(row?.PRECIO_UNITARIO_DOLARES) > 0 || numOr0(row?.PRECIO_PIEZA_DOLARES) > 0;
+//     const prefersMXN = numOr0(row?.PRECIO_UNITARIO_MXN) > 0 || numOr0(row?.PRECIO_PIEZA_MXN) > 0;
 
 //     if (prefersUSD && !prefersMXN) return "USD";
 //     if (prefersMXN && !prefersUSD) return "MXN";
@@ -1177,11 +1192,9 @@ export default function NewOrderDetails() {
 //     return "MXN";
 //   };
 
-//   // ⬅️ NEW: unit price preferring CSV when order item lacks a clean value
 //   const getUnitPrice = (it) => {
 //     const cur = getItemCurrency(it);
-//     const fromItem =
-//       cur === "USD" ? Number(it.priceUSD ?? it.price ?? 0) : Number(it.priceMXN ?? it.price ?? 0);
+//     const fromItem = cur === "USD" ? Number(it.priceUSD ?? it.price ?? 0) : Number(it.priceMXN ?? it.price ?? 0);
 //     if (fromItem > 0) return fromItem;
 
 //     const row = findProductRow(it);
@@ -1196,7 +1209,6 @@ export default function NewOrderDetails() {
 //     }
 //   };
 
-//   // --------- Legacy sums kept only for per-item display (not for totals box anymore) ----------
 //   const sums = useMemo(() => {
 //     const list = Array.isArray(order?.items) ? order.items : [];
 //     let usd = 0;
@@ -1205,70 +1217,56 @@ export default function NewOrderDetails() {
 //       const cur = getItemCurrency(it);
 //       const qty = Number(it.amount) || 0;
 //       const unit = getUnitPrice(it);
-//       if (cur === "USD") {
-//         usd += qty * unit;
-//       } else {
-//         mxn += qty * unit;
-//       }
+//       if (cur === "USD") usd += qty * unit;
+//       else mxn += qty * unit;
 //     });
 //     return { usd, mxn };
 //     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, [order?.items, productsLoaded, productsCsv, account, order?.receivingAccount, receivingAccount]);
 
-//   // ⬅️ NEW: normalize the latest totals snapshot from Mongo (array or object)
 //   const latestTotals = useMemo(() => {
 //     const t = order?.totals;
 //     if (Array.isArray(t)) return t[t.length - 1] || {};
 //     return t && typeof t === "object" ? t : {};
 //   }, [order?.totals]);
 
-//   // ⬅️ NEW: decide from Mongo's paymentCurrency (fallback to preferredCurrency if needed)
 //   const payCurrency = useMemo(
-//     () =>
-//       normCur(order?.paymentCurrency) ||
-//       normCur(order?.preferredCurrency) ||
-//       "",
+//     () => normCur(order?.paymentCurrency) || normCur(order?.preferredCurrency) || "",
 //     [order?.paymentCurrency, order?.preferredCurrency]
 //   );
 
-//   // ⬅️ NEW: Display totals based ONLY on Mongo fields
 //   const displayTotals = useMemo(() => {
 //     const usdNative = numOr0(latestTotals.totalUSDNative);
 //     const mxnNative = numOr0(latestTotals.totalMXNNative);
-//     const allMXN = numOr0(latestTotals.totalAllMXN) || numOr0(latestTotals.finalAllMXN);
-
-//     if (payCurrency === "USD") {
-//       // Show USD from totalUSDNative.
-//       // MXN shows totalMXNNative if present, else 0.
-//       return {
-//         showUSD: true,
-//         usd: usdNative,
-//         showMXN: true,
-//         mxn: mxnNative || 0,
-//         note: null,
-//       };
+  
+//     const rate = Number(order?.currencyExchange?.rate) || null;
+  
+//     let usdFinal = usdNative;
+//     let mxnFinal = mxnNative;
+  
+//     // 🔥 If one currency is missing → calculate it
+//     if (rate) {
+//       if (usdNative > 0 && mxnNative === 0) {
+//         mxnFinal = usdNative * rate;
+//       }
+  
+//       if (mxnNative > 0 && usdNative === 0) {
+//         usdFinal = mxnNative / rate;
+//       }
+  
+//       // Mixed order but missing combined MXN
+//       if (usdNative > 0 && mxnNative > 0) {
+//         mxnFinal = mxnNative + (usdNative * rate);
+//       }
 //     }
-
-//     if (payCurrency === "MXN") {
-//       // USD remains 0; MXN comes from totalAllMXN (or finalAllMXN as fallback).
-//       return {
-//         showUSD: true,
-//         usd: 0,
-//         showMXN: true,
-//         mxn: allMXN,
-//         note: null,
-//       };
-//     }
-
-//     // Fallback if paymentCurrency missing: show whatever is available
+  
 //     return {
-//       showUSD: true,
-//       usd: usdNative,
-//       showMXN: true,
-//       mxn: mxnNative || allMXN || 0,
-//       note: null,
+//       usd: usdFinal,
+//       mxn: mxnFinal,
+//       rate,
 //     };
-//   }, [latestTotals, payCurrency]);
+//   }, [latestTotals, order?.currencyExchange]);
+//   // modif apr23
 
 //   // Actions
 //   const handleValidatePayment = async () => {
@@ -1277,6 +1275,7 @@ export default function NewOrderDetails() {
 //         paymentMethod,
 //         paymentAccount: account,
 //         orderStatus: "Pago Verificado",
+//         paymentVerifiedAt: new Date().toISOString(), // optional
 //       };
 //       await axios.put(`${API}/orders/${orderId}`, updatedData);
 //       setIsValidated(true);
@@ -1285,6 +1284,29 @@ export default function NewOrderDetails() {
 //     } catch (error) {
 //       console.error("Error updating order:", error);
 //       alert("Error al validar el pago.");
+//     }
+//   };
+
+//   // ✅ NEW: delete order
+//   const handleDeleteOrder = async () => {
+//     if (!orderId) return;
+
+//     const short = String(orderId).slice(-5);
+//     const ok = window.confirm(
+//       `¿Seguro que deseas BORRAR el pedido #${short}?\n\nEsta acción NO se puede deshacer.`
+//     );
+//     if (!ok) return;
+
+//     try {
+//       setDeleting(true);
+//       await axios.delete(`${API}/orders/${orderId}`);
+//       alert(`Pedido #${short} borrado correctamente.`);
+//       navigate("/newOrders"); // o "/adminHome" si prefieres
+//     } catch (e) {
+//       console.error("Delete order error:", e?.response?.data || e.message);
+//       alert("No se pudo borrar el pedido. Revisa el servidor / endpoint.");
+//     } finally {
+//       setDeleting(false);
 //     }
 //   };
 
@@ -1312,9 +1334,7 @@ export default function NewOrderDetails() {
 //   }
 
 //   const downloadName =
-//     order?.evidenceFile?.filename ||
-//     order?.paymentEvidence?.filename ||
-//     `evidencia_${String(order._id).slice(-5)}.jpg`;
+//     order?.evidenceFile?.filename || order?.paymentEvidence?.filename || `evidencia_${String(order._id).slice(-5)}.jpg`;
 
 //   const displayName = (clientFullName || csvDisplayName || order.userEmail || "").trim();
 //   const displayCompany = (companyFromMongo || csvCompanyName || "").trim();
@@ -1323,14 +1343,7 @@ export default function NewOrderDetails() {
 //     <body className="body-BG-Gradient">
 //       {/* LOGO */}
 //       <div className="loginLogo-ParentDiv">
-//         <img
-//           className="secondaryPages-GISLogo"
-//           src={Logo}
-//           alt="Home Icon"
-//           width="180"
-//           height="55"
-//           onClick={goHomeLogo}
-//         />
+//         <img className="secondaryPages-GISLogo" src={Logo} alt="Home Icon" width="180" height="55" onClick={goHomeLogo} />
 //       </div>
 
 //       <div className="edit-titleIcon-Div">
@@ -1357,6 +1370,24 @@ export default function NewOrderDetails() {
 //               })()
 //             : "Sin fecha"}
 //         </label>
+
+//         {/* new apr28 */}
+//         <label>
+//           {order.orderDate
+//             ? (() => {
+//               const d = new Date(order.orderDate);
+
+//               // ⏰ Time (local device time)
+//               const time = d.toLocaleTimeString("es-MX", {
+//                 hour: "2-digit",
+//                 minute: "2-digit",
+//                 hour12: true,
+//               });
+//               return `${time}`;
+//             })()
+//           : "Sin fecha"}
+//         </label>
+//         {/* end apr28 */}
 //       </div>
 
 //       <div className="newOrderDets-Scroll">
@@ -1373,7 +1404,6 @@ export default function NewOrderDetails() {
 //                       <b>{item.product}</b>
 //                     </label>
 
-//                     {/* Presentación */}
 //                     <label className="orderDets-Label">
 //                       <b>Presentación:</b> {item.presentation || item.packPresentation || "N/A"}
 //                     </label>
@@ -1382,7 +1412,6 @@ export default function NewOrderDetails() {
 //                       <b>Cantidad:</b> {item.amount}
 //                     </label>
 
-//                     {/* Precio unitario with currency + thousands separators */}
 //                     <label className="orderDets-Label">
 //                       <b>Precio Unitario:</b> {unitFmt(unit, cur)}
 //                     </label>
@@ -1393,25 +1422,25 @@ export default function NewOrderDetails() {
 //           ) : (
 //             <p>No hay productos en este pedido.</p>
 //           )}
+//           <label className="newOrderDetsTotal-Label">
+//             <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")} USD
+//           </label>
 
-//           {/* Totals per Mongo rules */}
-//           {displayTotals.showUSD && (
-//             <label className="newOrderDetsTotal-Label">
-//               <b>Total USD:</b> ${fmtNum(displayTotals.usd, "en-US")}
-//             </label>
+//           <label className="newOrderDetsTotal-Label">
+//             <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")} MXN
+//           </label>
+
+//           {/* 🔥 Show FX used */}
+//           {displayTotals.rate && (
+//             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 10 }}>
+//               Tipo de cambio aplicado: {displayTotals.rate} MXN/USD
+//             </div>
 //           )}
-//           {displayTotals.showMXN && (
-//             <label className="newOrderDetsTotal-Label">
-//               <b>Total MXN:</b> ${fmtNum(displayTotals.mxn, "es-MX")}
-//             </label>
-//           )}
-//           {displayTotals.note && (
-//             <div style={{ fontSize: 12, color: "#6b7280", marginTop: 4 }}>{displayTotals.note}</div>
-//           )}
-//           {!displayTotals.showUSD && !displayTotals.showMXN && (
-//             <label className="newOrderDetsTotal-Label" style={{ color: "#b45309" }}>
-//               (Totales no disponibles en el registro actual)
-//             </label>
+
+//           {payCurrency && (
+//             <div style={{ fontWeight: "bold", fontSize:"12px", fontStyle:"italic", marginTop: 10 }}>
+//               Moneda elegida por cliente: {payCurrency}
+//             </div>
 //           )}
 //         </div>
 
@@ -1421,11 +1450,7 @@ export default function NewOrderDetails() {
 //             <div className="headerEditIcon-Div">
 //               <label className="newUserData-Label">Método de Pago</label>
 //             </div>
-//             <select
-//               className="paymentDets-Select"
-//               value={paymentMethod}
-//               onChange={(e) => setPaymentMethod(e.target.value)}
-//             >
+//             <select className="paymentDets-Select" value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
 //               <option value="">Selecciona método</option>
 //               <option value="Efectivo">01: Efectivo</option>
 //               <option value="Cheque Nominativo">02: Cheque Nominativo</option>
@@ -1450,32 +1475,51 @@ export default function NewOrderDetails() {
 
 //           <div className="paymentDets-Dropdown">
 //             <div className="headerEditIcon-Div">
-//               <label className="newUserData-Label">Evidencia de Pago</label>
-//               <div className="existingQuote-Div">
-//                 {order?.evidenceFileExt ? (
-//                   <EvidenceGallery orderId={orderId} evidenceFileExt={order.evidenceFileExt} />
+//               <label className="newUserData-Label">Evidencia de Pago</label> <br></br>
+//               <div className="paymentEvidence-gallery">
+
+//                 {!evidenceLoaded ? (
+//                   <div style={{ fontSize: 12, color: "#999" }}>
+//                     Cargando evidencia...
+//                   </div>
+//                 ) : evidenceUrls.length > 0 ? (
+//                   evidenceUrls.map((url, idx) => (
+//                     <img
+//                       key={idx}
+//                       src={url}
+//                       alt={`Evidencia ${idx + 1}`}
+//                       className="paymentEvidence-thumb"
+//                       onClick={() => {
+//                         setCurrentImageIndex(idx);
+//                         setIsLightboxOpen(true);
+//                       }}
+//                     />
+//                   ))
 //                 ) : (
-//                   <div style={{ fontSize: 12, color: "#666" }}>Aún no hay evidencia de pago cargada por el cliente.</div>
+//                   <div style={{ fontSize: 12, color: "#666" }}>
+//                     No hay evidencia disponible.
+//                   </div>
 //                 )}
 //               </div>
+//               {/* modif apr29 */}
 //             </div>
-//           </div>
-
-//           {/* Evidence preview + actions */}
-//           <div className="paymentEvidence-Div" style={{ gap: 12, alignItems: "center" }}>
-//             <img
-//               src={evidenceUrl}
-//               alt=""
-//               style={{ cursor: evidenceUrl ? "zoom-in" : "default", objectFit: "cover" }}
-//               onClick={evidenceUrl ? () => setIsLightboxOpen(true) : undefined}
-//             />
 //           </div>
 //         </div>
 
-//         {/* Validate */}
-//         <div className="validatePaymentSubmitBtn-Div">
-//           <button className="submitOrder-Btn" type="submit" onClick={handleValidatePayment}>
+//         {/* ✅ Validate + Delete (aligned) */}
+//         <div style={{ display: "grid", gridTemplateColumns: "50% 50%", gap: 10, marginBottom:"25%", marginLeft: "10%" }}>
+//           <button className="submitOrder-Btn" type="button" onClick={handleValidatePayment} disabled={deleting}>
 //             Validar Pago
+//           </button>
+
+//           <button
+//             className="submitOrder-Btn"
+//             type="button"
+//             onClick={handleDeleteOrder}
+//             disabled={deleting}
+//             style={{ background: "#b91c1c" }} // rojo (si tu CSS lo sobreescribe, lo quitamos)
+//           >
+//             {deleting ? "Borrando…" : "Borrar"}
 //           </button>
 //         </div>
 
@@ -1501,7 +1545,9 @@ export default function NewOrderDetails() {
 //       </div>
 
 //       {/* LIGHTBOX */}
-//       {isLightboxOpen && evidenceUrl && (
+//       {/* modif apr29 */}
+//       {isLightboxOpen && evidenceUrls.length > 0 && (
+//       // modif apr29
 //         <div
 //           onClick={closeLightbox}
 //           style={{
@@ -1517,10 +1563,10 @@ export default function NewOrderDetails() {
 //         >
 //           <div onClick={(e) => e.stopPropagation()} style={{ position: "relative", maxWidth: "95vw", maxHeight: "95vh" }}>
 //             <img
-//               src={evidenceUrl}
-//               alt="Evidencia de pago (ampliada)"
-//               style={{ maxWidth: "95vw", maxHeight: "90vh", display: "block", borderRadius: 8 }}
+//               src={evidenceUrls[currentImageIndex]}
+//               alt="Evidencia ampliada"
 //             />
+//             {/* modif apr29 */}
 //             <button
 //               onClick={closeLightbox}
 //               style={{
@@ -1546,3 +1592,7 @@ export default function NewOrderDetails() {
 //     </body>
 //   );
 // }
+
+
+
+
